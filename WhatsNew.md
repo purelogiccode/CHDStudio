@@ -5,6 +5,21 @@ nav_order: 15
 
 # What's New
 
+## 3.9.3 (2026-10-11)
+
+### Cue WAVE tracks with an over-declared header now convert (#68232–#68237)
+
+*   **A WAV whose header claims more audio than the file contains no longer fails the conversion.** Both encoders trust the data chunk's size field, so a file that is short of its declared length — the widely distributed Policenauts Saturn English patch ships exactly this shape, one CD frame (2,352 bytes) over-declared on all three discs — made `chdman` abort with `Error reading input file (...wav)` and the built-in CHDSharp fallback report `Unexpected end of file (...wav)`. The app now detects the over-declaration before encoding and clamps the data and RIFF sizes to the bytes actually present, so the conversion reads the audio that exists. The repair happens on a private copy; the user's files are never modified.
+*   **Only the damaged WAV is copied.** The repaired work set is staged on the cue's own volume and references every other file (including multi-hundred-MB disc images) in place by relative path. When a same-volume location is unavailable it falls back to the full copy-based work directory, which repairs the WAVs there.
+*   **Both encoders produce the same result for a repaired set**: a byte-identical CHD from `chdman` and the built-in CHDSharp encoder (verified against the real Policenauts disc 1 files).
+
+### Housekeeping
+
+*   `PbpFileIntegrationTests` now early-returns when its local samples are absent, matching every other integration group (§11.5); without samples the tests report as passed instead of failing on `Assert.NotEmpty()`.
+*   MDSSharp published as **1.2.1** with repository metadata pointing at the renamed CHD Studio repository; no functional changes.
+*   Package updates: Avalonia 12.1.3 → 12.1.4, SharpCompress 0.50.4 → 0.50.5, Meziantou.Analyzer 3.0.294 → 3.0.299, xunit.runner.visualstudio 4.0.0 → 4.0.1.
+*   Test suite grew to **1133 tests** (1104 unit + 29 integration) across 58 test classes, including `WavHeaderSanitizer` unit coverage, the CueWorkDirectory repair paths and a real-`chdman` end-to-end regression test for the repaired cue set.
+
 ## 3.9.2 (2026-10-05)
 
 ### Duplicate outputs are skipped before conversion

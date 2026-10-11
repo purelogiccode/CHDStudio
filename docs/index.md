@@ -20,7 +20,7 @@ This documentation covers the project from both a user and a developer perspecti
 | 5 | [Conversion Pipeline (Technical)](05-conversion-pipeline.md) | Developers | Content resolution, per-format routing, chdman wrapper, cue normalization, ISZ/ECM/Alcohol/split sets, error handling |
 | 6 | [Extraction & Verification (Technical)](06-extraction-and-verification.md) | Developers | CHD extraction internals, verification, file moves, partial-extraction handling |
 | 7 | [Services Reference](07-services-reference.md) | Developers | ArchiveService, UpdateService, StatsService, FileWatcherService, AppHttpClient, more |
-| 8 | [Utilities Reference](08-utilities-reference.md) | Developers | PathUtils, CueNormalizer, CueWorkDirectory, GameFileParser, BinCueGenerator, content detection, ISZ/ECM/Alcohol, more |
+| 8 | [Utilities Reference](08-utilities-reference.md) | Developers | PathUtils, CueNormalizer, CueWorkDirectory, WavHeaderSanitizer, GameFileParser, BinCueGenerator, content detection, ISZ/ECM/Alcohol, more |
 | 9 | [Bug Reporting System](09-bug-reporting.md) | Developers | Bug report API contract, sink, exclusion patterns, environment details |
 | 10 | [Embedded Libraries](10-libraries.md) | Developers | CCDSharp, CSOSharp, PBPSharp, MDSSharp, ISZSharp: purpose, API, integration |
 | 11 | [Testing](11-testing.md) | Developers | Test project layout, coverage by file, integration tests, how to run |
@@ -33,7 +33,7 @@ This documentation covers the project from both a user and a developer perspecti
 | Fact | Value |
 |------|-------|
 | **Application name** | `CHDStudio` |
-| **Latest version** | 3.9.1 |
+| **Latest version** | 3.9.3 |
 | **Target framework** | .NET 10.0 (`net10.0;net10.0-windows`), Avalonia |
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
@@ -58,7 +58,7 @@ CHDStudio/
 │   ├── Services/                   # Archive, BugReport, FileWatcher, Stats, Update, ...
 │   └── Utilities/                  # PathUtils, CueNormalizer, GameFileParser, ...
 │       └── Ecm/                    # in-process ECM decoding
-├── CHDStudio.Tests/        # xUnit test suite (1121 tests)
+├── CHDStudio.Tests/        # xUnit test suite (1133 tests)
 ├── CCDSharp/                       # CloneCD (.ccd/.img/.sub) parsing library
 ├── CSOSharp/                       # CSO/CISO decompression library (deflate + LZ4)
 ├── PBPSharp/                       # PlayStation PBP extraction + SFO parsing library

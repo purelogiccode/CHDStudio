@@ -5,9 +5,9 @@ nav_order: 12
 
 # 11. Testing
 
-The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net10.0-windows`), with **1121 tests across 57 test classes**: 1093 unit tests plus 28 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
+The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net10.0-windows`), with **1133 tests across 58 test classes**: 1104 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
 
-> **Expected result on a machine without the local sample folders:** the 1093 unit tests pass and the 28 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
+> **Expected result on a machine without the local sample folders:** the 1104 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
 
 ## 11.1 Running the Tests
 
@@ -48,7 +48,7 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 | `ChdChecksumReportTests.cs` | Report path/name, whole-image SHA-1 equals a fresh `ComputeHashes` pass, per-track blocks for CD, whole-image-only blocks for DVD, all three algorithms present |
 | `ChdInfoReportTests.cs` | CD report (version/type/metadata/tracks/hunks/SHA-1), DVD report without a track section, unreadable-header text instead of an exception |
 | `CueNormalizerTests.cs` | Encoding detection (CP949/CP1251/CP932/UTF-8/UTF-32LE BOM), canonicalization, zero-padding resolution, unresolved names, MP3 transform hook, canonical write format |
-| `CueWorkDirectoryTests.cs` | Work-dir creation rules, in-place BOM fast path, MP3→WAV decoding (fake + real NAudio decoders), **end-to-end tests running real `chdman.exe`** (BOM regression, cue/bin/mp3, cue/iso/mp3; skipped when chdman is absent) |
+| `CueWorkDirectoryTests.cs` | Work-dir creation rules, in-place BOM fast path, MP3→WAV decoding (fake + real NAudio decoders), over-declared-WAVE repair (repair-only work set with in-place binaries, full-copy fallback, intact files untouched), **end-to-end tests running real `chdman.exe`** (BOM regression, cue/bin/mp3, cue/iso/mp3, over-declared WAVE; skipped when chdman is absent) |
 | `FileExtensionsTests.cs` | All extension constants and sets via reflection, cross-consistency, no duplicates |
 | `FileItemTests.cs` | INotifyPropertyChanged, `DisplaySize` formatting (0 B … 1.5 TB) |
 | `FileWatcherServiceTests.cs` | Start/Stop/Dispose, `GetContextForMissingFile` diagnostics with a real `FileSystemWatcher`, history eviction at 1000 entries, buffer-overflow clearing |
@@ -61,6 +61,7 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 | `RetryingFileOperationsTests.cs` | `TryDeleteAsync`/`TryMoveAsync` with real file locks (`FileShare.None`), read-only attribute clearing, retry-then-give-up, success-after-lock-release, missing-source/missing-destination semantics |
 | `StatsServiceTests.cs` | POST method/URL/Bearer header/body, no-throw on 429/401/400/500/network errors |
 | `UpdateServiceTests.cs` | Version parsing/normalization theories, new/older/minor/major comparisons, draft/prerelease skip, rate-limit and 5xx handling (no bug report), bug-report paths, invalid tags |
+| `WavHeaderSanitizerTests.cs` | RIFF chunk walk (standard and extra-chunk layouts), over-declaration detection, clamping of the data and RIFF size fields to the actual bytes, byte-identical no-op on intact files, non-WAVE rejection |
 
 ### Format detection and recovery tests
 
@@ -112,7 +113,7 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 4. For chdman-dependent tests, early-return when `chdman.exe` is absent from `AppContext.BaseDirectory`.
 5. Prefer building binary fixtures in code (see `IszImageBuilder`) over committing them. Commit one only when the format cannot be generated trustworthily in-repo, as with `ecm-sample.ecm` (the reference encoder's own output) or the WinRAR-produced RAR volume set (there is no RAR writer in the repository).
 6. When a fixture asserts agreement with an outside implementation, add a **guard test** that the fixture still covers the cases it is meant to. A fixture can be regenerated more simply and silently stop testing anything.
-7. Run the full suite before pushing. On the maintainer's machine a full run is **1121 passed / 0 failed**; CI runs the unit tests only, via `--filter "Category!=Integration"` (1093 tests). The integration classes' behaviour without samples is described in §11.5.
+7. Run the full suite before pushing. On the maintainer's machine a full run is **1133 passed / 0 failed**; CI runs the unit tests only, via `--filter "Category!=Integration"` (1104 tests). The integration classes' behaviour without samples is described in §11.5.
 
 ### Analyzer constraints worth knowing
 

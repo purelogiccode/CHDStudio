@@ -85,7 +85,7 @@ CSharp_CHDStudio.sln
 
 - The app references `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` as project references.
 - All five libraries are packable and expose internals to `CHDStudio.Tests` via `InternalsVisibleTo`; `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` all multi-target `net8.0;net9.0;net10.0`.
-- `CHDStudio.Tests` references the app (internals visible) plus `MDSSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` — but **not** `CCDSharp` (there are no CCDSharp unit tests today; see [Testing](11-testing.md)).
+- `CHDStudio.Tests` references the app (internals visible) plus `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp`; `CcdParserTests`/`CcdModelTests` cover the CloneCD parser and writer (see [Testing](11-testing.md)).
 
 > **Why ISZ and Alcohol support moved into libraries.** `ISZSharp` and `MDSSharp` were split out of the app's utilities into standalone packable projects (they are self-contained formats with redistributable value), while ECM decoding remains in-app because it is tightly coupled to the cue staging flow. The test project references both new libraries directly.
 

@@ -34,7 +34,7 @@ All classes live in `CHDStudio/Utilities/` (and `Models/` where noted).
 
 ---
 
-## 8.2 CueNormalizer & CueWorkDirectory
+## 8.2 CueNormalizer, CueWorkDirectory & WavHeaderSanitizer
 
 ### CueNormalizer (`CueNormalizer.cs`)
 
@@ -56,12 +56,23 @@ All classes live in `CHDStudio/Utilities/` (and `Models/` where noted).
 `internal static class CueWorkDirectory` — builds a self-contained ASCII work directory when the cue can't be handed to chdman as-is.
 
 - `PrepareAsync(cuePath, tempDirPrefix, mp3Decoder?, onLog?, token)` → `CueWorkDirectoryResult(WorkCuePath, WorkDir, UnresolvedNames)`:
-  - No work needed (UTF-8, no BOM, ASCII names, no corrections, no MP3, safe path lengths) → `(null, null, [])`.
+  - No work needed (UTF-8, no BOM, ASCII names, no corrections, no MP3, no over-declared WAVE header, safe path lengths) → `(null, null, [])`.
+  - **WAVE repair fast path**: when the only defect is one or more `WAVE` tracks whose header declares more audio than the file contains, the work directory is created **on the cue's own volume** and the canonical cue references every other file (the disc image included) **in place via relative paths**; only the damaged WAVs are copied, and their headers are clamped in the copy. Declined when a reference cannot be reached relatively or when the same-volume directory cannot be created — then the full path below repairs the copies instead.
   - **BOM-only fast path**: writes a BOM-free canonical `game.cue` into the work dir that references bins **in place via relative paths** — no bin copies. Declined when any bin is on another drive or when the descriptor/references are at or beyond MAX_PATH (the relative references would rejoin into the same overlong paths).
-  - Full path: copies every referenced file under safe `trackNN.ext` names (MP3 tracks decoded to `trackNN.wav` via the MP3 decoder, track type rewritten to `WAVE`), then writes the canonical cue. Overlong paths force this copy-based route so chdman only ever sees short ASCII names.
+  - Full path: copies every referenced file under safe `trackNN.ext` names (MP3 tracks decoded to `trackNN.wav` via the MP3 decoder, track type rewritten to `WAVE`), then writes the canonical cue. Overlong paths force this copy-based route so chdman only ever sees short ASCII names. Over-declared WAVE copies are clamped here as well.
   - Unresolved references → returned in `UnresolvedNames` (caller skips conversion).
   - On failure the work dir is deleted and the exception rethrown.
-- `TryWriteInPlaceWorkCueAsync` — the fast path above; `CopyWithRetryAsync` copies bins with up to 4 attempts (300 ms × attempt backoff).
+- `TryWriteInPlaceWorkCueAsync` — the BOM fast path above; `TryPrepareWaveRepairWorkDirAsync` — the WAVE repair fast path; `CopyWithRetryAsync` copies bins with up to 4 attempts (300 ms × attempt backoff).
+
+### WavHeaderSanitizer (`WavHeaderSanitizer.cs`)
+
+`internal static class WavHeaderSanitizer` — repairs PCM WAVE files whose RIFF/data size fields declare more audio than the file actually contains. Both encoders read the declared length: chdman aborts mid-conversion with `Error reading input file (...)` and the built-in encoder reports `Unexpected end of file (...)`; some widely distributed rips (the Policenauts Saturn English patch ships one CD frame more than it holds on all three discs) fail every conversion because of it.
+
+- `TryGetDataChunk(wavPath, out dataOffset, out declaredDataLength, out fileLength)` — walks the RIFF chunks exactly like the encoders' MAME-derived parser (`fmt ` payload skipped by its size field, non-`data` chunks skipped by theirs) and reports where the audio starts and what the data chunk declares. Returns `false` for non-WAVE, malformed or unreadable files.
+- `IsOverDeclared(wavPath)` — `true` when the data chunk's declared length runs past the end of the file.
+- `ClampDeclaredSizes(wavPath)` — clamps the data size field (and the RIFF size when it over-declares too) to the bytes actually present and returns how many audio bytes were over-declared, or `0` when nothing changed. Files that are not over-declared are left byte-identical.
+
+> **Where the repair is applied.** Only on the private work copy built by `CueWorkDirectory` — the user's originals are never modified. The clamped track simply contains the frames that exist; the header was wrong by exactly the missing frame in the real-world file, so the audio is complete.
 
 ### Why this exists
 
