@@ -376,20 +376,31 @@ internal static class CueWorkDirectory
 
     /// <summary>
     ///     Finds the resolved WAVE tracks whose header declares more audio bytes than the file
-    ///     contains (truncated or mislabelled rip).
+    ///     contains (truncated or mislabelled rip). A file that is also referenced as a data track is
+    ///     excluded: clamping it would alter its bytes, and such a cue cannot be converted
+    ///     meaningfully anyway.
     /// </summary>
     /// <param name="references">Every FILE line, with its resolved on-disk name.</param>
-    /// <returns>The full paths of the over-declared WAVE files.</returns>
+    /// <returns>The full paths of the over-declared, WAVE-only files.</returns>
     private static HashSet<string> FindOverDeclaredWaves(IReadOnlyList<CueFileReference> references)
     {
-        var overDeclared = new HashSet<string>(StringComparer.Ordinal);
+        var wavePaths = new HashSet<string>(StringComparer.Ordinal);
+        var nonWavePaths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var reference in references)
         {
             if (!reference.IsResolved) continue;
-            if (!string.Equals(reference.TrackType, "WAVE", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (WavHeaderSanitizer.IsOverDeclared(reference.ResolvedFullPath))
-                overDeclared.Add(reference.ResolvedFullPath);
+            if (string.Equals(reference.TrackType, "WAVE", StringComparison.OrdinalIgnoreCase))
+                wavePaths.Add(reference.ResolvedFullPath);
+            else
+                nonWavePaths.Add(reference.ResolvedFullPath);
+        }
+
+        wavePaths.ExceptWith(nonWavePaths);
+
+        var overDeclared = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in wavePaths)
+        {
+            if (WavHeaderSanitizer.IsOverDeclared(path)) overDeclared.Add(path);
         }
 
         return overDeclared;

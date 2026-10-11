@@ -711,6 +711,31 @@ public class CueWorkDirectoryTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsyncWaveAlsoReferencedAsBinaryIsNotRepaired()
+    {
+        // A cue referencing one file as both a data track and a WAVE track is malformed; clamping
+        // the shared file would silently alter the data track's bytes, so no repair is attempted
+        // and the encoder's own validation reports the failure instead.
+        var wavPath = WritePcmWav(
+            Path.Combine(_tempDir, "shared.wav"),
+            frames: 4,
+            declaredExtraFrames: 1
+        );
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"shared.wav\" BINARY\r\n  TRACK 01 MODE1/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"shared.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        Assert.Null(result.WorkCuePath);
+        Assert.Null(workDir);
+        Assert.True(WavHeaderSanitizer.IsOverDeclared(wavPath));
+    }
+
+    [Fact]
     public async Task PrepareAsyncOverDeclaredWaveWithNonAsciiNamesRepairsCopiedWave()
     {
         // Non-ASCII names force the full copy-based work directory; the WAVE must be clamped
