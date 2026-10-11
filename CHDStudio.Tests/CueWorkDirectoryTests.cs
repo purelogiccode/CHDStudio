@@ -614,6 +614,241 @@ public class CueWorkDirectoryTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsyncIntactWaveKeepsDirectConversion()
+    {
+        // A WAVE track whose header matches the file must not force any work directory; the
+        // over-declaration repair is only for headers that run past the end of the file.
+        CreateFile("track1.bin", "bin-content");
+        WritePcmWav(Path.Combine(_tempDir, "track2.wav"), frames: 4, declaredExtraFrames: 0);
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"track1.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"track2.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        Assert.Null(result.WorkCuePath);
+        Assert.Null(workDir);
+        Assert.Empty(result.UnresolvedNames);
+    }
+
+    [Fact]
+    public async Task PrepareAsyncOverDeclaredWaveRepairsOnlyTheWaveInWorkDir()
+    {
+        // The Policenauts Saturn patch ships WAVE tracks whose data chunk declares one CD frame
+        // more than the file contains; both encoders abort on them. The repair has to clamp a
+        // private copy and leave the (potentially huge) bins in place, referenced relatively.
+        var binPath = CreateFile("track1.bin", "bin-content");
+        var wavPath = WritePcmWav(
+            Path.Combine(_tempDir, "track2.wav"),
+            frames: 4,
+            declaredExtraFrames: 1
+        );
+        var originalWavBytes = await File.ReadAllBytesAsync(wavPath);
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"track1.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"track2.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+
+            // Only the damaged WAVE is copied; the bin stays where it is.
+            Assert.Equal(
+                ["game.cue", "track01.wav"],
+                Directory
+                    .GetFiles(workDir)
+                    .Select(Path.GetFileName)
+                    .OrderBy(static f => f, StringComparer.Ordinal)
+                    .ToList()
+            );
+
+            var workCue = await File.ReadAllTextAsync(result.WorkCuePath, Encoding.UTF8);
+            Assert.Contains("FILE \"track01.wav\" WAVE", workCue, StringComparison.Ordinal);
+
+            // The bin's FILE line is a relative path resolving to the original file.
+            var binLine = workCue
+                .Split("\r\n")
+                .First(static line => line.Contains("track1.bin", StringComparison.Ordinal));
+            var firstQuote = binLine.IndexOf('"');
+            var lastQuote = binLine.LastIndexOf('"');
+            var referencedName = binLine[(firstQuote + 1)..lastQuote];
+            Assert.False(Path.IsPathRooted(referencedName));
+            Assert.Equal(
+                Path.GetFullPath(binPath),
+                Path.GetFullPath(Path.Combine(workDir, referencedName))
+            );
+
+            // The copied WAVE's header now matches the audio present...
+            var repairedWave = Path.Combine(workDir, "track01.wav");
+            Assert.False(WavHeaderSanitizer.IsOverDeclared(repairedWave));
+
+            // ...and the user's original file is untouched.
+            Assert.Equal(originalWavBytes, await File.ReadAllBytesAsync(wavPath));
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsyncOverDeclaredWaveWithNonAsciiNamesRepairsCopiedWave()
+    {
+        // Non-ASCII names force the full copy-based work directory; the WAVE must be clamped
+        // there too, because that is the file chdman is pointed at.
+        const string koreanName = "진설 사무라이 스피리츠 무사도열전.bin";
+        CreateFile(koreanName, "bin-content");
+        WritePcmWav(Path.Combine(_tempDir, "track2.wav"), frames: 4, declaredExtraFrames: 1);
+        var cuePath = CreateFile(
+            "game.cue",
+            $"FILE \"{koreanName}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"track2.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+            Assert.Equal(
+                ["game.cue", "track01.bin", "track02.wav"],
+                Directory
+                    .GetFiles(workDir)
+                    .Select(Path.GetFileName)
+                    .OrderBy(static f => f, StringComparer.Ordinal)
+                    .ToList()
+            );
+
+            Assert.False(WavHeaderSanitizer.IsOverDeclared(Path.Combine(workDir, "track02.wav")));
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task OverDeclaredWaveEndToEndWithRealChdman()
+    {
+        // Regression test for the Policenauts Saturn patch failure: chdman aborted with
+        // "Error reading input file" because the WAVE header declared one frame more than the
+        // file held. The repaired work cue must convert.
+        var chdmanPath = Path.Combine(AppContext.BaseDirectory, "chdman.exe");
+        if (!File.Exists(chdmanPath))
+            return; // integration test — skipped when the bundled chdman is unavailable
+
+        var isoPath = Path.Combine(_tempDir, "disc.iso");
+        await File.WriteAllBytesAsync(isoPath, CreateMode1Bin(100, 2048));
+        WritePcmWav(Path.Combine(_tempDir, "track02.wav"), frames: 40, declaredExtraFrames: 1);
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"disc.iso\" BINARY\r\n  TRACK 01 MODE1/2048\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"track02.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var result = await CueWorkDirectory.PrepareAsync(
+            cuePath,
+            "TestPrefix_",
+            null,
+            null,
+            CancellationToken.None
+        );
+        Assert.NotNull(result.WorkCuePath);
+        Assert.Empty(result.UnresolvedNames);
+
+        var workDir = result.WorkDir!;
+        try
+        {
+            var outputChd = Path.Combine(workDir, "game.chd");
+            var (exitCode, output) = await RunChdmanAsync(
+                chdmanPath,
+                result.WorkCuePath,
+                outputChd
+            );
+            Assert.True(exitCode == 0, $"chdman failed on a repaired cue set: {output}");
+            Assert.True(File.Exists(outputChd), "expected a CHD output from the repaired cue set");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(workDir, true);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Writes a 44100 Hz stereo 16-bit PCM WAVE. When <paramref name="declaredExtraFrames" /> is
+    ///     positive, both size fields over-declare by that many CD frames while the payload keeps
+    ///     <paramref name="frames" /> frames, producing the truncated-header shape seen in the wild.
+    /// </summary>
+    /// <param name="path">Destination path.</param>
+    /// <param name="frames">Number of 2352-byte audio frames actually written.</param>
+    /// <param name="declaredExtraFrames">Extra frames the header claims but the file does not hold.</param>
+    /// <returns>The full path of the written file.</returns>
+    private static string WritePcmWav(string path, int frames, int declaredExtraFrames)
+    {
+        const int frameBytes = 2352;
+        var dataBytes = frames * frameBytes;
+        var declaredBytes = dataBytes + declaredExtraFrames * frameBytes;
+
+        using var stream = File.Create(path);
+        using var writer = new BinaryWriter(stream);
+        writer.Write("RIFF"u8.ToArray());
+        writer.Write(36 + declaredBytes);
+        writer.Write("WAVE"u8.ToArray());
+        writer.Write("fmt "u8.ToArray());
+        writer.Write(16);
+        writer.Write((ushort)1);
+        writer.Write((ushort)2);
+        writer.Write(44100);
+        writer.Write(176400);
+        writer.Write((ushort)4);
+        writer.Write((ushort)16);
+        writer.Write("data"u8.ToArray());
+        writer.Write(declaredBytes);
+        for (var i = 0; i < dataBytes; i++) writer.Write((byte)(i % 251));
+        return path;
+    }
+
+    [Fact]
     [Trait("Category", "Integration")]
     public async Task BomCueEndToEndWithRealChdman()
     {
