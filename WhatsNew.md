@@ -5,6 +5,18 @@ nav_order: 15
 
 # What's New
 
+## 3.9.4 (2026-10-13)
+
+### CD extraction writes cooked sectors again (#11)
+
+*   **Extracted BINs are Redump-identical again.** The built-in reader called CHDSharp with `cooked:false`, writing full 2448-byte raw frames (data plus 96-byte subcode) instead of chdman's cooked `DataSize` bytes per frame. A single-track MODE2_RAW disc extracted as 546,178,176 bytes (SHA1 `072ea00f...`) instead of 524,759,424 bytes (SHA1 `9b4c1b51...`) while the CUE looked identical. Extraction now passes `cooked:true`, matching `chdman extractcd` byte-for-byte (subcode omitted, audio byte-swapped). Reproduced against *Armored Core (USA) (Rerelease)*.
+*   **Verify passing for the bad rebuild is by design.** A CHD built from the oversized BIN is internally consistent (232,218 frames instead of 223,112; 267,908,519 bytes), so both `chdman verify` and CHDStudio Verify report success. Verify checks the header hashes, not Redump: the header SHA1 (`6dc714d9...`) and the file SHA1 (`3e1b20c5...`) differ from 7-Zip's file hash by design. Delete BINs/CHDs produced by the broken extraction and re-extract.
+
+### Housekeeping
+
+*   Package updates: Meziantou.Analyzer 3.0.299 → 3.0.303, Microsoft.NET.Test.Sdk 18.10.1 → 18.11.0, VideoGameFileSystemParser 1.3.0 → 1.4.0.
+*   Test suite: new `ExtractCd_CookedMatchesOriginalBin_RawAddsSubcode` regression test; 1105 unit tests pass (`Category!=Integration`).
+
 ## 3.9.3 (2026-10-11)
 
 ### Cue WAVE tracks with an over-declared header now convert (#68232–#68237)

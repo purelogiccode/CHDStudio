@@ -5,8 +5,8 @@
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <Company>PureLogicCode.com</Company>
-        <AssemblyVersion>3.9.3</AssemblyVersion>
-        <FileVersion>3.9.3</FileVersion>
+        <AssemblyVersion>3.9.4</AssemblyVersion>
+        <FileVersion>3.9.4</FileVersion>
         <NeutralLanguage>en</NeutralLanguage>
     </PropertyGroup>
 
@@ -15,11 +15,11 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.299">
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.303">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
         <PackageReference Include="Roslynator.Analyzers" Version="5.0.1">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

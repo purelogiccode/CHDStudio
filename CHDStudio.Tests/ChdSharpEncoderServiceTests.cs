@@ -310,4 +310,67 @@ public class ChdSharpEncoderServiceTests : IDisposable
             )
         );
     }
+
+    [Fact]
+    public void ExtractCd_CookedMatchesOriginalBin_RawAddsSubcode()
+    {
+        // Regression test for Armored Core (USA) (Rerelease): the app extracted with
+        // cooked:false (full 2448-byte raw frames), producing a 546,178,176-byte BIN
+        // (223112 x 2448, SHA1 072ea00f...) instead of chdman's cooked 524,759,424-byte
+        // BIN (223112 x 2352, SHA1 9b4c1b51...). The extraction must use cooked:true.
+        const int frames = 8;
+        const int dataSize = 2352;
+        const int rawFrameSize = 2448;
+        var original = new byte[frames * dataSize];
+        for (var i = 0; i < original.Length; i++)
+            original[i] = (byte)(i % 251);
+        File.WriteAllBytes(PathFor("mode2.bin"), original);
+        var cuePath = PathFor("mode2.cue");
+        File.WriteAllText(
+            cuePath,
+            "FILE \"mode2.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
+        );
+        var chdPath = PathFor("mode2.chd");
+        ChdSharpEncoderService.Encode(
+            "createcd",
+            cuePath,
+            chdPath,
+            false,
+            2,
+            CancellationToken.None
+        );
+        AssertVerifies(chdPath);
+
+        var err = ChdFile.Open(chdPath, out var chd);
+        Assert.Equal(ChdError.Chderrnone, err);
+        using (chd)
+        {
+            var cookedDir = PathFor("cooked");
+            var cooked = chd!.ExtractToDirectoryWithReporting(
+                cookedDir,
+                "game",
+                null,
+                CancellationToken.None,
+                cooked: true
+            );
+            Assert.Equal(ChdError.Chderrnone, cooked.Error);
+            var cookedBin = Path.Combine(cookedDir, "game.bin");
+            Assert.True(File.Exists(cookedBin));
+            Assert.Equal(original.Length, new FileInfo(cookedBin).Length);
+            Assert.Equal(original, File.ReadAllBytes(cookedBin));
+
+            var rawDir = PathFor("raw");
+            var raw = chd.ExtractToDirectoryWithReporting(
+                rawDir,
+                "game",
+                null,
+                CancellationToken.None,
+                cooked: false
+            );
+            Assert.Equal(ChdError.Chderrnone, raw.Error);
+            var rawBin = Path.Combine(rawDir, "game.bin");
+            Assert.True(File.Exists(rawBin));
+            Assert.Equal(frames * rawFrameSize, new FileInfo(rawBin).Length);
+        }
+    }
 }

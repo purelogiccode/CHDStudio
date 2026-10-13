@@ -60,7 +60,7 @@ When the detected command is `extractld` (or the user forced **Laserdisc (.avi)*
 `ExtractChdTracksToDirectory` (`:2252`):
 
 1. Creates `_extract_temp_<guid>` **inside the target directory**.
-2. Calls `chd.ExtractToDirectory(tempExtractDir, baseFileName)` (CHDSharp).
+2. Calls `chd.ExtractToDirectoryWithReporting(tempExtractDir, baseFileName, progress, token, cooked: true)` (CHDSharp). `cooked:true` matches `chdman extractcd`: each 2448-byte frame is stripped to its `DataSize` bytes (96-byte subcode omitted, audio byte-swapped). The default `cooked:false` writes full raw frames and produces an oversized BIN (e.g. 546,178,176 instead of 524,759,424 bytes for a single-track MODE2_RAW disc with an identical CUE) — see 3.9.4 / issue #11.
 3. Picks the destination: the target dir, or a fresh subfolder named after the disc when any extracted file would clash with something already there (`ReserveFreeSubdirectory`). Then moves each extracted file into it.
 4. On success the temp dir is deleted; on failure the temp dir is **kept** and a warning logs the number of remaining files ("Partial extraction: N file(s) remain in temp directory: ...") so the user can inspect/clean up.
 5. Moves go through `RetryingFileOperations.TryMoveAsync` (retry with backoff, ~45 s) so transient locks (antivirus/indexer) don't abort the whole disc extraction; a move that still fails after retries throws and the partial-extraction path handles the rest. The `TryDeleteAsync` on the destination remains only as a guard against a file appearing between the clash test and the move — after step 3 the destination is expected to be free.
@@ -94,6 +94,8 @@ The CHDSharp failure is reported to the bug API **only when the chdman fallback 
 ### VerifyChdAsync
 
 `VerifyChdAsync` opens the file read-only and calls `Chd.CheckFile(stream, fileName, true, progress)` (CHDSharp, in-process — **no** chdman process), logging `CHDSHARP: Verifying, N% complete...` every 10%. On success it logs `V{version} — SHA1: {hex}` and returns the `ChdResult`; failures log `result.Error.GetMessage()` or the exception message. The per-file read speed is sampled via the read performance counter.
+
+Verify checks internal consistency (decompression plus header hashes), not Redump correctness: a CHD rebuilt from a bad extraction is self-consistent and still verifies (see 3.9.4 / issue #11). The logged SHA1 is the header's combined hash, not the file hash shown by 7-Zip.
 
 ### Checksum report
 

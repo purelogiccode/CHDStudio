@@ -5578,13 +5578,18 @@ internal partial class MainWindow : Window, IDisposable
         try
         {
             token.ThrowIfCancellationRequested();
-            // The reporting variant returns per-track results instead of stopping at the first
-            // failure, so the log and bug report can name the track(s) that failed to decode.
+            // chdman extractcd writes cooked sectors (DataSize bytes per frame, 96-byte
+            // subcode omitted, audio byte-swapped), so the built-in reader must do the
+            // same: cooked:true strips each 2448-byte frame to its DataSize. The default
+            // (cooked:false) writes full 2448-byte raw frames, producing a BIN that is
+            // larger than the Redump original (e.g. 546,178,176 instead of 524,759,424
+            // for a single-track MODE2_RAW disc) and a CUE that looks identical.
             var result = chd.ExtractToDirectoryWithReporting(
                 tempExtractDir,
                 baseFileName,
                 progress,
-                token
+                token,
+                cooked: true
             );
             if (!result.IsCompleteSuccess)
             {
