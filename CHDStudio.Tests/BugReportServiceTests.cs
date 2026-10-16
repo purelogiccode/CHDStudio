@@ -297,6 +297,8 @@ public class BugReportServiceTests
         "Conversion of 'game.cue' failed due to an I/O error. The source file may be on a failing disk, a disconnected network drive, or the file may be corrupt.")]
     [InlineData(@"Failed to convert 'game.cue': Error parsing input file (C:\temp\game.cue: Unsupported format)")]
     [InlineData(
+        "Failed to convert 'game.cue': chdman exited with code -1 and its output is not a valid CHD (Decompression failed); discarding it.")]
+    [InlineData(
         "game.zip: the extension says an archive but the content is an unrecognised format, and it is not a usable disc image. The download is probably incomplete.")]
     [InlineData(
         "Alone In The Dark - The New Nightmare CD1.iso: this file is already a CHD. Copy it to the output folder rather than converting it.")]
@@ -334,6 +336,8 @@ public class BugReportServiceTests
     [InlineData("could not validate referenced files")]
     [InlineData("The file or directory is corrupted and unreadable")]
     [InlineData("Retry via temp failed")]
+    [InlineData(
+        " Source file appears to be corrupt: Sega Rally 2 v1.003 (1999)(Sega)(NTSC)(US)[!].gdi")]
     [InlineData("archive file may be corrupted")]
     [InlineData("archive is invalid or corrupt")]
     [InlineData("archive file appears to be incomplete")]
@@ -348,6 +352,9 @@ public class BugReportServiceTests
     )]
     [InlineData(
         "chdman.exe terminated abnormally during the startup check (exit code -1073741511; 0xC0000139, STATUS_ENTRYPOINT_NOT_FOUND - a required DLL entry point is missing (the build is incompatible with this Windows version; install Windows updates / the latest Visual C++ redistributable or use a chdman build for your OS))."
+    )]
+    [InlineData(
+        "Failed to convert 'Xeno Crisis (World) (Unl).cue': chdman terminated abnormally (exit code -1073741795; 0xC000001D, STATUS_ILLEGAL_INSTRUCTION - the CPU executed an unsupported instruction)."
     )]
     [InlineData(" The output folder is not available: F:\\compressed iso")]
     [InlineData(

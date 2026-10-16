@@ -377,4 +377,108 @@ public class CueNormalizerTests : IDisposable
             StringComparison.Ordinal
         );
     }
+
+    // ---- CueNormalizer: cdrdao TOC descriptors ----
+
+    [Fact]
+    public async Task NormalizeAsyncTocDatafileKeepsOffsetArguments()
+    {
+        CreateFile("game.bin", "dummy");
+        var tocPath = CreateFile(
+            "game.toc",
+            "TRACK MODE2_RAW\r\nDATAFILE \"game.bin\" 0 1000\r\nSTART"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(tocPath, CancellationToken.None);
+
+        Assert.Empty(result.UnresolvedNames);
+        var reference = Assert.Single(result.References);
+        Assert.Equal("game.bin", reference.ResolvedName);
+        Assert.False(result.NeedsRewrite);
+        Assert.Equal(
+            "TRACK MODE2_RAW\r\nDATAFILE \"game.bin\" 0 1000\r\nSTART\r\n",
+            result.CanonicalCueText
+        );
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncTocUnquotedDatafileGetsQuotedAndKeepsArguments()
+    {
+        CreateFile("game.bin", "dummy");
+        var tocPath = CreateFile("game.toc", "TRACK MODE2_RAW\r\nDATAFILE game.bin 0 1000\r\n");
+
+        var result = await CueNormalizer.NormalizeAsync(tocPath, CancellationToken.None);
+
+        Assert.Empty(result.UnresolvedNames);
+        Assert.True(result.NeedsRewrite);
+        Assert.Contains(
+            "DATAFILE \"game.bin\" 0 1000",
+            result.CanonicalCueText,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncTocPadCorrectedNameIsRewritten()
+    {
+        CreateFile("Game (Track 2).bin", "dummy");
+        var tocPath = CreateFile(
+            "game.toc",
+            "TRACK AUDIO\r\nAUDIOFILE \"Game (Track 02).bin\" 0 00:01:00\r\n"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(tocPath, CancellationToken.None);
+
+        Assert.Empty(result.UnresolvedNames);
+        Assert.True(result.ReferencesChanged);
+        Assert.Contains(
+            "AUDIOFILE \"Game (Track 2).bin\" 0 00:01:00",
+            result.CanonicalCueText,
+            StringComparison.Ordinal
+        );
+    }
+
+    // ---- CueNormalizer: type-less and escaped-quote FILE lines ----
+
+    [Fact]
+    public async Task NormalizeAsyncCueFileWithoutTypeInfersBinary()
+    {
+        CreateFile("track1.bin", "dummy");
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"track1.bin\"\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.True(result.NeedsRewrite);
+        Assert.Equal("BINARY", result.References[0].TrackType);
+        Assert.Contains(
+            "FILE \"track1.bin\" BINARY",
+            result.CanonicalCueText,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncCueBackslashEscapedQuotesResolveAndCanonicalize()
+    {
+        CreateFile("track01.bin", "dummy");
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \\\"track01.bin\\\"\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.Empty(result.UnresolvedNames);
+        var reference = Assert.Single(result.References);
+        Assert.Equal("track01.bin", reference.ResolvedName);
+        Assert.True(result.NeedsRewrite);
+        Assert.Contains(
+            "FILE \"track01.bin\" BINARY",
+            result.CanonicalCueText,
+            StringComparison.Ordinal
+        );
+    }
 }

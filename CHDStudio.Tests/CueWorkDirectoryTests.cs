@@ -1177,6 +1177,62 @@ public class CueWorkDirectoryTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task PrepareAsyncCdrdaoTocKeepsTocExtensionAndRewritesDatafile()
+    {
+        const string binName = "Диск.bin";
+        var sourceBinPath = CreateFile(binName, "bin-content");
+        var tocPath = CreateFile(
+            "game.toc",
+            $"TRACK MODE2_RAW\r\nDATAFILE \"{binName}\" 0 1000\r\nSTART\r\n"
+        );
+
+        var (result, workDir) = await PrepareAsync(tocPath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+            // Both encoders dispatch by extension: a cdrdao .toc must not be renamed to .cue.
+            Assert.EndsWith("game.toc", result.WorkCuePath, StringComparison.Ordinal);
+
+            var files = Directory
+                .GetFiles(workDir)
+                .Select(Path.GetFileName)
+                .Order(StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(["game.toc", "track01.bin"], files);
+
+            var workToc = await File.ReadAllTextAsync(result.WorkCuePath, Encoding.UTF8);
+            Assert.Contains(
+                "DATAFILE \"track01.bin\" 0 1000",
+                workToc,
+                StringComparison.Ordinal
+            );
+            Assert.Contains("START", workToc, StringComparison.Ordinal);
+
+            var copiedBin = Path.Combine(workDir, "track01.bin");
+            Assert.Equal(
+                await File.ReadAllTextAsync(sourceBinPath),
+                await File.ReadAllTextAsync(copiedBin)
+            );
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
     private static async Task WriteCraftedMp3Async(string path)
     {
         // Craft a stream of MPEG-1 Layer III frames (128 kbps, 44.1 kHz, stereo) filled with silence.

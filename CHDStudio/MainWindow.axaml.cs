@@ -117,6 +117,11 @@ internal partial class MainWindow : Window, IDisposable
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
     );
 
+    // Set when chdman crashes while converting a file (negative exit code: the same CPU/OS
+    // incompatibility the startup probe catches, or antivirus damage). The built-in CHDSharp
+    // encoder takes over for the rest of the batch instead of crashing once per file.
+    private volatile bool _chdmanUnusableThisBatch;
+
     // Tracks whether a close was requested while an operation was running
     private bool _pendingClose;
 
@@ -2029,6 +2034,8 @@ internal partial class MainWindow : Window, IDisposable
         {
             _batchOutputPaths.Clear();
         }
+
+        _chdmanUnusableThisBatch = false;
 
         _totalFilesProcessed = filesToConvert.Length;
         UpdateStatsDisplay();
@@ -4981,7 +4988,10 @@ internal partial class MainWindow : Window, IDisposable
             }
             else if (IsCorruptionException(ex) || IsCrcErrorException(ex))
             {
-                LogError($" Source file appears to be corrupt: {originalName}");
+                // A CRC/data error while copying the source is a damaged file or disk. The details
+                // go to the local log; the bug-report filter drops the classified message (all
+                // retry-via-temp outcomes are user-data/environment conditions).
+                LogError($" Source file appears to be corrupt: {originalName}", ex);
             }
             else
             {
@@ -6127,7 +6137,8 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         // --- Primary encoder: chdman on Windows; the built-in CHDSharp encoder elsewhere ---
-        var useChdman = OperatingSystem.IsWindows() && File.Exists(chdmanPath);
+        var useChdman =
+            OperatingSystem.IsWindows() && File.Exists(chdmanPath) && !_chdmanUnusableThisBatch;
         if (!useChdman)
         {
             if (await TryChdSharpInProcessAsync())
@@ -6288,6 +6299,19 @@ internal partial class MainWindow : Window, IDisposable
             if (!success && !token.IsCancellationRequested && exitCode != 0)
             {
                 var errorText = errorBuffer.ToString().TrimEnd();
+
+                // A negative exit code means Windows terminated chdman abnormally (illegal
+                // instruction on a CPU without the build's SIMD extensions, a missing DLL entry
+                // point, antivirus damage). The startup probe cannot catch every case - it only
+                // runs `chdman help` - so the first conversion that crashes switches the rest of
+                // the batch to the built-in encoder instead of crashing once per file.
+                if (exitCode < 0 && !_chdmanUnusableThisBatch)
+                {
+                    _chdmanUnusableThisBatch = true;
+                    LogWarning(
+                        $" chdman.exe crashed while converting '{Path.GetFileName(originalInputFile)}' (exit code {exitCode}{DescribeChdmanCrash(exitCode)}). It may be incompatible with this computer's CPU or Windows version; the built-in CHDSharp encoder will be used for the rest of this batch."
+                    );
+                }
 
                 if (
                     errorText.Contains(

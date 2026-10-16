@@ -50,6 +50,10 @@ internal class BugReportService
         // chdman.cpp:1517 wraps every failure inside its compression phase ("Error during
         // compression: <OS error>"); the message is the user's storage failing, not app logic.
         "Error during compression",
+        // A nonzero chdman exit that left a partial output: the output is validated, discarded
+        // when unusable, and the encoder falls back. The classified final message reports the
+        // real cause, so the intermediate validation notice is not a separate app defect.
+        "its output is not a valid CHD",
         // chdman rejecting the user's cue/image with a parse error ("Error parsing input file
         // (...: Unsupported format / Invalid data)") and I/O failures on failing disks are
         // user-data/environment problems; the app already shows per-cause guidance.
@@ -90,6 +94,11 @@ internal class BugReportService
         "could not validate referenced files",
         "The file or directory is corrupted and unreadable",
         "Retry via temp failed",
+        // The classified form of the retry-via-temp catch for a CRC/data error while copying the
+        // source: a damaged file or failing disk. Every other outcome of that path logs "Retry
+        // via temp failed", already excluded above; this branch must be silent too or the same
+        // user-data condition files a bug report.
+        "Source file appears to be corrupt",
         "archive file may be corrupted",
         "archive is invalid or corrupt",
         "archive file appears to be incomplete",
@@ -126,8 +135,12 @@ internal class BugReportService
         "Failed to start CHDSharp",
         // The startup probe crashing with a negative exit code (0xC0000139 entry point not
         // found, illegal instruction, ...) means the bundled chdman build is incompatible with
-        // the user's CPU/Windows version - an installation problem, not app logic.
+        // the user's CPU/Windows version - an installation problem, not app logic. The same
+        // crash can surface later on the first real conversion (the `help` probe does not
+        // exercise the SIMD paths); the batch then switches to the built-in encoder, so the
+        // per-file crash summary is the same installation problem.
         "terminated abnormally during the startup check",
+        "chdman terminated abnormally",
         // The output folder's drive is gone (USB unplugged, network drive dropped).
         "output folder is not available",
         // Writing into the output folder is denied (root of C:\, "Program Files", read-only

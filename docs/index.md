@@ -38,7 +38,7 @@ This documentation covers the project from both a user and a developer perspecti
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
 | **Primary encoder** | `chdman` (MAME Project, 0.289), bundled as `chdman.exe` / `chdman_arm64.exe` on Windows; built-in CHDSharp on Linux/macOS |
-| **Fallback encoder** | Built-in `CHDSharp` encoder (CHDSharpLib NuGet 1.4.3, in-process) — always available, chdman byte-identical output |
+| **Fallback encoder** | Built-in `CHDSharp` encoder (CHDSharpLib NuGet 1.4.4, in-process) — always available, chdman byte-identical output |
 | **External tools needed** | None beyond the bundled `chdman` (Windows) and 7-Zip (`7za` on Windows, `7zz` on Linux/macOS) — every input format is handled in-process |
 | **Output format** | `.chd` (Compressed Hunks of Data) |
 | **Logs** | `%LocalAppData%\CHDStudio\logs` |

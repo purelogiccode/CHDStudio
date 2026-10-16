@@ -8,8 +8,10 @@ namespace CHDStudio.Utilities;
 ///     the original file as-is: UTF-8 BOM (which chdman's parser does not skip, producing
 ///     "couldn't find bin file []"), non-UTF-8 cue text, non-ASCII names or paths, paths at or beyond
 ///     MAX_PATH (chdman's ANSI file APIs cannot open them), or referenced names
-///     that needed zero-padding correction. The work directory contains a canonicalized cue plus every
-///     referenced file under safe ASCII names (trackNN.ext), so chdman sees a self-contained cue set.
+///     that needed zero-padding correction. The work directory contains a canonicalized descriptor
+///     (named "game" with the source's own extension, so a cdrdao .toc keeps its parser in both
+///     encoders) plus every referenced file under safe ASCII names (trackNN.ext), so chdman sees a
+///     self-contained set.
 ///     When the only problem is a BOM and the bins are on the same drive as the work directory, the
 ///     bins are NOT copied — the canonical cue instead references them via relative paths.
 ///     WAVE tracks whose header declares more audio than the file contains are clamped in a private
@@ -193,7 +195,7 @@ internal static class CueWorkDirectory
             var normalized = await CueNormalizer
                 .NormalizeAsync(cuePath, token, Transform)
                 .ConfigureAwait(false);
-            var workCue = Path.Combine(workDir, "game.cue");
+            var workCue = GetWorkDescriptorPath(workDir, cuePath);
             await CueNormalizer
                 .WriteCanonicalCueAsync(workCue, normalized, token)
                 .ConfigureAwait(false);
@@ -226,7 +228,7 @@ internal static class CueWorkDirectory
     }
 
     /// <summary>
-    ///     Attempts the in-place fast path: writes a BOM-free canonical cue named "game.cue" into
+    ///     Attempts the in-place fast path: writes a BOM-free canonical descriptor into
     ///     <paramref name="workDir" /> whose FILE lines reference every bin via a path relative to
     ///     <paramref name="workDir" /> (chdman prepends the cue's directory to every FILE name, so the
     ///     bins must be addressed relative to where the cue lives). No bin files are copied.
@@ -261,7 +263,7 @@ internal static class CueWorkDirectory
             return null;
         }
 
-        var workCue = Path.Combine(workDir, "game.cue");
+        var workCue = GetWorkDescriptorPath(workDir, cuePath);
         await CueNormalizer
             .WriteCanonicalCueAsync(workCue, normalized, token)
             .ConfigureAwait(false);
@@ -345,7 +347,7 @@ internal static class CueWorkDirectory
                 RepairWaveHeader(destination, source, onLog);
             }
 
-            var workCue = Path.Combine(workDir, "game.cue");
+            var workCue = GetWorkDescriptorPath(workDir, cuePath);
             await CueNormalizer
                 .WriteCanonicalCueAsync(workCue, normalized, token)
                 .ConfigureAwait(false);
@@ -441,6 +443,24 @@ internal static class CueWorkDirectory
         {
             // ignored
         }
+    }
+
+    /// <summary>
+    ///     Returns the work descriptor path, keeping the source descriptor's extension: both encoders
+    ///     dispatch by extension (chdman's parse_toc and the built-in CdImageParser), so a cdrdao
+    ///     .toc must stay ".toc" — renamed to .cue, its cdrdao TRACK lines would be read by the CUE
+    ///     parser and fail with "Malformed TRACK command".
+    /// </summary>
+    /// <param name="workDir">The work directory.</param>
+    /// <param name="sourceDescriptorPath">The original .cue or .toc path.</param>
+    /// <returns>Path of the canonical descriptor inside the work directory.</returns>
+    private static string GetWorkDescriptorPath(string workDir, string sourceDescriptorPath)
+    {
+        var extension = Path.GetExtension(sourceDescriptorPath);
+        var name = string.IsNullOrEmpty(extension)
+            ? "game.cue"
+            : "game" + extension.ToLowerInvariant();
+        return Path.Combine(workDir, name);
     }
 
     /// <summary>

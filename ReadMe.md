@@ -47,7 +47,7 @@
 
 ### 🛠️ Intelligent Conversion & Extraction
 *   **Automated Batch Processing**: Convert entire directories of disk images with real-time progress monitoring and immediate cancellation response.
-*   **chdman Primary Encoding (Windows)**: On Windows conversions run on the bundled `chdman`, the reference MAME CHD encoder. If chdman is missing or fails, the conversion automatically falls back to the built-in [CHDSharp](https://www.nuget.org/packages/CHDSharp) encoder (CHDSharpLib v1.4.3) running in-process — the project's own managed CHD encoder, whose output is byte-identical to `chdman` (verified across a 56-disc battle corpus). On Linux and macOS the built-in CHDSharp encoder is always used. An encoder always exists, so a batch never refuses to start for a missing encoder.
+*   **chdman Primary Encoding (Windows)**: On Windows conversions run on the bundled `chdman`, the reference MAME CHD encoder. If chdman is missing or fails, the conversion automatically falls back to the built-in [CHDSharp](https://www.nuget.org/packages/CHDSharp) encoder (CHDSharpLib v1.4.4) running in-process — the project's own managed CHD encoder, whose output is byte-identical to `chdman` (verified across a 56-disc battle corpus). On Linux and macOS the built-in CHDSharp encoder is always used. An encoder always exists, so a batch never refuses to start for a missing encoder.
 *   **Recursive Structure Preservation**: Maintains your original directory hierarchy in the output folder when processing subfolders.
 *   **Robust Extraction**: Supports extracting CHD files back to **.cue (CD)**, **.iso (DVD)**, **.gdi (Dreamcast/Naomi)**, **.img (HDD)**, and **.avi (laserdisc A/V)** with intelligent flag-based auto-detection using the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library. CD/GDI extraction writes cooked sectors like `chdman extractcd` (subcode omitted, audio byte-swapped), so BINs stay Redump-identical. A/V (laserdisc) CHDs extract **in-process** with CHDSharp's MAME-parity AVI writer, so they no longer need `chdman`; if the built-in reader cannot decode a CHD (corrupt file or an unsupported variant), extraction automatically falls back to `chdman` — including `extractld` (AVI) / `extractraw` for laserdisc CHDs.
 *   **Laserdisc A/V Support**: `.avi` laserdisc captures (Daphne-style dumps) convert with `createld` — the A/V `avhu` codec (delta-RLE Huffman video + mono FLAC audio), one frame per hunk — through the built-in CHDSharp encoder on every platform, with output that is byte-identical to `chdman createld`.
@@ -156,11 +156,11 @@ Generated cue sheets reference the disc image where it already lies rather than 
 *   **Bundled Dependencies**:
     *   `chdman.exe` / `chdman_arm64.exe` (MAME Project — primary encoder on Windows, extraction fallback)
     *   `7za.exe` / `7za_arm64.exe` (Windows) or `7zz` (official 7-Zip 26.03, Linux/macOS) — 7-Zip fallback extraction
-*   **Built-in Encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.4.3) runs in-process on every platform — the automatic fallback behind chdman on Windows and the primary encoder on Linux/macOS.
+*   **Built-in Encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.4.4) runs in-process on every platform — the automatic fallback behind chdman on Windows and the primary encoder on Linux/macOS.
 *   **No Other Dependencies**: every format above is handled inside the application. There is nothing else to download, and both x64 and ARM64 get the same feature set.
 *   **Library Dependencies**:
     * [Avalonia](https://avaloniaui.net/) (v12.1.4) — Cross-platform Fluent Design UI framework and controls
-    * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.4.3) — Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
+    * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.4.4) — Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
     * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.1) — Pure C# CSO/CISO decompression (deflate + LZ4)
     * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.4) — Pure C# PBP extraction and SFO parsing
     * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.1) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion

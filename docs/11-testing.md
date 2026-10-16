@@ -47,12 +47,12 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 | `ChdSharpProgressLoggerTests.cs` | 10%-step throttling for reader and encoder reports, cumulative encoder ratio, repeated percents logged once, zero-total/zero-hunk edge cases, byte-count formatting |
 | `ChdChecksumReportTests.cs` | Report path/name, whole-image SHA-1 equals a fresh `ComputeHashes` pass, per-track blocks for CD, whole-image-only blocks for DVD, all three algorithms present |
 | `ChdInfoReportTests.cs` | CD report (version/type/metadata/tracks/hunks/SHA-1), DVD report without a track section, unreadable-header text instead of an exception |
-| `CueNormalizerTests.cs` | Encoding detection (CP949/CP1251/CP932/UTF-8/UTF-32LE BOM), canonicalization, zero-padding resolution, unresolved names, MP3 transform hook, canonical write format |
+| `CueNormalizerTests.cs` | Encoding detection (CP949/CP1251/CP932/UTF-8/UTF-32LE BOM), canonicalization, zero-padding resolution, unresolved names, MP3 transform hook, canonical write format, cdrdao TOC `DATAFILE`/`AUDIOFILE` normalization (offset/length arguments preserved), type-less `FILE` lines (type inferred), backslash-escaped quotes |
 | `CueWorkDirectoryTests.cs` | Work-dir creation rules, in-place BOM fast path, MP3→WAV decoding (fake + real NAudio decoders), over-declared-WAVE repair (repair-only work set with in-place binaries, full-copy fallback, intact files untouched), **end-to-end tests running real `chdman.exe`** (BOM regression, cue/bin/mp3, cue/iso/mp3, over-declared WAVE; skipped when chdman is absent) |
 | `FileExtensionsTests.cs` | All extension constants and sets via reflection, cross-consistency, no duplicates |
 | `FileItemTests.cs` | INotifyPropertyChanged, `DisplaySize` formatting (0 B … 1.5 TB) |
 | `FileWatcherServiceTests.cs` | Start/Stop/Dispose, `GetContextForMissingFile` diagnostics with a real `FileSystemWatcher`, history eviction at 1000 entries, buffer-overflow clearing |
-| `GameFileParserTests.cs` | cue/gdi/toc referenced-file extraction (quoted/unquoted/spaces/multi-file), encoding detection |
+| `GameFileParserTests.cs` | cue/gdi/toc referenced-file extraction (quoted/unquoted/spaces/multi-file), cdrdao `DATAFILE`/`AUDIOFILE` scanning, backslash-escaped quotes, encoding detection |
 | `GitHubReleaseTests.cs` | Model defaults, JSON (de)serialization |
 | `IsoSectorValidatorTests.cs` | Sector-size alignment warnings; descriptors/empty/missing not validated |
 | `MainWindowHelperTests.cs` | `StripUtf8BomIfPresentAsync`, `SelectChdmanErrorLine` (skips progress lines, picks last real error) |

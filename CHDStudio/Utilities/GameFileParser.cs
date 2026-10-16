@@ -103,19 +103,113 @@ internal static class GameFileParser
     }
 
     /// <summary>
-    ///     Extracts referenced file paths from a TOC (Table of Contents) file.
+    ///     Extracts referenced file paths from a TOC (Table of Contents) file. Handles both
+    ///     cdrdao keywords (DATAFILE/AUDIOFILE) and the FILE form; in cdrdao files the tokens
+    ///     after the name are an optional SWAP flag and decimal/MSF offsets and lengths.
     /// </summary>
     /// <param name="tocPath">Path to the TOC file to parse.</param>
     /// <param name="onLog">Callback for logging messages.</param>
     /// <param name="token">Cancellation token to cancel the operation.</param>
     /// <returns>A list of file paths referenced by the TOC file.</returns>
-    internal static Task<List<string>> GetReferencedFilesFromTocAsync(
+    internal static async Task<List<string>> GetReferencedFilesFromTocAsync(
         string tocPath,
         Action<string> onLog,
         CancellationToken token
     )
     {
-        return ParseFileReferenceLinesAsync(tocPath, onLog, "TOC", token);
+        var referencedFiles = new List<string>();
+        var directory = Path.GetDirectoryName(tocPath) ?? string.Empty;
+        try
+        {
+            var (lines, _, _) = await ReadLinesWithDetectedEncodingAsync(tocPath, token)
+                .ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            foreach (var line in lines)
+            {
+                var trimmedLine = line.Trim();
+                if (!IsTocReferenceLine(trimmedLine)) continue;
+
+                if (!TryGetTocFileNameAndTail(trimmedLine, out var fileName, out _) || fileName is null)
+                    continue;
+
+                referencedFiles.Add(Path.Combine(directory, fileName));
+            }
+        }
+        catch (IOException ex)
+        {
+            onLog(
+                $"[WARNING] Could not parse TOC file: {Path.GetFileName(tocPath)}. Error: {ex.Message}"
+            );
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            onLog(
+                $"[WARNING] Could not access TOC file: {Path.GetFileName(tocPath)}. Error: {ex.Message}"
+            );
+        }
+
+        return referencedFiles;
+    }
+
+    /// <summary>Returns whether a trimmed TOC line starts a file reference (FILE/DATAFILE/AUDIOFILE).</summary>
+    /// <param name="trimmedLine">The trimmed line to test.</param>
+    /// <returns><see langword="true" /> for FILE, DATAFILE and AUDIOFILE lines.</returns>
+    internal static bool IsTocReferenceLine(string trimmedLine)
+    {
+        var keywordEnd = trimmedLine.IndexOfAny(Separator);
+        var keyword = keywordEnd < 0 ? trimmedLine : trimmedLine[..keywordEnd];
+        return keyword.Equals("FILE", StringComparison.OrdinalIgnoreCase)
+               || keyword.Equals("DATAFILE", StringComparison.OrdinalIgnoreCase)
+               || keyword.Equals("AUDIOFILE", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Extracts the referenced file name and the trailing argument tokens from a cdrdao TOC
+    ///     reference line (FILE/DATAFILE/AUDIOFILE). Unlike cue lines, the tokens after the name
+    ///     are optional SWAP/offset/length arguments, not a track type: unquoted names are a single
+    ///     token ("DATAFILE data.bin 0 1000"), quoted names run to the closing quote
+    ///     ("AUDIOFILE \"track 2.wav\" 0").
+    /// </summary>
+    /// <param name="trimmedLine">The trimmed reference line.</param>
+    /// <param name="fileName">The extracted referenced file name, or null when the line is unusable.</param>
+    /// <param name="tail">The argument tokens after the name (possibly empty), without the name.</param>
+    /// <returns><see langword="true" /> when a usable file name was extracted.</returns>
+    internal static bool TryGetTocFileNameAndTail(
+        string trimmedLine,
+        out string? fileName,
+        out string tail
+    )
+    {
+        fileName = null;
+        tail = string.Empty;
+
+        var firstQuote = trimmedLine.IndexOf('"');
+        var lastQuote = trimmedLine.LastIndexOf('"');
+        if (firstQuote != -1 && lastQuote > firstQuote)
+        {
+            fileName = trimmedLine.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+            StripEscapedQuoteBackslash(trimmedLine, lastQuote, ref fileName);
+            tail = trimmedLine[(lastQuote + 1)..].Trim();
+        }
+        else
+        {
+            var keywordEnd = trimmedLine.IndexOfAny(Separator);
+            if (keywordEnd < 0) return false;
+
+            var rest = trimmedLine[(keywordEnd + 1)..].TrimStart();
+            var nameEnd = rest.IndexOfAny(Separator);
+            if (nameEnd < 0)
+            {
+                fileName = rest;
+            }
+            else
+            {
+                fileName = rest[..nameEnd];
+                tail = rest[(nameEnd + 1)..].Trim();
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fileName);
     }
 
     /// <summary>
@@ -270,6 +364,7 @@ internal static class GameFileParser
         if (firstQuote != -1 && lastQuote > firstQuote)
         {
             fileName = trimmedLine.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+            StripEscapedQuoteBackslash(trimmedLine, lastQuote, ref fileName);
         }
         else
         {
@@ -304,6 +399,32 @@ internal static class GameFileParser
         }
 
         return !string.IsNullOrWhiteSpace(fileName);
+    }
+
+    /// <summary>
+    ///     Removes the backslash of a backslash-escaped closing quote from an extracted file name.
+    ///     Some cue writers escape the quotes around the name (FILE \"track01.bin\"); with the
+    ///     quotes stripped by the extraction the escape backslash would otherwise become a bogus
+    ///     trailing character of the name, and the reference would never resolve. Only a backslash
+    ///     that directly precedes the closing quote is an escape; a backslash anywhere else stays.
+    /// </summary>
+    /// <param name="line">The line the name was extracted from.</param>
+    /// <param name="closingQuoteIndex">Index of the closing quote in the line.</param>
+    /// <param name="fileName">The extracted name; updated in place when it ends with an escape.</param>
+    private static void StripEscapedQuoteBackslash(
+        string line,
+        int closingQuoteIndex,
+        ref string fileName
+    )
+    {
+        if (
+            closingQuoteIndex > 0
+            && line[closingQuoteIndex - 1] == '\\'
+            && fileName.EndsWith('\\')
+        )
+        {
+            fileName = fileName[..^1];
+        }
     }
 
     /// <summary>

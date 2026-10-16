@@ -9,6 +9,9 @@ namespace CHDStudio.Utilities;
 ///     Parses a CUE sheet with encoding detection, resolves every referenced file against the filesystem
 ///     (exact match, then case-insensitive, then zero-padding-tolerant like "(Track 2)" vs "(Track 02)"),
 ///     and produces a canonical UTF-8 rewrite of the cue that chdman can consume reliably.
+///     TOC (cdrdao) descriptors are normalized the same way: their FILE/DATAFILE/AUDIOFILE lines have
+///     the referenced name resolved and rewritten while the SWAP/offset/length arguments after the
+///     name are preserved verbatim.
 /// </summary>
 internal static class CueNormalizer
 {
@@ -32,6 +35,9 @@ internal static class CueNormalizer
         [FileExtensions.Bin, FileExtensions.Img, FileExtensions.Iso, FileExtensions.Raw],
         StringComparer.OrdinalIgnoreCase
     );
+
+    /// <summary>Whitespace characters separating descriptor tokens.</summary>
+    private static readonly char[] TokenSeparators = [' ', '\t'];
 
     /// <summary>
     ///     Normalizes the cue at <paramref name="cuePath" />.
@@ -57,13 +63,63 @@ internal static class CueNormalizer
         var needsRewrite = false;
         var referencesChanged = false;
 
-        // A cue with exactly one FILE line describes one data file, which allows a last-resort match
-        // by elimination when the recorded name is unusable.
-        var isSingleFileCue = CountFileLines(lines) == 1;
+        var isToc = string.Equals(
+            Path.GetExtension(cuePath),
+            FileExtensions.Toc,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        // A descriptor with exactly one reference line describes one data file, which allows a
+        // last-resort match by elimination when the recorded name is unusable.
+        var isSingleFileCue = CountReferenceLines(lines, isToc) == 1;
 
         foreach (var line in lines)
         {
             var trimmedLine = line.Trim();
+
+            if (isToc)
+            {
+                if (
+                    !GameFileParser.IsTocReferenceLine(trimmedLine)
+                    || !GameFileParser.TryGetTocFileNameAndTail(
+                        trimmedLine,
+                        out var tocName,
+                        out var tocTail
+                    )
+                    || tocName is null
+                )
+                {
+                    canonicalLines.Add(line);
+                    continue;
+                }
+
+                var tocKind = InferTrackTypeFromExtension(tocName);
+                var tocReference = ResolveReference(directory, tocName, tocKind, isSingleFileCue);
+                references.Add(tocReference);
+
+                if (!tocReference.IsResolved) unresolved.Add(tocName);
+
+                var tocLineName = tocReference.ResolvedName ?? tocName;
+                if (tocReference.IsResolved && transform is not null)
+                {
+                    var transformed = transform(tocReference);
+                    if (transformed is not null)
+                    {
+                        tocLineName = transformed.Value.Name;
+                        referencesChanged = true;
+                    }
+                }
+
+                if (tocReference.WasNameCorrected) referencesChanged = true;
+
+                var canonicalTocLine = BuildCanonicalTocLine(trimmedLine, tocLineName, tocTail);
+                if (!string.Equals(canonicalTocLine, trimmedLine, StringComparison.Ordinal))
+                    needsRewrite = true;
+
+                canonicalLines.Add(canonicalTocLine);
+                continue;
+            }
+
             if (
                 !trimmedLine.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase)
                 || !GameFileParser.TryGetFileNameFromFileLine(trimmedLine, out var referencedName)
@@ -74,7 +130,11 @@ internal static class CueNormalizer
                 continue;
             }
 
-            var trackType = GetTrackType(trimmedLine);
+            // A missing track type token (some cue writers omit "BINARY") is inferred from the
+            // referenced file's extension so the canonical rewrite carries a type both chdman and
+            // the built-in encoder accept.
+            var trackType =
+                GetTrackType(trimmedLine) ?? InferTrackTypeFromExtension(referencedName);
             var reference = ResolveReference(directory, referencedName, trackType, isSingleFileCue);
             references.Add(reference);
 
@@ -225,20 +285,36 @@ internal static class CueNormalizer
     }
 
     /// <summary>
-    ///     Counts FILE lines that carry a parseable file name.
+    ///     Counts reference lines that carry a parseable file name: FILE lines for cues, and
+    ///     FILE/DATAFILE/AUDIOFILE lines for cdrdao TOCs.
     /// </summary>
-    /// <param name="lines">Lines of the cue.</param>
-    /// <returns>The number of usable FILE lines.</returns>
-    private static int CountFileLines(string[] lines)
+    /// <param name="lines">Lines of the descriptor.</param>
+    /// <param name="isToc">True when the descriptor is a cdrdao TOC.</param>
+    /// <returns>The number of usable reference lines.</returns>
+    private static int CountReferenceLines(string[] lines, bool isToc)
     {
         var count = 0;
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
+            if (isToc)
+            {
+                if (
+                    GameFileParser.IsTocReferenceLine(trimmed)
+                    && GameFileParser.TryGetTocFileNameAndTail(trimmed, out var name, out _)
+                    && name is not null
+                )
+                {
+                    count++;
+                }
+
+                continue;
+            }
+
             if (
                 trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase)
-                && GameFileParser.TryGetFileNameFromFileLine(trimmed, out var name)
-                && name is not null
+                && GameFileParser.TryGetFileNameFromFileLine(trimmed, out var fileName)
+                && fileName is not null
             )
             {
                 count++;
@@ -375,6 +451,41 @@ internal static class CueNormalizer
     private static string BuildCanonicalFileLine(string name, string? trackType)
     {
         return trackType is null ? $"FILE \"{name}\"" : $"FILE \"{name}\" {trackType}";
+    }
+
+    /// <summary>
+    ///     Builds the canonical cdrdao TOC reference line: the original keyword (FILE, DATAFILE or
+    ///     AUDIOFILE), the resolved name quoted, and the trailing argument tokens (SWAP, #decimal
+    ///     or MSF offsets/lengths) preserved verbatim — they describe positions inside the file,
+    ///     which copying the file does not change.
+    /// </summary>
+    /// <param name="trimmedLine">The original trimmed line.</param>
+    /// <param name="name">The resolved file name to write.</param>
+    /// <param name="tail">The argument tokens after the name (possibly empty).</param>
+    /// <returns>The canonical TOC reference line.</returns>
+    private static string BuildCanonicalTocLine(string trimmedLine, string name, string tail)
+    {
+        var keywordEnd = trimmedLine.IndexOfAny(TokenSeparators);
+        var keyword = keywordEnd < 0 ? trimmedLine : trimmedLine[..keywordEnd];
+        return tail.Length == 0 ? $"{keyword} \"{name}\"" : $"{keyword} \"{name}\" {tail}";
+    }
+
+    /// <summary>
+    ///     Infers the track type token for a FILE line that does not carry one, from the referenced
+    ///     file's extension. Returns null for unknown extensions so the line is left untouched.
+    /// </summary>
+    /// <param name="name">The referenced (or resolved) file name.</param>
+    /// <returns>The inferred type token, or null.</returns>
+    private static string? InferTrackTypeFromExtension(string name)
+    {
+        return Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".wav" => "WAVE",
+            ".mp3" => "MP3",
+            ".aif" or ".aiff" => "AIFF",
+            ".bin" or ".img" or ".iso" or ".raw" => "BINARY",
+            _ => null,
+        };
     }
 
     /// <summary>

@@ -38,14 +38,15 @@ All classes live in `CHDStudio/Utilities/` (and `Models/` where noted).
 
 ### CueNormalizer (`CueNormalizer.cs`)
 
-`internal static class CueNormalizer` — produces a canonical, chdman-safe cue.
+`internal static class CueNormalizer` — produces a canonical, chdman-safe cue or cdrdao TOC.
 
 - `NormalizeAsync(cuePath, token, transform?)`:
   1. Reads lines with `GameFileParser.ReadLinesWithDetectedEncodingAsync` (encoding + BOM detection).
-  2. Processes only lines starting with `FILE ` (case-insensitive); everything else passes through verbatim.
+  2. Cues: processes lines starting with `FILE ` (case-insensitive); everything else passes through verbatim. cdrdao TOCs (`.toc`): processes `FILE`/`DATAFILE`/`AUDIOFILE` lines and keeps the argument tokens after the name (`SWAP`, `#decimal`/MSF offsets and lengths) verbatim — they describe positions inside the file, which copying does not change.
   3. Resolves each reference: **exact case-sensitive** match → **case-insensitive** match → **zero-padding-tolerant** match (`(Track 2)` ↔ `(Track 02)`/`(Track 002)` via `TrackNumberRegex`).
   4. Applies an optional transform (used to rewrite MP3 → WAV names and track types).
   5. Compares the canonical line with the original; flags `NeedsRewrite`/`ReferencesChanged`.
+- A cue `FILE` line without a type token gets one inferred from the referenced extension (`BINARY` for bin/img/iso/raw, `WAVE`, `MP3`, `AIFF`); a name quoted with backslash-escaped quotes (`FILE \"track01.bin\"`, written by some tools) has the escape backslash removed so the reference resolves and the rewrite is consumable by both encoders.
 - `WriteCanonicalCueAsync` — writes **UTF-8 without BOM**, CRLF line endings.
 - `GetTrackType` — token after the last quote, matched against `[BINARY, WAVE, MP3, AIFF, MOTOROLA, AUDIO]` (case-insensitive), upper-cased; tolerates cdrdao TOC extra columns.
 - Result model `CueNormalizationResult` carries `SourceEncoding`, `HasBom`, `References`, `UnresolvedNames`, `CanonicalLines`, `NeedsRewrite`, `ReferencesChanged`, `CanonicalCueText`.
@@ -58,8 +59,8 @@ All classes live in `CHDStudio/Utilities/` (and `Models/` where noted).
 - `PrepareAsync(cuePath, tempDirPrefix, mp3Decoder?, onLog?, token)` → `CueWorkDirectoryResult(WorkCuePath, WorkDir, UnresolvedNames)`:
   - No work needed (UTF-8, no BOM, ASCII names, no corrections, no MP3, no over-declared WAVE header, safe path lengths) → `(null, null, [])`.
   - **WAVE repair fast path**: when the only defect is one or more `WAVE` tracks whose header declares more audio than the file contains, the work directory is created **on the cue's own volume** and the canonical cue references every other file (the disc image included) **in place via relative paths**; only the damaged WAVs are copied, and their headers are clamped in the copy. Declined when a reference cannot be reached relatively or when the same-volume directory cannot be created — then the full path below repairs the copies instead.
-  - **BOM-only fast path**: writes a BOM-free canonical `game.cue` into the work dir that references bins **in place via relative paths** — no bin copies. Declined when any bin is on another drive or when the descriptor/references are at or beyond MAX_PATH (the relative references would rejoin into the same overlong paths).
-  - Full path: copies every referenced file under safe `trackNN.ext` names (MP3 tracks decoded to `trackNN.wav` via the MP3 decoder, track type rewritten to `WAVE`), then writes the canonical cue. Overlong paths force this copy-based route so chdman only ever sees short ASCII names. Over-declared WAVE copies are clamped here as well.
+  - **BOM-only fast path**: writes a BOM-free canonical descriptor named `game.<ext>` into the work dir that references bins **in place via relative paths** — no bin copies. The source extension is kept (`.cue` stays `.cue`, cdrdao `.toc` stays `.toc`): both encoders dispatch parsers by extension, and a cdrdao `.toc` renamed to `.cue` would be read by the CUE parser and fail with `Malformed TRACK command`. Declined when any bin is on another drive or when the descriptor/references are at or beyond MAX_PATH (the relative references would rejoin into the same overlong paths).
+  - Full path: copies every referenced file under safe `trackNN.ext` names (MP3 tracks decoded to `trackNN.wav` via the MP3 decoder, track type rewritten to `WAVE`), then writes the canonical descriptor. Overlong paths force this copy-based route so chdman only ever sees short ASCII names. Over-declared WAVE copies are clamped here as well.
   - Unresolved references → returned in `UnresolvedNames` (caller skips conversion).
   - On failure the work dir is deleted and the exception rethrown.
 - `TryWriteInPlaceWorkCueAsync` — the BOM fast path above; `TryPrepareWaveRepairWorkDirAsync` — the WAVE repair fast path; `CopyWithRetryAsync` copies bins with up to 4 attempts (300 ms × attempt backoff).
@@ -85,7 +86,7 @@ chdman's cue parser does **not** skip a UTF-8 BOM — the first token becomes `"
 `internal static class GameFileParser` (`GameFileParser.cs:11`)
 
 - `GetReferencedFilesFromCueAsync` / `FromGdiAsync` / `FromTocAsync` — extract referenced file names from descriptors:
-  - **cue/toc**: lines starting with `FILE `; quoted or unquoted names; the last space-delimited token is stripped when it is a known track type.
+  - **cue/toc**: `FILE ` lines; quoted or unquoted names; the last space-delimited token is stripped when it is a known track type. TOCs also recognize the cdrdao keywords `DATAFILE`/`AUDIOFILE` (unquoted names are a single token; offset/length arguments never become part of the name). A backslash directly before the closing quote is treated as the escape half of a quoted name (`FILE \"track01.bin\"` from tools that escape their quotes).
   - **gdi**: skips line 0 (track-count header); quoted names between first/last quote; unquoted lines need ≥ 5 whitespace parts, with names spanning parts 4..end when > 6 parts (spaces in filenames).
 - `ReadLinesWithDetectedEncodingAsync` — BOM detection (UTF-8 → **UTF-32LE before UTF-16LE** → UTF-16LE → UTF-16BE), then strict UTF-8, then legacy codepages `[932, 949, 936, 1251, 866, 1252]` ("ordered by likelihood for game rips") scored +10 per `FILE` line whose name resolves to an existing file; ties broken by declared order; last resort `Encoding.Default`.
 - Used by the conversion pipeline for dependency validation, by `CueNormalizer`, and by `DeleteOriginalGameFilesAsync`.

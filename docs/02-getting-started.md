@@ -13,7 +13,7 @@ nav_order: 3
 - **Bundled executables** (shipped with the app, must stay next to `CHDStudio.exe`):
   - Windows: `chdman.exe` / `chdman_arm64.exe` (0.289) — MAME CHD tool (primary encoder and extraction fallback); `7za.exe` / `7za_arm64.exe` — 7-Zip fallback extractor
   - Linux/macOS: `7zz` (official 7-Zip 26.03 console build, copied from `tools/` at publish time) — 7-Zip fallback extractor
-- **Built-in encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.4.3) runs in-process on every platform — the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to chdman 0.289, and being a managed assembly there is no encoder executable to ship.
+- **Built-in encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.4.4) runs in-process on every platform — the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to chdman 0.289, and being a managed assembly there is no encoder executable to ship.
 - **Nothing else to install** — CSO, ISZ, ECM, Alcohol `.mds`/`.mdf` and split volume sets are all handled inside the application, so x64 and ARM64 get the same feature set.
 
 ### Build (developers)
@@ -61,13 +61,13 @@ The solution contains seven projects:
 | `PBPSharp` | class library (PBP/SFO parsing) | `net8.0;net9.0;net10.0` |
 | `ISZSharp` | class library (ISZ decompression) | `net8.0;net9.0;net10.0` |
 
-> **Note**: on Windows, `chdman.exe` and `7za.exe` are copied to the output directory by the build (`CHDStudio.csproj`); on Linux and macOS the matching `tools/7zz*` binary (official 7-Zip 26.03) is copied as `7zz`, while a `chdman` on `PATH` is only used for extraction fallback and never for encoding. The libraries are referenced as project references, not NuGet packages, except `CHDSharp` (NuGet 1.4.3) and other packages listed below.
+> **Note**: on Windows, `chdman.exe` and `7za.exe` are copied to the output directory by the build (`CHDStudio.csproj`); on Linux and macOS the matching `tools/7zz*` binary (official 7-Zip 26.03) is copied as `7zz`, while a `chdman` on `PATH` is only used for extraction fallback and never for encoding. The libraries are referenced as project references, not NuGet packages, except `CHDSharp` (NuGet 1.4.4) and other packages listed below.
 
 ### NuGet dependencies (application)
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| CHDSharp | 1.4.3 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
+| CHDSharp | 1.4.4 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
 | Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.1.x | Cross-platform Fluent Design UI framework and controls |
 | SharpCompress | 0.50.x | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
 | NAudio | 3.1.0 | MP3 decoding via Media Foundation |

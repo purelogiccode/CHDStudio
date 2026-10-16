@@ -347,6 +347,55 @@ public class GameFileParserTests : IDisposable
     }
 
     [Fact]
+    public async Task GetReferencedFilesFromTocAsyncCdrdaoDatafileAndAudiofileReturned()
+    {
+        var tocPath = Path.Combine(_tempDir, "disc.toc");
+        const string content =
+            "CD_DA\n\nTRACK MODE2_RAW\nNO COPY\nDATAFILE \"data.bin\" 0 1000\nTRACK AUDIO\nAUDIOFILE track02.wav 0 00:00:50\nSTART\n";
+        await File.WriteAllTextAsync(tocPath, content);
+
+        var result = await GameFileParser.GetReferencedFilesFromTocAsync(
+            tocPath,
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(Path.Combine(_tempDir, "data.bin"), result[0]);
+        Assert.Equal(Path.Combine(_tempDir, "track02.wav"), result[1]);
+    }
+
+    [Fact]
+    public async Task GetReferencedFilesFromTocAsyncBackslashEscapedQuotesReturnName()
+    {
+        var tocPath = Path.Combine(_tempDir, "disc.toc");
+        // Literal backslash-escaped quotes around the name, plus cdrdao offset/length arguments.
+        const string content = "TRACK MODE2_RAW\nDATAFILE \\\"track01.bin\\\" 0 1000\n";
+        await File.WriteAllTextAsync(tocPath, content);
+
+        var result = await GameFileParser.GetReferencedFilesFromTocAsync(
+            tocPath,
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.Single(result);
+        Assert.Equal(Path.Combine(_tempDir, "track01.bin"), result[0]);
+    }
+
+    [Fact]
+    public void TryGetFileNameFromFileLineHandlesBackslashEscapedQuotes()
+    {
+        Assert.True(
+            GameFileParser.TryGetFileNameFromFileLine(
+                "FILE \\\"track01.bin\\\"",
+                out var fileName
+            )
+        );
+        Assert.Equal("track01.bin", fileName);
+    }
+
+    [Fact]
     public async Task ReadLinesWithDetectedEncodingAsyncReportsBomPresence()
     {
         const string content =

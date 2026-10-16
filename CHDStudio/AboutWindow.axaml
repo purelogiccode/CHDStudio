@@ -149,7 +149,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the CHDSharp library for in-process CHD reading, verification, extraction and creation">
-                        <Run Text="Uses " /><Run Text="CHDSharp" FontWeight="Bold" /><Run Text=" (v1.4.3) by Peterson Fernandes for in-process CHD reading, verification, extraction and creation (chdman byte-identical output)." />
+                        <Run Text="Uses " /><Run Text="CHDSharp" FontWeight="Bold" /><Run Text=" (v1.4.4) by Peterson Fernandes for in-process CHD reading, verification, extraction and creation (chdman byte-identical output)." />
                     </TextBlock>
                     <Button
                         Classes="link"
