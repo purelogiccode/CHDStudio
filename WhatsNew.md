@@ -5,6 +5,34 @@ nav_order: 15
 
 # What's New
 
+## 3.9.5 (2026-10-16)
+
+### Encoder library: CHDSharp 1.4.4 / 1.4.5
+
+*   **Redump Dreamcast multi-cues convert byte-identically to `chdman`.** A `.cue` holding both images of a GD-ROM (`REM SINGLE-DENSITY AREA` / `REM HIGH-DENSITY AREA`) previously produced a plain-CD layout; the parser now applies MAME's `is_gdicue` rules — pregaps move onto the previous track as split regions, the last single-density track pads up to LBA 45000, and the CHD is stamped with `CHGD` GD-ROM metadata. Verified against a real 1.19 GB Redump multi-cue: identical SHA-1 and metadata to `chdman createcd`, and `chdman extractcd` on the app's output restores every track byte-for-byte.
+*   **Multisession cues (IsoBuster/ImgBurn/Redump/DiscImageCreator) are laid out like chdman.** `REM SESSION` / `REM LEAD-IN` / `REM LEAD-OUT` and session `REM PREGAP` are now honored: single-bin images trim the session's last track at the declared lead-out and turn the inter-session dummy data into zero-filled pad frames (with DiscImageCreator's `.img` no-padding heuristic); multi-bin images get the synthesized standard lead-in/lead-out values. An inconsistent lead-out that would go negative is rejected with a clear error instead of being encoded as a silently wrong image. Byte-parity is pinned by `chdman createcd` fixtures for all three layouts.
+*   **cdrdao `.toc` files with a bare `START` line convert.** MAME accepts a numberless `START` (no pregap); the built-in parser rejected it with `Malformed START command`, failing every `.toc` chdman converts. Both `START` forms now produce byte-identical output to chdman.
+
+### cdrdao `.toc` staging and malformed-cue fixes (#68261, #68249)
+
+*   **A staged `.toc` keeps its extension.** When a descriptor needed the work directory (UTF-8 BOM, non-ASCII names, …) it was always renamed to `game.cue`; cdrdao syntax (`TRACK MODE2_RAW`, `DATAFILE …`) then reached the CUE parser in both encoders and failed with `Malformed TRACK command: TRACK MODE2_RAW`. The work descriptor is now `game.toc` for `.toc` input, and its `DATAFILE`/`AUDIOFILE` references are copied and rewritten with their `SWAP`/offset/length arguments preserved.
+*   **Backslash-escaped quotes and missing `BINARY` tokens are repaired.** A cue written as `FILE \"track01.bin\"` (escape backslashes, no type token) could not resolve its bin and made the fallback report `Malformed FILE command`. The normalizer now unescapes the name and infers the missing type from the extension, producing a canonical cue that both encoders accept.
+*   **A descriptor that describes more data than its file holds (truncated rip) is documented and classified.** `chdman` reports `Error reading input file`, the built-in encoder `Unexpected end of file` — both reject the same files, so it is a user-data condition; the troubleshooting page explains it and it files no bug report.
+
+### chdman crash handling (#68281)
+
+*   **One conversion-time crash switches the batch to the built-in encoder.** The startup probe only runs `chdman help`; a chdman that dies later with `STATUS_ILLEGAL_INSTRUCTION` (a CPU without the build's SIMD extensions) used to crash again for every file. The first negative exit code now sets a per-batch flag: the remaining files are encoded in-process, and the crash summary is excluded from bug reports as an installation problem (matching the startup-check policy).
+
+### Fewer false bug reports (#68256, #68260)
+
+*   `chdman exited with code N and its output is not a valid CHD (…); discarding it.` — the intermediate validation notice for a partial output no longer files a report; the classified final message still reports the real cause.
+*   `Source file appears to be corrupt: …` (a CRC/data error while copying a source for the temp retry) is a user-data condition; it is now excluded from reports and logs the underlying exception to the local log file.
+
+### Housekeeping
+
+*   Package updates: CHDSharp 1.4.3 → 1.4.5 (two parity releases, see above), NAudio 3.1.0 → 3.2.0.
+*   Test suite: **1146 tests (1117 unit + 29 integration) across 58 test classes**; CHDSharp 1.4.5 ships 451 green tests, including the `chdman` byte-parity suites for the three descriptor fixes.
+
 ## 3.9.4 (2026-10-13)
 
 ### CD extraction writes cooked sectors again (#11)
