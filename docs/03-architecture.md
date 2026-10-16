@@ -80,7 +80,7 @@ CSharp_CHDStudio.sln
          ┌──────────────────────┐  ┌─────────────────────┐
          │       MDSSharp       │  │       ISZSharp      │
          └──────────────────────┘  └─────────────────────┘
-     NuGet: CHDSharp 1.4.4, Avalonia, SharpCompress, NAudio, Serilog
+     NuGet: CHDSharp 1.4.5, Avalonia, SharpCompress, NAudio, Serilog
 ```
 
 - The app references `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` as project references.

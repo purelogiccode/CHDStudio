@@ -24,7 +24,7 @@ Developed by [Pure Logic Code](https://www.purelogiccode.com), the application c
 
 ### Intelligent Conversion & Extraction
 - **Automated batch processing** — convert entire directories with real-time progress, immediate cancellation, and per-file timeouts.
-- **Built-in encoder** — the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.4.4) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
+- **Built-in encoder** — the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.4.5) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
 - **Recursive structure preservation** — the output folder mirrors the input folder's directory hierarchy (`PathUtils.GetSafeRelativePath`).
 - **Robust extraction** — CHD → `.cue` (CD), `.iso` (DVD), `.gdi` (Dreamcast/Naomi), `.img` (HDD), `.avi` (laserdisc A/V), with automatic flag-based command detection via CHDSharp. Laserdisc A/V CHDs extract in-process, so they no longer need chdman.
 - **Laserdisc support** — `.avi` inputs convert with `createld` (A/V `avhu` codec), and A/V CHDs extract back to AVI, all through the built-in encoder.
