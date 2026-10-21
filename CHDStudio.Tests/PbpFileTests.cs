@@ -145,6 +145,24 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
+    public void OpenMultiDiscPbpWithDiscPastEndReturnsTruncatedPsar()
+    {
+        var path = Path.Combine(_tempDir, $"truncated_multi_{Guid.NewGuid():N}.pbp");
+        var data = new PbpTestFileBuilder().AsMultiDisc(0x200000).Build();
+
+        // Keep the PBP and PSAR headers and the disc-position table, but drop the disc data the
+        // table points at. The old 32-bit arithmetic treated some large positions as a negative
+        // Seek and reported IoError; the parser now recognises the file as truncated.
+        Array.Resize(ref data, 0x1000);
+        File.WriteAllBytes(path, data);
+
+        var error = PbpFile.Open(path, out var pbp);
+
+        Assert.Equal(PbpError.TruncatedPsar, error);
+        Assert.Null(pbp);
+    }
+
+    [Fact]
     public void OpenPopFeStyleMultiDiscPbpExtractsBothDiscs()
     {
         var path = Path.Combine(_tempDir, $"popfe_multi2_{Guid.NewGuid():N}.pbp");

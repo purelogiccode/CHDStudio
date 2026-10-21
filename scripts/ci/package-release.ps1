@@ -125,6 +125,23 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
     [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zipPath, [IO.Compression.CompressionLevel]::Optimal, $false)
 
+    # The package job runs on Windows for every RID, and ZipFile writes no Unix mode bits.
+    # Without them, unzip on Linux/macOS creates CHDStudio and 7zz as 0644 (not executable),
+    # so the downloaded app cannot start until the user runs chmod +x. Stamp the standard
+    # 0755 mode on the executables and 0644 on the data files in the non-Windows bundles.
+    if (-not $isWindowsRid) {
+        $zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
+        try {
+            foreach ($entry in $zip.Entries) {
+                $mode = if ($entry.FullName -in @($executable, '7zz')) { 0x81ED } else { 0x81A4 }
+                $entry.ExternalAttributes = [int]($mode -shl 16)
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
+
     Write-Host "Created $zipPath"
     Get-ChildItem -LiteralPath $stage -File | Sort-Object Name | ForEach-Object {
         Write-Host ("  {0,-24} {1,8:N2} MB" -f $_.Name, ($_.Length / 1MB))

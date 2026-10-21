@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const csprojPath = join(repoRoot, 'CHDStudio', 'CHDStudio.csproj');
 
 const args = process.argv.slice(2);
 const getArg = (name) => {
@@ -12,13 +11,46 @@ const getArg = (name) => {
     return index === -1 ? undefined : args[index + 1];
 };
 
-const csproj = readFileSync(csprojPath, 'utf8');
-const match = csproj.match(/<AssemblyVersion>([^<]+)<\/AssemblyVersion>/);
-if (!match) {
-    console.error(`Could not find <AssemblyVersion> in ${csprojPath}`);
+const readProjectVersion = (relativePath) => {
+    const path = join(repoRoot, relativePath);
+    const text = readFileSync(path, 'utf8');
+    const assembly = text.match(/<AssemblyVersion>([^<]+)<\/AssemblyVersion>/);
+    const file = text.match(/<FileVersion>([^<]+)<\/FileVersion>/);
+    if (!assembly || !file) {
+        console.error(`Could not find <AssemblyVersion>/<FileVersion> in ${path}`);
+        process.exit(1);
+    }
+
+    const assemblyVersion = assembly[1].trim();
+    const fileVersion = file[1].trim();
+    if (assemblyVersion !== fileVersion) {
+        console.error(
+            `${relativePath} has mismatched versions: AssemblyVersion=${assemblyVersion}, FileVersion=${fileVersion}.`
+        );
+        process.exit(1);
+    }
+
+    return assemblyVersion;
+};
+
+const version = readProjectVersion(join('CHDStudio', 'CHDStudio.csproj'));
+const testsVersion = readProjectVersion(join('CHDStudio.Tests', 'CHDStudio.Tests.csproj'));
+if (testsVersion !== version) {
+    console.error(
+        `Version mismatch: CHDStudio is ${version}, CHDStudio.Tests is ${testsVersion}. Update both project files together.`
+    );
     process.exit(1);
 }
-const version = match[1].trim();
+
+const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const whatsNew = readFileSync(join(repoRoot, 'WhatsNew.md'), 'utf8').replace(/\r\n/g, '\n');
+const notesHeading = new RegExp(`^## ${escapedVersion}(?:\\s|\\(|$)`, 'm');
+if (!notesHeading.test(whatsNew)) {
+    console.error(
+        `No "## ${version}" section found in WhatsNew.md. Add the release notes for this version.`
+    );
+    process.exit(1);
+}
 
 const tag = getArg('tag');
 if (tag !== undefined) {

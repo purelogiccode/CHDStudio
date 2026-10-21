@@ -378,6 +378,20 @@ public class BugReportServiceTests
     [InlineData(
         "The bundled chdman.exe may be incompatible with this computer's CPU or Windows version, or was damaged/quarantined by antivirus software."
     )]
+    [InlineData("Could not delete temp dir: CHDStudio_Temp_0020ffeda67e48c48634889815498f48")]
+    [InlineData(
+        "Unable to load shared library 'libHarfBuzzSharp' or one of its dependencies. ... /home/user/Downloads/libHarfBuzzSharp.so: cannot open shared object file: No such file or directory"
+    )]
+    [InlineData("libSkiaSharp.so: cannot open shared object file: No such file or directory")]
+    [InlineData(
+        "CHDSharp encoding failed: Track 33: the session lead-out values leave a negative length (-24208 frames); the cue's REM SESSION/LEAD-OUT values do not match the image."
+    )]
+    [InlineData(
+        @"CHDSharp encoding failed: Unexpected end of file [C:\Users\CARLOS-MENDIETA\Desktop\Fighting Force\Fighting Force.bin]"
+    )]
+    [InlineData(
+        "The CHD's CD track metadata is missing or damaged (no tracks could be read). [CHD v5 compression=Cdlzma,Cdzlib,Cdflac,None hunks=13870 tracks=0 metadata=CHT2(93)]"
+    )]
     public void IsExcludedFromBugReport_KnownPatterns_ReturnsTrue(string message)
     {
         Assert.True(BugReportService.IsExcludedFromBugReport(message));
@@ -454,6 +468,51 @@ public class BugReportServiceTests
         var service = new BugReportService(TestApiUrl, TestApiKey, TestAppName, httpClient);
 
         var result = await service.SendBugReportAsync("disk space is running low");
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsMissingNativeLibrary_DllNotFound_ReturnsTrue()
+    {
+        var ex = new DllNotFoundException(
+            "Unable to load shared library 'libHarfBuzzSharp' or one of its dependencies."
+        );
+
+        Assert.True(BugReportService.IsMissingNativeLibrary(ex));
+    }
+
+    [Fact]
+    public void IsMissingNativeLibrary_WrappedException_ReturnsTrue()
+    {
+        var inner = new DllNotFoundException("libSkiaSharp.so: cannot open shared object file");
+        var outer = new TypeInitializationException("Avalonia.Skia", inner);
+
+        Assert.True(BugReportService.IsMissingNativeLibrary(outer));
+    }
+
+    [Fact]
+    public void IsMissingNativeLibrary_OtherException_ReturnsFalse()
+    {
+        Assert.False(
+            BugReportService.IsMissingNativeLibrary(new InvalidOperationException("Encoder failed"))
+        );
+        Assert.False(BugReportService.IsMissingNativeLibrary(null));
+    }
+
+    [Fact]
+    public async Task SendBugReportAsync_NativeLibraryFailure_ReturnsFalseWithoutHttpCall()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+            throw new InvalidOperationException("Should not be called")
+        );
+        using var httpClient = new HttpClient(handler);
+        var service = new BugReportService(TestApiUrl, TestApiKey, TestAppName, httpClient);
+
+        var result = await service.SendBugReportAsync(
+            "Unhandled Exception from AppDomain.UnhandledException",
+            new DllNotFoundException("libHarfBuzzSharp.so: cannot open shared object file")
+        );
 
         Assert.False(result);
     }

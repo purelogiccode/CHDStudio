@@ -151,7 +151,26 @@ internal class BugReportService
         // the extractor retries via a local temp copy, so this intermediate notice is
         // not an app bug.
         "Direct extraction failed",
-        "will fall back to temp-copy extraction"
+        "will fall back to temp-copy extraction",
+        // Temp directories are removed best-effort. A file still held open by antivirus or
+        // a search indexer leaves the folder behind; the OS reclaims it later, so this is
+        // an environment condition rather than an app defect.
+        "Could not delete temp dir",
+        // A missing native rendering library means the release bundle was not extracted in
+        // full (for example, only the executable was copied out of the zip). The startup
+        // guard reports the missing files to the user; nothing in the app failed.
+        "Unable to load shared library",
+        "libHarfBuzzSharp",
+        "libSkiaSharp",
+        // CHDSharp rejects a cue whose REM SESSION/LEAD-OUT values disagree with the image.
+        // Both encoders reject that cue, and the message already tells the user what to fix.
+        "session lead-out values leave a negative",
+        // A cue/image that describes more data than its file holds (a truncated rip) makes
+        // both encoders stop at EOF. The source is incomplete, not the app.
+        "CHDSharp encoding failed: Unexpected end of file",
+        // A CD CHD whose track metadata cannot be parsed is a damaged user file. A valid CHD
+        // created from the same source extracts correctly; re-creating it is the fix.
+        "CD track metadata is missing or damaged"
     ];
 
     private static readonly string[] DirectlyReportedMessagePatterns =
@@ -228,6 +247,40 @@ internal class BugReportService
     }
 
     /// <summary>
+    ///     Returns whether an exception was caused by a missing native rendering library
+    ///     (HarfBuzz, Skia or the Avalonia native backend). The release zip ships these files
+    ///     beside the executable, so this is an incomplete-extraction/installation problem,
+    ///     not an application defect.
+    /// </summary>
+    /// <param name="exception">The exception to inspect, including its inner exceptions.</param>
+    /// <returns>True when the failure is a missing native rendering library.</returns>
+    internal static bool IsMissingNativeLibrary(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DllNotFoundException) return true;
+
+            if (
+                current.Message.Contains("libHarfBuzzSharp", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains("libSkiaSharp", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains(
+                    "libAvaloniaNative",
+                    StringComparison.OrdinalIgnoreCase
+                )
+                || current.Message.Contains(
+                    "Unable to load shared library",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Sends a bug report to the API with full environment and exception details
     /// </summary>
     /// <param name="message">A summary of the error or bug report</param>
@@ -242,7 +295,7 @@ internal class BugReportService
     {
         token.ThrowIfCancellationRequested();
 
-        if (IsExcludedFromBugReport(message))
+        if (IsExcludedFromBugReport(message) || IsMissingNativeLibrary(ex))
             return false;
 
         try

@@ -355,14 +355,22 @@ public sealed class PbpFile : IDisposable
     {
         discs = [];
 
-        stream.Seek(header.DataPsarOffset, SeekOrigin.Begin);
+        // Disc positions and the ISO data area are 32-bit fields, but a multi-gigabyte PBP can
+        // place a later disc beyond 2 GB. Every offset is widened to long before arithmetic so
+        // the sign bit of the on-disk int32 cannot turn a valid offset into a negative Seek.
+        var psarOffset = (long)header.DataPsarOffset;
+        var streamLength = GetStreamLengthOrMax(stream);
+        if (psarOffset < 0) return PbpError.InvalidPsarHeader;
+        if (psarOffset > streamLength - 16) return PbpError.TruncatedPsar;
+
+        stream.Seek(psarOffset, SeekOrigin.Begin);
         var psarHeaderBuffer = new byte[16];
         stream.ReadExactly(psarHeaderBuffer, 0, 16);
         var psarHeader = Encoding.ASCII.GetString(psarHeaderBuffer, 0, 12);
 
         if (string.Equals(psarHeader, "PSISOIMG0000", StringComparison.Ordinal))
         {
-            discs.Add(new PbpDiscInfo(stream, header.DataPsarOffset, 1));
+            discs.Add(new PbpDiscInfo(stream, psarOffset, 1));
         }
         else
         {
@@ -404,11 +412,37 @@ public sealed class PbpFile : IDisposable
             for (var i = 0; i < 5; i++)
             {
                 var pos = BitConverter.ToUInt32(posBuffer, i * 4);
-                if (pos > 0) discs.Add(new PbpDiscInfo(stream, header.DataPsarOffset + (int)pos, i + 1));
+                if (pos == 0) continue;
+
+                var discOffset = psarOffset + pos;
+                if (discOffset > streamLength - 16) return PbpError.TruncatedPsar;
+
+                discs.Add(new PbpDiscInfo(stream, discOffset, i + 1));
             }
         }
 
         return PbpError.None;
+    }
+
+    /// <summary>
+    ///     Returns <paramref name="stream" />'s length, or <see cref="long.MaxValue" /> when the
+    ///     stream does not support reporting it. The PBP parser only needs the length to reject
+    ///     offsets that point past the end; a stream without a length still gets the normal
+    ///     read-time validation.
+    /// </summary>
+    /// <param name="stream">The seekable PBP stream.</param>
+    /// <returns>The stream length, or <see cref="long.MaxValue" />.</returns>
+    private static long GetStreamLengthOrMax(Stream stream)
+    {
+        try
+        {
+            return stream.Length;
+        }
+        catch (Exception ex)
+            when (ex is NotSupportedException or IOException or InvalidOperationException)
+        {
+            return long.MaxValue;
+        }
     }
 
     /// <summary>

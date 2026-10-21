@@ -47,11 +47,13 @@ try {
     git(['config', 'core.autocrlf', 'false'], wikiDir);
 
     const changed = [];
+    const expectedTargets = new Set();
     for (const name of readdirSync(docsDir)) {
         if (!name.endsWith('.md')) {
             continue;
         }
         const target = name === 'index.md' ? 'Home.md' : name;
+        expectedTargets.add(target);
         const content = stripFrontMatter(readFileSync(join(docsDir, name), 'utf8'));
         const targetPath = join(wikiDir, target);
         let previous = '';
@@ -70,6 +72,7 @@ try {
         readFileSync(join(repoRoot, 'WhatsNew.md'), 'utf8')
     ).replace(/\r\n/g, '\n');
     const whatsNewTarget = join(wikiDir, 'WhatsNew.md');
+    expectedTargets.add('WhatsNew.md');
     let previousWhatsNew = '';
     try {
         previousWhatsNew = readFileSync(whatsNewTarget, 'utf8').replace(/\r\n/g, '\n');
@@ -79,6 +82,21 @@ try {
     if (previousWhatsNew !== whatsNew) {
         writeFileSync(whatsNewTarget, whatsNew, 'utf8');
         changed.push('WhatsNew.md');
+    }
+
+    // Delete generated pages that no longer exist in docs/. Manual wiki pages
+    // that do not follow the docs naming scheme (for example _Footer.md or a
+    // hand-written scratch page) are preserved.
+    const generatedPagePattern = /^(?:_Sidebar|Home|WhatsNew|\d{2}-.+)\.md$/;
+    for (const name of readdirSync(wikiDir)) {
+        if (!name.endsWith('.md') || expectedTargets.has(name)) {
+            continue;
+        }
+        if (!generatedPagePattern.test(name)) {
+            continue;
+        }
+        rmSync(join(wikiDir, name), { force: true });
+        changed.push(`deleted ${name}`);
     }
 
     if (changed.length === 0) {

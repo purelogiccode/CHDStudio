@@ -5,8 +5,9 @@
 # docs/ is the single source of truth. Do not edit the wiki by hand; the wiki
 # job copies docs/*.md over (index.md becomes Home.md, Jekyll front matter is
 # stripped), adds WhatsNew.md, and pushes. docs/_Sidebar.md becomes the wiki
-# side menu; Jekyll ignores the underscore-prefixed file. WhatsNew.md is staged
-# into docs/ before the Jekyll build so the Pages site renders it too. Requires
+# side menu; Jekyll ignores the underscore-prefixed file. docs/WhatsNew.md is a
+# committed copy of the root release notes; CI verifies the two stay identical
+# so a branch-based Pages deployment also renders What's New. Requires
 # a repository secret named WIKI_TOKEN (classic PAT with the "repo" scope, or a
 # fine-grained PAT with Contents: Read and write) because GITHUB_TOKEN cannot
 # push to the wiki repository.
@@ -19,6 +20,8 @@ name: Docs
 
 on:
   push:
+    branches: ["master"]
+  pull_request:
     branches: ["master"]
   workflow_dispatch:
 
@@ -39,9 +42,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
-      - name: Stage WhatsNew.md for the site
-        run: cp WhatsNew.md docs/WhatsNew.md
+      - name: Verify docs/WhatsNew.md is in sync
+        run: diff -u WhatsNew.md docs/WhatsNew.md
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
@@ -51,6 +55,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -63,6 +68,7 @@ jobs:
 
   wiki:
     name: Sync GitHub wiki
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read

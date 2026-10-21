@@ -79,6 +79,12 @@ internal partial class MainWindow : Window, IDisposable
 
     private const int MaxFileOperationRetries = 5;
 
+    /// <summary>
+    ///     Extra room kept free beyond a PBP's extracted ISO sizes, so a nearly full drive does not
+    ///     fail halfway through the last disc.
+    /// </summary>
+    private const long PbpExtractionMarginBytes = 64L * 1024 * 1024;
+
     // MP3 audio track decoder (Media Foundation) for cue sheets with MP3 tracks.
     private static readonly IMp3Decoder Mp3Decoder = new Mp3ToWavDecoder();
     private readonly ArchiveService _archiveService;
@@ -3748,14 +3754,23 @@ internal partial class MainWindow : Window, IDisposable
             /* ignored */
         }
 
+        var extractionBytes = GetPbpExtractionSizeEstimate(inputFile, pbpSize);
         var tempDir = PathUtils.GetBestTempDirectory(
             inputFile,
             outputFolder,
             TempDirPrefix,
-            pbpSize
+            extractionBytes
         );
         tempDirs.Add(tempDir);
         await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+
+        if (!HasFreeSpaceForTempDirectory(tempDir, extractionBytes))
+        {
+            LogError(
+                $" Not enough disk space to extract {originalName}: about {extractionBytes / (1024.0 * 1024.0 * 1024.0):F1} GB are needed on the temp drive. Free up disk space and try again."
+            );
+            return false;
+        }
 
         var result = await ExtractPbpToCueBinAsync(inputFile, tempDir, LogMessage, token);
         if (!result.Success || result.CueFilePaths.Count == 0)
@@ -5367,6 +5382,21 @@ internal partial class MainWindow : Window, IDisposable
                             // in the background so the disk write is not gated on one hunk at a time.
                             chd.ConfigureReadAhead(ExtractionReadAheadHunks);
 
+                            // A CD CHD whose metadata contains no readable track entries cannot be
+                            // split into cue/bin. This is the signature of a damaged CHT2/CHTR
+                            // metadata section (or a CHD that was never a CD); fail with a precise
+                            // message instead of letting CHDSharp return a bare Chderrinvaliddata.
+                            if (
+                                extractCommand is not ("extractld" or "extractdvd" or "extracthd")
+                                && chd.IsCd
+                                && (chd.Tracks is null || chd.Tracks.Count == 0)
+                            )
+                            {
+                                throw new InvalidDataException(
+                                    "The CHD's CD track metadata is missing or damaged (no tracks could be read)."
+                                );
+                            }
+
                             if (extractCommand is "extractld")
                             {
                                 // A/V (laserdisc) CHDs have no CD/DVD/HDD metadata; the built-in
@@ -5449,6 +5479,19 @@ internal partial class MainWindow : Window, IDisposable
                 LogMessage(
                     $" Built-in reader could not extract '{Path.GetFileName(chdFile)}': {reason} Trying chdman..."
                 );
+
+                if (
+                    reason.Contains("Chderrinvaliddata", StringComparison.OrdinalIgnoreCase)
+                    || reason.Contains(
+                        "CD track metadata is missing or damaged",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    LogMessage(
+                        "       This CHD is damaged: its CD track metadata cannot be parsed. Re-create it from the original cue/bin; a valid CHD from the same source extracts normally."
+                    );
+                }
 
                 try
                 {
@@ -6747,6 +6790,30 @@ internal partial class MainWindow : Window, IDisposable
             catch (Exception ex)
             {
                 LogError($" CHDSharp encoding failed: {ex.Message}");
+
+                if (
+                    ex.Message.Contains(
+                        "session lead-out values leave a negative",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    LogMessage(
+                        "       The cue's REM SESSION/LEAD-OUT values conflict with its INDEX positions. Remove or correct those REM lines (or use a verified cue) and try again."
+                    );
+                }
+                else if (
+                    ex.Message.Contains(
+                        "Unexpected end of file",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    LogMessage(
+                        "       The image contains less data than the cue declares. Re-download or re-rip the disc; the source is truncated."
+                    );
+                }
+
                 return false;
             }
             finally
@@ -6947,6 +7014,26 @@ internal partial class MainWindow : Window, IDisposable
             .Append(chd.IsDvd)
             .Append(" sha1=")
             .Append(chd.Sha1 is { Length: > 0 } sha1 ? Convert.ToHexString(sha1) : "n/a");
+
+        // The track list and metadata tags distinguish a damaged CD metadata section from a
+        // CHD that simply has no CD metadata. Access is defensive: a malformed metadata chain
+        // can throw while being inspected, and diagnostics must never hide the original error.
+        try
+        {
+            builder.Append(" tracks=").Append(chd.Tracks?.Count ?? -1);
+            builder
+                .Append(" metadata=")
+                .AppendJoin(
+                    ",",
+                    chd.Metadata.Select(static entry =>
+                        $"{entry.Tag}({entry.Data.Length})"
+                    )
+                );
+        }
+        catch
+        {
+            builder.Append(" metadata=unreadable");
+        }
 
         return builder.ToString();
     }
@@ -7343,6 +7430,69 @@ internal partial class MainWindow : Window, IDisposable
         if (!string.IsNullOrWhiteSpace(detail)) builder.Append("; ").Append(detail);
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    ///     Estimates how much space the cue/bin extraction of a PBP needs. The PBP file itself is
+    ///     compressed, so its size is not a safe estimate: a 2.2 GB four-disc PBP expands to
+    ///     several gigabytes of BIN files. The discs' declared ISO sizes are used when the PBP can
+    ///     be opened, with the file size as fallback.
+    /// </summary>
+    /// <param name="inputFile">Full path of the PBP file.</param>
+    /// <param name="fallbackBytes">Size to use when the PBP cannot be opened.</param>
+    /// <returns>The number of bytes to reserve on the temp drive.</returns>
+    private static long GetPbpExtractionSizeEstimate(string inputFile, long fallbackBytes)
+    {
+        try
+        {
+            var error = PbpFile.Open(inputFile, out var pbpFile);
+            if (error == PbpError.None && pbpFile is not null)
+            {
+                using (pbpFile)
+                {
+                    long total = 0;
+                    foreach (var disc in pbpFile.Discs)
+                        total += disc.IsoSize;
+
+                    if (total > 0)
+                        return total > long.MaxValue - PbpExtractionMarginBytes
+                            ? long.MaxValue
+                            : total + PbpExtractionMarginBytes;
+                }
+            }
+        }
+        catch
+        {
+            // Fall back to the compressed file size; the extraction itself reports the real error.
+        }
+
+        return fallbackBytes > 0 ? fallbackBytes : 0;
+    }
+
+    /// <summary>
+    ///     Returns whether the drive holding <paramref name="directory" /> has at least
+    ///     <paramref name="requiredBytes" /> free. The check is skipped when the drive cannot be
+    ///     queried, so an unusual filesystem does not block a conversion that might succeed.
+    /// </summary>
+    /// <param name="directory">Directory whose volume is checked.</param>
+    /// <param name="requiredBytes">Free space required, in bytes.</param>
+    /// <returns>True when the volume appears to have enough free space.</returns>
+    private static bool HasFreeSpaceForTempDirectory(string directory, long requiredBytes)
+    {
+        if (requiredBytes <= 0) return true;
+
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(directory));
+            if (string.IsNullOrEmpty(root)) return true;
+
+            var drive = new DriveInfo(root);
+            return !drive.IsReady || drive.AvailableFreeSpace >= requiredBytes;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     /// <summary>Extracts every disc in a PBP file to cue/bin pairs.</summary>

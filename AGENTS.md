@@ -90,16 +90,20 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
   `release_3.9.0_win-x64.zip`. One zip per runtime identifier - `win-x64`,
   `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64` - and all
   of them are attached to the GitHub release.
+- **Linux/macOS zips carry Unix execute bits.** Packaging runs on Windows for
+  every RID, and `ZipFile` writes no Unix modes, so `package-release.ps1` stamps
+  `0755` on `CHDStudio` and `7zz` (and `0644` on the remaining files); without
+  that, `unzip` creates them non-executable.
 - **Version lives in two csproj files** (`CHDStudio` and
   `CHDStudio.Tests`, `AssemblyVersion`/`FileVersion`) plus a matching
-  section in `WhatsNew.md`. A release tag is `release_<version>` and must match
-  the csproj version - `scripts/ci/version.mjs` enforces this in CI.
+  section in `WhatsNew.md`. `scripts/ci/version.mjs` enforces all three. A
+  release tag is `release_<version>` and must match the csproj version.
 - **Cutting a release:** bump both csproj versions, add the `## <version>`
   section to the top of `WhatsNew.md`, commit to `master`, then
   `git tag release_<version> && git push origin release_<version>`. The
   `Release` workflow tests, publishes all six RIDs, zips them, and creates the
   GitHub release (title = version, body = the `WhatsNew.md` section).
-  Re-running the workflow uploads assets with `--clobber`.
+  Re-running the workflow refreshes the notes and uploads assets with `--clobber`.
 
 ## Library NuGet packages (manual publish)
 
@@ -167,7 +171,7 @@ a real file on each runtime).
 |---|---|---|
 | `.github/workflows/ci.yml` | push/PR to `master`, manual | Restore, build, test; uploads trx results |
 | `.github/workflows/release.yml` | tag `release_*`, manual with tag | Validate version, test, package zips for all six RIDs (Windows/Linux/macOS, x64+arm64), publish GitHub release |
-| `.github/workflows/docs.yml` | push to `master`, manual | Build/deploy Jekyll Pages site and sync `docs/` to the GitHub wiki |
+| `.github/workflows/docs.yml` | push/PR to `master`, manual | PR: build the Jekyll Pages site; master: also deploy Pages and sync `docs/` to the GitHub wiki |
 
 All workflows set up Node 24 where scripts run. Use the latest action majors
 (`actions/checkout@v7`, `setup-dotnet@v6`, `setup-node@v7`, artifacts v7/v8) so
@@ -181,8 +185,8 @@ the runner's Node 24 runtime is used.
   `Home.md`, Jekyll front matter is stripped), adds `WhatsNew.md` (front matter
   stripped too), and syncs `docs/_Sidebar.md` as the wiki side menu.
 - `WhatsNew.md` lives at the repository root and carries Jekyll front matter for
-  the Pages site; the docs workflow stages a copy into `docs/` before the
-  Jekyll build (Jekyll ignores the underscore-prefixed `_Sidebar.md`).
+  the Pages site; `docs/WhatsNew.md` is a committed copy kept byte-identical by
+  the Docs workflow (Jekyll ignores the underscore-prefixed `_Sidebar.md`).
 - The wiki push needs a repository secret named `WIKI_TOKEN` (classic PAT with
   the `repo` scope, or fine-grained PAT with `Contents: Read and write`) because
   `GITHUB_TOKEN` cannot push to the wiki repository. Without the secret the sync

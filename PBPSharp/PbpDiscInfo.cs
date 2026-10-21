@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Text;
 using ICSharpCode.SharpZipLib;
 using ICSharpCode.SharpZipLib.Zip.Compression;
@@ -33,7 +34,7 @@ public sealed class PbpDiscInfo
     private const int MaxBlockEntrySize = 16 * IsoBlockSize + 4096;
 
     private readonly List<IsoIndexEntry> _isoIndex;
-    private readonly int _psarOffset;
+    private readonly long _psarOffset;
 
     private readonly Stream _stream;
 
@@ -51,7 +52,7 @@ public sealed class PbpDiscInfo
     /// <exception cref="InvalidDataException">
     ///     Thrown when the ISO index contains more entries than the format permits.
     /// </exception>
-    internal PbpDiscInfo(Stream stream, int psarOffset, int index)
+    internal PbpDiscInfo(Stream stream, long psarOffset, int index)
     {
         _stream = stream;
         _psarOffset = psarOffset;
@@ -186,7 +187,7 @@ public sealed class PbpDiscInfo
 
         _stream.Seek(_psarOffset + PsarIndexOffset, SeekOrigin.Begin);
 
-        var thisOffset = (uint)_stream.Position;
+        var thisOffset = _stream.Position;
         var psarIsoEnd = _psarOffset + PsarIsoOffset;
         var indexBytes = new byte[32]; // 4 offset + 2 size + 2 flags + 16 hash + 8 dummy
 
@@ -204,7 +205,7 @@ public sealed class PbpDiscInfo
             var size = BinaryPrimitives.ReadUInt16LittleEndian(indexBytes.AsSpan(4, 2));
             var flags = indexBytes[6];
 
-            thisOffset = (uint)_stream.Position;
+            thisOffset = _stream.Position;
 
             if (offset != 0 || size != 0)
             {
@@ -515,9 +516,74 @@ public sealed class PbpDiscInfo
         )
             return size;
 
+        // Some valid streams trip SharpZipLib's inflater (its state machine is stricter than
+        // zlib's) even though the data is complete. Retry with the .NET zlib implementation:
+        // it accepts a few stream shapes SharpZipLib rejects, and a block is only accepted when
+        // it produces exactly one full 16-sector block.
+        if (TrySystemInflate(compressed, compressedLength, output, noHeader: true, out size))
+            return size;
+
+        if (
+            compressedLength > 2
+            && TrySystemInflate(compressed, compressedLength, output, noHeader: false, out size)
+        )
+            return size;
+
         throw new InvalidDataException(
             $"the PSAR block did not inflate as raw deflate ({rawFailure}) or as a zlib stream ({zlibFailure})."
         );
+    }
+
+    /// <summary>
+    ///     Inflates one block with the .NET zlib implementation as a fallback for streams that
+    ///     SharpZipLib's inflater rejects. The result must be exactly one full 16-sector block,
+    ///     matching the PSAR layout; a short or overlong stream is not accepted.
+    /// </summary>
+    /// <param name="compressed">The buffer holding the compressed block.</param>
+    /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
+    /// <param name="output">The buffer that receives the decompressed data.</param>
+    /// <param name="noHeader">True for raw deflate, false for a zlib-wrapped stream.</param>
+    /// <param name="size">The number of bytes written when inflation succeeds.</param>
+    /// <returns><see langword="true" /> when the block inflated to a full block.</returns>
+    private static bool TrySystemInflate(
+        byte[] compressed,
+        int compressedLength,
+        byte[] output,
+        bool noHeader,
+        out int size
+    )
+    {
+        size = 0;
+
+        try
+        {
+            using var input = new MemoryStream(compressed, 0, compressedLength, writable: false);
+            using Stream inflater = noHeader
+                ? new DeflateStream(input, CompressionMode.Decompress)
+                : new ZLibStream(input, CompressionMode.Decompress);
+
+            var blockSize = 16 * IsoBlockSize;
+            var written = 0;
+            while (written < blockSize)
+            {
+                var read = inflater.Read(output, written, blockSize - written);
+                if (read == 0) break;
+                written += read;
+            }
+
+            if (written != blockSize) return false;
+
+            // Any additional byte means the stream expands past one PSAR block.
+            var extra = new byte[1];
+            if (inflater.Read(extra, 0, 1) != 0) return false;
+
+            size = written;
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

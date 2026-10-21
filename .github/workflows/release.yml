@@ -136,6 +136,27 @@ jobs:
           -PublishDir 'publish/${{ matrix.rid }}'
           -OutputDir 'dist'
 
+      - name: Verify non-Windows zip execute bits
+        if: startsWith(matrix.rid, 'linux-') || startsWith(matrix.rid, 'osx-')
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zipPath = "dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip"
+          $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+              foreach ($name in @('CHDStudio', '7zz')) {
+                  $entry = $zip.GetEntry($name)
+                  if (-not $entry) { throw "Release zip is missing $name" }
+                  $mode = ($entry.ExternalAttributes -shr 16) -band 0xFFFF
+                  if ($mode -ne 0x81ED) {
+                      throw "$name has Unix mode 0$([Convert]::ToString($mode, 8)), expected 0100755"
+                  }
+              }
+          }
+          finally {
+              $zip.Dispose()
+          }
+
       - name: Upload release zip
         uses: actions/upload-artifact@v7
         with:
@@ -168,14 +189,18 @@ jobs:
         run: |
           set -euo pipefail
           ls -l release
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists - uploading assets with --clobber."
+            echo "Release $TAG already exists - updating notes and uploading assets with --clobber."
+            gh release edit "$TAG" \
+              --title "$VERSION" \
+              --notes-file release/release-notes.md \
+              "${prerelease[@]}"
             gh release upload "$TAG" release/*.zip --clobber
           else
-            prerelease=()
-            if [[ "$VERSION" == *-* ]]; then
-              prerelease=(--prerelease)
-            fi
             gh release create "$TAG" \
               --verify-tag \
               --title "$VERSION" \
