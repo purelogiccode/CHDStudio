@@ -1,9 +1,51 @@
 ---
 title: What's New
-nav_order: 15
+nav_order: 16
 ---
 
 # What's New
+
+## 3.10.0 (2026-10-21)
+
+### Large and multi-disc PBP files
+
+*   **PBP disc offsets are 64-bit throughout the parser.** PSAR and per-disc positions were widened before every seek, so a multi-gigabyte PBP whose later disc lies beyond the signed 32-bit boundary no longer fails with a bogus `IoError`.
+*   **Truncated multi-disc PBPs are identified before extraction.** A disc position that points past the end of the file is reported as `TruncatedPsar` instead of seeking to a negative offset or producing a partial BIN.
+*   **PSAR blocks get a second inflater.** Blocks rejected by SharpZipLib's stricter state machine are retried with the .NET zlib implementation; a block is accepted only when it produces exactly one complete 16-sector block.
+*   **PBP extraction checks free space first.** The estimate uses each disc's declared ISO size plus a margin, and a nearly full temp drive gets an actionable message before a multi-gigabyte extraction starts.
+
+### Damaged CHDs and clearer diagnostics
+
+*   **A CD CHD with missing or damaged track metadata is rejected with a precise message** instead of a bare `Chderrinvaliddata`. The diagnostic log records the track count and metadata tags so a damaged `CHT2`/`CHTR` section is distinguishable from a non-CD image.
+*   **The message and log guidance tell the user to re-create the CHD from its cue/bin.** This is classified as damaged user data, not an application bug.
+*   **Malformed cue lead-out and truncated-image errors now include recovery guidance**, and both are excluded from automatic bug reports.
+
+### Startup and bug-reporting reliability
+
+*   **A missing native rendering library no longer produces an unhandled startup crash.** The app exits with a clear message naming `libHarfBuzzSharp`, `libSkiaSharp` and the platform native backend, and writes `startup-error.log` when the console is unavailable. This normally means the release zip was not extracted in full; copying every file beside the executable fixes it.
+*   **More routine conditions are excluded from the bug tracker**: missing native libraries, temp-directory cleanup held open by antivirus/indexers, damaged CHD track metadata, malformed cue lead-outs and truncated source images.
+*   **InspectCode warnings are cleared.** The solution now reports zero warning-level inspections; a warning-level `InspectCode.log` is available for local verification.
+
+### Release engineering, documentation and verification
+
+*   **All six release bundles are produced from the same version**: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64`.
+*   **Each zip contains the framework-dependent single-file app, its native libraries, the correct architecture's tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`.** No .NET runtime is embedded; users install the .NET 10 runtime.
+*   **Linux/macOS zips preserve Unix execute bits** (`0755` for `CHDStudio` and `7zz`), and the release workflow verifies them before publishing.
+*   **Pages and wiki documentation are deployed from the same `docs/` tree**, with a dark Just-the-Docs side menu and a wiki `_Sidebar.md`. Pull requests build the Pages site; `master` deploys it and syncs the wiki.
+*   **The documentation index, ReadMe badges and package tables now carry the 3.10.0 release data.**
+
+### Package updates
+
+*   CHDSharp 1.4.5 -> **1.5.0**
+*   NAudio 3.2.0 -> **3.3.0**
+*   SharpCompress 0.50.5 -> **0.50.7**
+*   Meziantou.Analyzer 3.0.303 -> **3.0.315**
+
+### Verification
+
+*   Build: **0 warnings, 0 errors**.
+*   Tests: **1157 passed** (1128 unit + 29 integration).
+*   `jb inspectcode --severity=WARNING`: **0 findings**.
 
 ## 3.9.5 (2026-10-16)
 

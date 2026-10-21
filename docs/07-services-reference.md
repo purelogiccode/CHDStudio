@@ -167,7 +167,7 @@ Checks GitHub for new releases at startup.
 
 `internal static class ChdSharpEncoderService` (`ChdSharpEncoderService.cs:11`)
 
-In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.4.5). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
+In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.5.0). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
 
 ### API
 

@@ -105,6 +105,74 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
   GitHub release (title = version, body = the `WhatsNew.md` section).
   Re-running the workflow refreshes the notes and uploads assets with `--clobber`.
 
+### Standard release routine (used for 3.10.0)
+
+1. **Review the changes since the previous tag** and fix regressions before
+   changing versions. Run the full suite, not only the CI filter.
+2. **Bump the version** in `CHDStudio/CHDStudio.csproj` and
+   `CHDStudio.Tests/CHDStudio.Tests.csproj` (`AssemblyVersion` and
+   `FileVersion`), add the matching `## <version> (date)` section to the top of
+   `WhatsNew.md`, copy that file byte-for-byte to `docs/WhatsNew.md`, and update
+   `ReadMe.md` and the current-version package tables in `docs/`.
+3. **Build and test**:
+   ```powershell
+   dotnet restore CSharp_CHDStudio.sln
+   dotnet build CSharp_CHDStudio.sln -c Release
+   dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
+   node scripts/ci/version.mjs
+   ```
+4. **Publish all six framework-dependent single-file bundles**, never
+   self-contained:
+   ```powershell
+   $version = "3.10.0"
+   $rids = [ordered]@{
+       'win-x64'     = 'net10.0-windows'
+       'win-arm64'   = 'net10.0-windows'
+       'linux-x64'   = 'net10.0'
+       'linux-arm64' = 'net10.0'
+       'osx-x64'     = 'net10.0'
+       'osx-arm64'   = 'net10.0'
+   }
+   foreach ($entry in $rids.GetEnumerator()) {
+       dotnet publish CHDStudio/CHDStudio.csproj -c Release `
+           -f $entry.Value -r $entry.Key --self-contained false `
+           -p:PublishSingleFile=true -o "publish/$($entry.Key)"
+       ./scripts/ci/package-release.ps1 -Rid $entry.Key -Version $version `
+           -PublishDir "publish/$($entry.Key)" -OutputDir "dist"
+   }
+   ```
+   Each zip must contain `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the
+   single-file `CHDStudio.exe`/`CHDStudio`, its native libraries, and only that
+   RID's tools. Never embed the .NET runtime. Keep the names
+   `release_<version>_<rid>.zip`.
+5. **Archive locally without deleting anything**: copy the six new zips into
+   `CHDStudio/bin/Release/`. That folder is an append-only local release
+   archive; do not remove older zips, posters, or other files in it. Package to
+   `dist/` or a temp folder first so the packaging script cannot remove an
+   existing release-path file.
+6. **Commit and push `master`**, then tag and push the tag:
+   ```powershell
+   git tag release_3.10.0
+   git push origin master
+   git push origin release_3.10.0
+   ```
+7. **Let CI do the GitHub work**: the `Release` workflow validates the tag,
+   tests, publishes all six RIDs, verifies the Linux/macOS execute bits, creates
+   or updates the GitHub release, and uploads all six assets. Do not create a
+   second handwritten release for the same tag.
+8. **Let the `Docs` workflow deploy documentation**: it builds Jekyll from
+   `docs/`, verifies `docs/WhatsNew.md` is identical to the root file, deploys
+   the GitHub Pages site and syncs the wiki (`Home.md`, `WhatsNew.md`,
+   `_Sidebar.md` and the numbered pages). Confirm Pages is using
+   `build_type: workflow`.
+9. **Verify after CI**:
+   `gh release view release_<version>` shows all six assets and the expected
+   notes; `gh run list` shows both `CI`/`Docs` green; Pages and the wiki show
+   the new version and side menu; the app's update check
+   (`releases/latest`) sees the new tag; and the local release folder contains
+   exactly the new six zips alongside every older file.
+
+
 ## Library NuGet packages (manual publish)
 
 `PBPSharp` (<https://www.nuget.org/packages/PBPSharp>), `CSOSharp`

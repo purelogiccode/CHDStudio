@@ -1,5 +1,3 @@
-# CSOSharp
-
 [![NuGet](https://img.shields.io/nuget/v/CSOSharp.svg)](https://www.nuget.org/packages/CSOSharp)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/CSOSharp.svg)](https://www.nuget.org/packages/CSOSharp)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
@@ -22,6 +20,8 @@
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/purelogiccode/CHDStudio/pulls)
 [![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/purelogiccode/CHDStudio)
+
+# CSOSharp
 
 **CSOSharp** is a managed C# library for reading and extracting **CSO/CISO** (Compressed ISO) files. It supports both the classic CSO v1 (deflate/zlib) format and CSO v2, also known as **ZSO** (LZ4), and can decode individual blocks, expose the decompressed image as a seekable `Stream`, or extract the whole ISO to disk.
 

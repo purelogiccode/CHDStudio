@@ -1,5 +1,3 @@
-# PBPSharp
-
 [![NuGet](https://img.shields.io/nuget/v/PBPSharp.svg)](https://www.nuget.org/packages/PBPSharp)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/PBPSharp.svg)](https://www.nuget.org/packages/PBPSharp)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
@@ -22,6 +20,8 @@
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/purelogiccode/CHDStudio/pulls)
 [![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/purelogiccode/CHDStudio)
+
+# PBPSharp
 
 **PBPSharp** is a managed, read-only C# library for reading PlayStation Portable **PBP** (`EBOOT.PBP`) containers and extracting the PlayStation disc images they carry. It handles both single-disc and multi-disc PBPs, parses the embedded `PARAM.SFO` metadata, decodes the PSAR ISO block index, and writes the extracted disc as a BIN file with a matching CUE sheet.
 

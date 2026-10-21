@@ -24,7 +24,7 @@ Developed by [Pure Logic Code](https://www.purelogiccode.com), the application c
 
 ### Intelligent Conversion & Extraction
 - **Automated batch processing** — convert entire directories with real-time progress, immediate cancellation, and per-file timeouts.
-- **Built-in encoder** — the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.4.5) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
+- **Built-in encoder** — the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.5.0) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
 - **Recursive structure preservation** — the output folder mirrors the input folder's directory hierarchy (`PathUtils.GetSafeRelativePath`).
 - **Robust extraction** — CHD → `.cue` (CD), `.iso` (DVD), `.gdi` (Dreamcast/Naomi), `.img` (HDD), `.avi` (laserdisc A/V), with automatic flag-based command detection via CHDSharp. Laserdisc A/V CHDs extract in-process, so they no longer need chdman.
 - **Laserdisc support** — `.avi` inputs convert with `createld` (A/V `avhu` codec), and A/V CHDs extract back to AVI, all through the built-in encoder.
@@ -33,7 +33,7 @@ Developed by [Pure Logic Code](https://www.purelogiccode.com), the application c
 - **Archive integration** — `.zip`, `.7z`, `.rar` are extracted and processed transparently (SharpCompress, with a bundled 7-Zip fallback — `7za` on Windows, `7zz` on Linux/macOS — for archives the built-in extractor cannot read); multi-part RAR sets (`.partNN.rar`, renamed `.001` volumes) are decoded from their first volume.
 - **CloneCD support** — `.ccd` sets are parsed by CCDSharp and converted via an auto-generated CUE/BIN.
 - **CSO decompression** — `.cso`/`.ciso` via CSOSharp (deflate/zlib and LZ4).
-- **PBP extraction** — PlayStation `.pbp` via PBPSharp, including blocks written without a final deflate block and pop-fe's 16-bit index layout; PSP-homebrew-style files (no PlayStation disc image) are detected and skipped with a clear message.
+- **PBP extraction** - PlayStation `.pbp` via PBPSharp, including blocks written without a final deflate block, zlib-wrapped blocks, pop-fe's 16-bit index layout, and 64-bit disc offsets for multi-gigabyte multi-disc files; PSP-homebrew-style files (no PlayStation disc image) are detected and skipped with a clear message.
 - **Smart CUE normalization** — encoding detection (UTF-8, Shift-JIS, Korean CP949, Cyrillic CP1251, Latin-1, …), UTF-8 BOM stripping, case-insensitive and zero-padding-tolerant reference resolution, canonicalization into a self-contained work directory. WAVE tracks whose header declares more audio than the file contains (the widely distributed Policenauts Saturn English patch) are repaired automatically in a private copy, so `Error reading input file (...wav)` / `Unexpected end of file (...wav)` can no longer block the conversion.
 - **Archive dependency validation** — cue/GDI/TOC entries extracted from archives are validated up front; entries with missing referenced files are skipped with a warning instead of failing inside chdman.
 - **MP3 audio track support** — cue/MP3 sets are decoded to chdman-compatible WAV (44.1 kHz, 16-bit, stereo) automatically, with a built-in decoder fallback.
@@ -68,7 +68,7 @@ A file's extension is the least reliable thing about it. Every input's leading b
 - **Optional checksum report** — whole-image SHA-1, CRC-32 and XXH3 hashes plus per-track hashes for CD/GD-ROM images, written next to each verified CHD.
 - **Automated organization** — optionally move verified/failed files into `Success`/`Failed` subfolders; these folders are excluded from subsequent scans.
 - **Empty-folder cleanup** — empty subdirectories are removed after files are moved or deleted.
-- **Dependency check at startup** — on Windows the user is notified if `chdman.exe` is missing; conversions then run on the always-available built-in CHDSharp encoder, so a batch never refuses to start for a missing encoder.
+- **Dependency check at startup** - on Windows the user is notified if `chdman.exe` is missing; conversions then run on the always-available built-in CHDSharp encoder, so a batch never refuses to start for a missing encoder. Missing native Avalonia/HarfBuzz/Skia libraries are reported with the files that must sit beside the executable, so an incomplete zip extraction is self-explanatory.
 - **File-system monitoring** — the input folder is watched during batch processing to explain why a file went missing mid-operation.
 - **Corrupt-image early warning** — ISO sizes that don't match any standard sector layout are flagged before conversion.
 - **Resilient file operations** — deletions and moves retry with backoff (~45 s) against transient locks (antivirus, indexer) and clear read-only attributes when needed.

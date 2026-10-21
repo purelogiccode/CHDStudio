@@ -13,7 +13,7 @@ nav_order: 3
 - **Bundled executables** (shipped with the app, must stay next to `CHDStudio.exe`):
   - Windows: `chdman.exe` / `chdman_arm64.exe` (0.289) — MAME CHD tool (primary encoder and extraction fallback); `7za.exe` / `7za_arm64.exe` — 7-Zip fallback extractor
   - Linux/macOS: `7zz` (official 7-Zip 26.03 console build, copied from `tools/` at publish time) — 7-Zip fallback extractor
-- **Built-in encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.4.5) runs in-process on every platform — the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to chdman 0.289, and being a managed assembly there is no encoder executable to ship.
+- **Built-in encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.5.0) runs in-process on every platform — the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to chdman 0.289, and being a managed assembly there is no encoder executable to ship.
 - **Nothing else to install** — CSO, ISZ, ECM, Alcohol `.mds`/`.mdf` and split volume sets are all handled inside the application, so x64 and ARM64 get the same feature set.
 
 ### Build (developers)
@@ -26,9 +26,11 @@ nav_order: 3
 ## 2.2 Installation (End Users)
 
 1. Download the latest binary from the [Releases page](https://github.com/purelogiccode/CHDStudio/releases), picking the zip for your platform and architecture (`win-x64`/`win-arm64`, `linux-x64`/`linux-arm64`, `osx-x64`/`osx-arm64`).
-2. Extract the contents to a permanent folder (do **not** run from a temp/Downloads folder if you want update/self-containment to behave).
+2. Extract the contents to a permanent folder (do **not** run from a temp/Downloads folder if you want update behavior to be predictable).
 3. **Important** (Windows): keep all `.exe` files (including ARM64 variants) in the same directory as `CHDStudio.exe` — tool discovery probes the app's base directory first, then `PATH` (`MainWindow.axaml.cs`). On Linux and macOS, `7zz` ships next to the app and other tools are discovered on `PATH`; the built-in CHDSharp encoder needs nothing on disk.
 4. Launch `CHDStudio.exe` on Windows or `CHDStudio` on Linux/macOS.
+
+Every release zip is named `release_<version>_<rid>.zip` and contains the framework-dependent single-file app, its native libraries, the matching `chdman`/7-Zip tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. The .NET 10 runtime is not embedded, so install the runtime listed above. Extract the **whole** archive into one folder: copying only `CHDStudio.exe` leaves the native rendering libraries behind and the app will refuse to start with a missing-library message.
 
 ---
 
@@ -61,16 +63,16 @@ The solution contains seven projects:
 | `PBPSharp` | class library (PBP/SFO parsing) | `net8.0;net9.0;net10.0` |
 | `ISZSharp` | class library (ISZ decompression) | `net8.0;net9.0;net10.0` |
 
-> **Note**: on Windows, `chdman.exe` and `7za.exe` are copied to the output directory by the build (`CHDStudio.csproj`); on Linux and macOS the matching `tools/7zz*` binary (official 7-Zip 26.03) is copied as `7zz`, while a `chdman` on `PATH` is only used for extraction fallback and never for encoding. The libraries are referenced as project references, not NuGet packages, except `CHDSharp` (NuGet 1.4.5) and other packages listed below.
+> **Note**: on Windows, `chdman.exe` and `7za.exe` are copied to the output directory by the build (`CHDStudio.csproj`); on Linux and macOS the matching `tools/7zz*` binary (official 7-Zip 26.03) is copied as `7zz`, while a `chdman` on `PATH` is only used for extraction fallback and never for encoding. The libraries are referenced as project references, not NuGet packages, except `CHDSharp` (NuGet 1.5.0) and other packages listed below.
 
 ### NuGet dependencies (application)
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| CHDSharp | 1.4.5 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
+| CHDSharp | 1.5.0 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
 | Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.1.x | Cross-platform Fluent Design UI framework and controls |
 | SharpCompress | 0.50.x | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
-| NAudio | 3.1.0 | MP3 decoding via Media Foundation |
+| NAudio | 3.3.0 | MP3 decoding via Media Foundation |
 | Serilog | 4.4.0 | Structured logging |
 | Serilog.Sinks.File | 7.0.0 | Rolling file logs |
 | Serilog.Sinks.Debug | 3.0.0 | Debugger sink |

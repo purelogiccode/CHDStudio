@@ -6324,9 +6324,8 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             ctsSpeed.Cancel();
-            // Wait for the sampler to observe cancellation before the enclosing `using`
-            // disposes the performance counter it reads.
-            await speedMonitoringTask.ConfigureAwait(false);
+            // Wait for the sampler to finish so it can dispose the performance counter it owns.
+            await speedMonitoringTask;
             process.CancelOutputRead();
             process.CancelErrorRead();
 

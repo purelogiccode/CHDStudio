@@ -1,5 +1,3 @@
-# CCDSharp
-
 [![NuGet](https://img.shields.io/nuget/v/CCDSharp.svg)](https://www.nuget.org/packages/CCDSharp)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/CCDSharp.svg)](https://www.nuget.org/packages/CCDSharp)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
@@ -22,6 +20,8 @@
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/purelogiccode/CHDStudio/pulls)
 [![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/purelogiccode/CHDStudio)
+
+# CCDSharp
 
 **CCDSharp** is a managed C# library for parsing and converting **CloneCD** disc images (`.ccd` + `.img` + `.sub`). It reads the CloneCD descriptor, resolves the associated raw image and subchannel files, and converts the image to a standard **ISO** (2048-byte user data sectors) or **CUE/BIN** pair.
 
