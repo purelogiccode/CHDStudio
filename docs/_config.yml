@@ -20,7 +20,7 @@ defaults:
     values:
       layout: default
 
-color_scheme: light
+color_scheme: dark
 
 search_enabled: true
 
