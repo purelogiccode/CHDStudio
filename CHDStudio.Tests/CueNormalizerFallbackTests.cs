@@ -193,4 +193,55 @@ public class CueNormalizerFallbackTests : IDisposable
         Assert.Equal(["nothing-here.bin"], result.UnresolvedNames);
         Assert.False(Assert.Single(result.References).IsResolved);
     }
+
+    [Fact]
+    public async Task DifferentNamesForOneFileStayUnresolved()
+    {
+        // Two FILE lines that name different files must never be collapsed onto one file: the
+        // encoders would read the same image twice and two tracks would start at the same position,
+        // which neither encoder can lay out.
+        WriteFile("Track 01.bin", "data");
+        var cue = WriteFile(
+            "disc.cue",
+            "FILE \"Track 01.bin\" BINARY\r\n"
+                + "  TRACK 01 MODE1/2352\r\n"
+                + "    INDEX 01 00:00:00\r\n"
+                + "FILE \"Track 01.img\" BINARY\r\n"
+                + "  TRACK 02 MODE1/2352\r\n"
+                + "    INDEX 01 00:00:00\r\n"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cue, CancellationToken.None);
+
+        Assert.True(result.References[0].IsResolved);
+        Assert.False(result.References[1].IsResolved);
+        Assert.Equal(["Track 01.img"], result.UnresolvedNames);
+        Assert.Contains("FILE \"Track 01.bin\"", result.CanonicalCueText, StringComparison.Ordinal);
+        Assert.Contains("FILE \"Track 01.img\"", result.CanonicalCueText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SameFileWrittenWithADotPrefixIsStillAccepted()
+    {
+        // A single-bin multisession cue repeats the FILE line for the second session; a "./" prefix
+        // is the same file written the same way, so both references must keep resolving.
+        WriteFile("disc.bin", "data");
+        var cue = WriteFile(
+            "disc.cue",
+            "REM SESSION 01\r\n"
+                + "FILE \"disc.bin\" BINARY\r\n"
+                + "  TRACK 01 MODE2/2352\r\n"
+                + "    INDEX 01 00:00:00\r\n"
+                + "REM LEAD-OUT 00:01:25\r\n"
+                + "REM SESSION 02\r\n"
+                + "FILE \".\\disc.bin\" BINARY\r\n"
+                + "  TRACK 02 MODE2/2352\r\n"
+                + "    INDEX 01 00:02:00\r\n"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cue, CancellationToken.None);
+
+        Assert.Empty(result.UnresolvedNames);
+        Assert.All(result.References, reference => Assert.True(reference.IsResolved));
+    }
 }

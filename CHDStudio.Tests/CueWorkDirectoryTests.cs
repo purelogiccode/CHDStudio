@@ -78,6 +78,32 @@ public class CueWorkDirectoryTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsyncZeroLeadOutMultisessionCueNeedsNoWorkDir()
+    {
+        // CHDSharp 1.5.1 lays out an unusable session lead-out exactly like chdman, so the cue is
+        // handed to the encoders unchanged (no repaired work cue any more).
+        CreateFile("disc.bin", new string('\0', 2352 * 100));
+        var cuePath = CreateFile(
+            "disc.cue",
+            "REM SESSION 01\r\n"
+                + "FILE \"disc.bin\" BINARY\r\n"
+                + "  TRACK 01 AUDIO\r\n"
+                + "    INDEX 01 00:00:00\r\n"
+                + "REM LEAD-OUT 00:00:00\r\n"
+                + "REM SESSION 02\r\n"
+                + "  TRACK 02 AUDIO\r\n"
+                + "    INDEX 01 00:00:10\r\n",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        Assert.Null(result.WorkCuePath);
+        Assert.Null(workDir);
+        Assert.Empty(result.UnresolvedNames);
+    }
+
+    [Fact]
     public async Task PrepareAsyncKoreanCp949CueCreatesAsciiWorkDirWithAllFiles()
     {
         const string koreanName = "진설 사무라이 스피리츠 무사도열전.bin";

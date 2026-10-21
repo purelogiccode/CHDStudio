@@ -77,6 +77,42 @@ public class ChdSharpEncoderServiceTests : IDisposable
     }
 
     [Fact]
+    public void CreateCd_ZeroLeadOutMultisessionCue_EncodesInsteadOfGoingNegative()
+    {
+        // A single-bin multisession cue whose REM LEAD-OUT sits before the session's last track
+        // used to trim that track to a negative length (the reported -11400/-53048/-122045
+        // failures). chdman skips the trim with its unsigned comparison, and CHDSharp 1.5.1 does
+        // the same, so the encode must succeed.
+        File.WriteAllBytes(PathFor("disc.bin"), new byte[2352 * 100]);
+        var cuePath = PathFor("disc.cue");
+        File.WriteAllText(
+            cuePath,
+            "REM SESSION 01\n"
+                + "FILE \"disc.bin\" BINARY\n"
+                + "  TRACK 01 AUDIO\n"
+                + "    INDEX 01 00:00:00\n"
+                + "  TRACK 02 AUDIO\n"
+                + "    INDEX 01 00:00:10\n"
+                + "REM LEAD-OUT 00:00:00\n"
+                + "REM SESSION 02\n"
+                + "  TRACK 03 AUDIO\n"
+                + "    INDEX 01 00:00:20\n"
+        );
+        var chdPath = PathFor("disc.chd");
+
+        ChdSharpEncoderService.Encode(
+            "createcd",
+            cuePath,
+            chdPath,
+            false,
+            2,
+            CancellationToken.None
+        );
+
+        AssertVerifies(chdPath);
+    }
+
+    [Fact]
     public void CreateDvd_EncodesVerifiableDvdChd()
     {
         File.WriteAllBytes(PathFor("disc.iso"), new byte[2048 * 20]);

@@ -6808,6 +6808,17 @@ internal partial class MainWindow : Window, IDisposable
                 }
                 else if (
                     ex.Message.Contains(
+                        "unable to determine size of track",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    LogMessage(
+                        "       The cue gives two tracks in the same image the same start position. Re-create the cue from the disc (or use a verified cue) and try again."
+                    );
+                }
+                else if (
+                    ex.Message.Contains(
                         "Unexpected end of file",
                         StringComparison.OrdinalIgnoreCase
                     )

@@ -387,6 +387,9 @@ public class BugReportServiceTests
         "CHDSharp encoding failed: Track 33: the session lead-out values leave a negative length (-24208 frames); the cue's REM SESSION/LEAD-OUT values do not match the image."
     )]
     [InlineData(
+        "CHDSharp encoding failed: Unable to determine size of track 1, missing INDEX 01 markers?"
+    )]
+    [InlineData(
         @"CHDSharp encoding failed: Unexpected end of file [C:\Users\CARLOS-MENDIETA\Desktop\Fighting Force\Fighting Force.bin]"
     )]
     [InlineData(

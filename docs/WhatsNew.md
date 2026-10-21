@@ -5,6 +5,24 @@ nav_order: 16
 
 # What's New
 
+## 3.10.1 (2026-10-21)
+
+### Multisession cues now encode byte-identically to chdman
+
+*   **CHDSharp 1.5.2 fixes two cue-layout divergences from `chdman`.** A single-bin multisession cue whose `REM LEAD-OUT` sits at or before the session's last track (`REM LEAD-OUT 00:00:00` is common in real IsoBuster/ImgBurn rips) used to trim that track to a negative length and abort the conversion with `the session lead-out values leave a negative length (-11400 frames)`. MAME compares a `uint32_t` frame count against a signed `int32_t` end frame, so the value wraps and the trim is skipped; the built-in encoder now performs the same unsigned comparison and reproduces `chdman`'s layout byte for byte.
+*   **A pad larger than its track no longer zeroes the track.** The CD reader now mirrors chdman's unsigned pad offset, so the track is read from the source file instead of being written as zeros, and the GD-ROM data/pad/split ordering matches chdman as well.
+*   **The cue work directory no longer repairs these cues.** The 3.10.0 workaround that dropped an unusable `REM LEAD-OUT` line is gone: the cue reaches the encoder unchanged, so `chdman` and the built-in encoder stay identical.
+
+### Cue reference resolution
+
+*   **Two `FILE` lines that name different files can no longer collapse onto one image.** A missing track whose name matched another track's file was silently resolved to it, turning a split-track cue into a single-bin one and making two tracks start at the same position - which both encoders reject with `Unable to determine size of track N, missing INDEX 01 markers?`. The second reference is now reported as missing, with a message that names it.
+*   **That failure is classified as user data** and excluded from automatic bug reports, with guidance telling the user to re-create the cue.
+
+### Verification
+
+*   New regression tests cover the zero lead-out, a lead-out before the track, the missing-file collapse and the `.`-prefixed repeated `FILE` line, plus an end-to-end encode of a zero-lead-out cue through the built-in encoder.
+*   Test suite: **1162 tests (1133 unit + 29 integration) across 58 test classes**. CHDSharp 1.5.2 ships 454 encoder + 4214 library tests and 905 battle-harness checks, all green.
+
 ## 3.10.0 (2026-10-21)
 
 ### Large and multi-disc PBP files

@@ -47,6 +47,7 @@ All classes live in `CHDStudio/Utilities/` (and `Models/` where noted).
   4. Applies an optional transform (used to rewrite MP3 → WAV names and track types).
   5. Compares the canonical line with the original; flags `NeedsRewrite`/`ReferencesChanged`.
 - A cue `FILE` line without a type token gets one inferred from the referenced extension (`BINARY` for bin/img/iso/raw, `WAVE`, `MP3`, `AIFF`); a name quoted with backslash-escaped quotes (`FILE \"track01.bin\"`, written by some tools) has the escape backslash removed so the reference resolves and the rewrite is consumable by both encoders.
+- Two `FILE` lines that name **different** files never resolve to the same file: a repeated reference is accepted only when the cue names it the same way (case-insensitively). Collapsing different names onto one image would turn a multi-bin cue into a single-bin one and make both tracks start at the same position.
 - `WriteCanonicalCueAsync` — writes **UTF-8 without BOM**, CRLF line endings.
 - `GetTrackType` — token after the last quote, matched against `[BINARY, WAVE, MP3, AIFF, MOTOROLA, AUDIO]` (case-insensitive), upper-cased; tolerates cdrdao TOC extra columns.
 - Result model `CueNormalizationResult` carries `SourceEncoding`, `HasBom`, `References`, `UnresolvedNames`, `CanonicalLines`, `NeedsRewrite`, `ReferencesChanged`, `CanonicalCueText`.

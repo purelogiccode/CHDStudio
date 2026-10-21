@@ -162,9 +162,12 @@ internal class BugReportService
         "Unable to load shared library",
         "libHarfBuzzSharp",
         "libSkiaSharp",
-        // CHDSharp rejects a cue whose REM SESSION/LEAD-OUT values disagree with the image.
-        // Both encoders reject that cue, and the message already tells the user what to fix.
+        // A cue whose session layout cannot be laid out (an index layout both encoders reject)
+        // is user data, and the message already tells the user what to fix.
         "session lead-out values leave a negative",
+        // A cue that gives two tracks in one image the same start position cannot be laid out by
+        // either encoder; the cue's INDEX data is unusable, not the app.
+        "unable to determine size of track",
         // A cue/image that describes more data than its file holds (a truncated rip) makes
         // both encoders stop at EOF. The source is incomplete, not the app.
         "CHDSharp encoding failed: Unexpected end of file",

@@ -39,6 +39,11 @@ internal static class CueNormalizer
     /// <summary>Whitespace characters separating descriptor tokens.</summary>
     private static readonly char[] TokenSeparators = [' ', '\t'];
 
+    /// <summary>Compares resolved file paths the way the host file system does.</summary>
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
     /// <summary>
     ///     Normalizes the cue at <paramref name="cuePath" />.
     /// </summary>
@@ -62,6 +67,12 @@ internal static class CueNormalizer
         var canonicalLines = new List<string>(lines.Length);
         var needsRewrite = false;
         var referencesChanged = false;
+
+        // Two FILE lines that name different files but resolve to the same one cannot describe the
+        // layout the cue declares: the encoders would treat them as separate images, and the
+        // rewrite would collapse them into one and mangle the track lengths. The later line is
+        // left unresolved so the caller reports the missing file instead.
+        var claimedFiles = new Dictionary<string, string>(PathComparer);
 
         var isToc = string.Equals(
             Path.GetExtension(cuePath),
@@ -95,6 +106,9 @@ internal static class CueNormalizer
 
                 var tocKind = InferTrackTypeFromExtension(tocName);
                 var tocReference = ResolveReference(directory, tocName, tocKind, isSingleFileCue);
+                if (tocReference.IsResolved && !TryClaimFile(claimedFiles, tocReference, tocName))
+                    tocReference = AsUnresolved(tocReference, tocName);
+
                 references.Add(tocReference);
 
                 if (!tocReference.IsResolved) unresolved.Add(tocName);
@@ -136,6 +150,9 @@ internal static class CueNormalizer
             var trackType =
                 GetTrackType(trimmedLine) ?? InferTrackTypeFromExtension(referencedName);
             var reference = ResolveReference(directory, referencedName, trackType, isSingleFileCue);
+            if (reference.IsResolved && !TryClaimFile(claimedFiles, reference, referencedName))
+                reference = AsUnresolved(reference, referencedName);
+
             references.Add(reference);
 
             if (!reference.IsResolved) unresolved.Add(referencedName);
@@ -283,6 +300,75 @@ internal static class CueNormalizer
             directory
         );
     }
+
+    /// <summary>
+    ///     Claims the on-disk file behind a resolved reference. A repeated reference to the same
+    ///     file is accepted only when the cue names it the same way; a different name for the same
+    ///     file is rejected because the encoders would treat the two FILE lines as separate images
+    ///     and the rewrite would silently merge them.
+    /// </summary>
+    /// <param name="claimedFiles">Resolved full path to the name that first claimed it.</param>
+    /// <param name="reference">The resolved reference to claim.</param>
+    /// <param name="referencedName">File name exactly as written in the descriptor.</param>
+    /// <returns>True when the reference may keep its resolved file.</returns>
+    private static bool TryClaimFile(
+        Dictionary<string, string> claimedFiles,
+        CueFileReference reference,
+        string referencedName
+    )
+    {
+        var path = reference.ResolvedFullPath;
+        if (claimedFiles.TryGetValue(path, out var first))
+            return IsSameWrittenName(first, referencedName);
+
+        claimedFiles[path] = referencedName;
+        return true;
+    }
+
+    /// <summary>
+    ///     Returns whether two cue references name the same file the same way, tolerating the
+    ///     separators and "./" prefixes cue writers use interchangeably.
+    /// </summary>
+    /// <param name="left">First referenced name.</param>
+    /// <param name="right">Second referenced name.</param>
+    /// <returns>True when both references mean the same written file name.</returns>
+    private static bool IsSameWrittenName(string left, string right)
+    {
+        return string.Equals(
+            NormalizeWrittenName(left),
+            NormalizeWrittenName(right),
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    /// <summary>
+    ///     Normalizes the separator style and a leading "./" away from a referenced file name.
+    /// </summary>
+    /// <param name="name">Referenced file name as written.</param>
+    /// <returns>The comparable form.</returns>
+    private static string NormalizeWrittenName(string name)
+    {
+        var normalized = name.Replace('\\', '/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal)) normalized = normalized[2..];
+
+        return normalized;
+    }
+
+    /// <summary>
+    ///     Returns a copy of a resolved reference that is reported as unresolved.
+    /// </summary>
+    /// <param name="reference">The reference whose file is already claimed by another name.</param>
+    /// <param name="referencedName">File name exactly as written in the descriptor.</param>
+    /// <returns>The unresolved reference.</returns>
+    private static CueFileReference AsUnresolved(CueFileReference reference, string referencedName) =>
+        new(
+            referencedName,
+            null,
+            reference.FullPath,
+            reference.TrackType,
+            false,
+            reference.CueDirectory
+        );
 
     /// <summary>
     ///     Counts reference lines that carry a parseable file name: FILE lines for cues, and

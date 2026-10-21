@@ -20,12 +20,12 @@ All four values must match, and `WhatsNew.md` must contain a section whose
 heading starts with that exact version:
 
 ```markdown
-## 3.10.0 (2026-10-21)
+## 3.10.1 (2026-10-21)
 ```
 
 `scripts/ci/version.mjs` validates all of this locally and in CI. A release tag
 is `release_<version>` and must match the project version exactly, for example
-`release_3.10.0`.
+`release_3.10.1`.
 
 ## 14.2 Build the six runtime bundles
 
@@ -46,7 +46,7 @@ Avalonia libraries and the matching bundled tools.
 From the repository root:
 
 ```powershell
-$version = "3.10.0"
+$version = "3.10.1"
 $rids = @(
     @{ Rid = 'win-x64';     Tfm = 'net10.0-windows' },
     @{ Rid = 'win-arm64';   Tfm = 'net10.0-windows' },
@@ -127,8 +127,8 @@ secret; without it the step reports that it skipped the sync.
 After the docs and version files are committed and pushed to `master`:
 
 ```powershell
-git tag release_3.10.0
-git push origin release_3.10.0
+git tag release_3.10.1
+git push origin release_3.10.1
 ```
 
 The `Release` workflow then:
