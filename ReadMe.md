@@ -162,10 +162,10 @@ Generated cue sheets reference the disc image where it already lies rather than 
     * [Avalonia](https://avaloniaui.net/) (v12.1.4) — Cross-platform Fluent Design UI framework and controls
     * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.5.0) - Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
     * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.1) — Pure C# CSO/CISO decompression (deflate + LZ4)
-    * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.4) — Pure C# PBP extraction and SFO parsing
+    * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.5) — Pure C# PBP extraction and SFO parsing
     * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.1) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
-    * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.1) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
-    * [ISZSharp](https://www.nuget.org/packages/ISZSharp) (v1.0.2) — Pure C# UltraISO ISZ decompression
+    * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.2) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
+    * [ISZSharp](https://www.nuget.org/packages/ISZSharp) (v1.0.3) — Pure C# UltraISO ISZ decompression
     * [SharpCompress](https://github.com/adamhathcock/sharpcompress) (v0.50.7) - Archive extraction, and bzip2 decompression for ISZ images
     * [NAudio](https://github.com/naudio/NAudio) (v3.3.0) - MP3 audio track decoding on Windows (Media Foundation); Linux and macOS use `ffmpeg` from `PATH`
     * [Serilog](https://serilog.net/) (v4.4.0) — Structured diagnostic logging

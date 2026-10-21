@@ -509,6 +509,7 @@ PBP files are produced by several authoring tools, and PBPSharp reads the layout
 - **pop-fe** — official 16-bit index size field with a stored/uncompressed flag byte, uncompressed (stored) blocks when compression is disabled, zlib-wrapped deflate blocks, and multi-disc `PSTITLEIMG` headers with zeroed template fields.
 - **Unfinished deflate streams** — a raw stream whose final block never sets BFINAL (a writer that flushed with `Z_SYNC_FLUSH` instead of finishing the stream) is accepted once a full 16-sector block has been decoded; SharpZipLib's stream wrapper would report it as "Unexpected EOF" even though every byte is present.
 - **Incompressible blocks** — deflate streams a few bytes larger than the raw 16-sector block are accepted.
+- **Strict inflater edge cases** — a complete block that SharpZipLib rejects is retried with the runtime's .NET zlib implementation, but only when it expands to exactly one full block.
 - **Truncated PBPs** — a valid disc container with no ISO index, an index that points past the end of the file, or a block whose data runs past end-of-stream is reported as `PbpError.TruncatedPsar` rather than a generic corruption or I/O error.
 - **Trailing index-area data** — entries listed after the ISO size the disc declares (for example the subchannel blob pop-fe can append to the index area) are not image data and are not read, so a complete image still extracts.
 - **PSP applications** — PBPs whose PSAR is not a PlayStation disc image are reported as `PbpError.InvalidPsarHeader` and are skipped cleanly.
@@ -542,6 +543,14 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 ```
 
 ## Version history
+
+### 1.1.5
+
+- Multi-gigabyte PBPs are supported end to end: the PSAR base and every per-disc position are widened to 64-bit before arithmetic, so a later disc beyond the signed 32-bit boundary no longer seeks to a negative offset or fails with a bogus I/O error.
+- Disc positions are checked against the stream length before the first read. A truncated multi-disc PBP now returns `PbpError.TruncatedPsar` instead of seeking past the end or producing a partial BIN.
+- Blocks rejected by SharpZipLib are retried with the runtime's .NET `DeflateStream`/`ZLibStream`; a block is accepted only when it expands to exactly one complete 16-sector block.
+- The computed SFO section size is clamped without an unchecked cast, so a corrupt data-table size cannot wrap the public `SfoData.Size` value.
+- No public API changes.
 
 ### 1.1.4
 

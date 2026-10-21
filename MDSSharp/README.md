@@ -343,6 +343,12 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 
 ## Version history
 
+### 1.2.2
+
+- Package rebuilt from the current CHD Studio source with the latest analyzer settings.
+- Internal v1/v2 footer-offset arithmetic was simplified and the public `MdsTrack` model is annotated for the externally consumed subchannel fields.
+- No public API or parsing-behavior changes; the package still targets `net8.0`, `net9.0` and `net10.0`.
+
 ### 1.2.1
 
 - Package metadata and README now reference the renamed CHD Studio repository (<https://github.com/purelogiccode/CHDStudio>, previously `BatchConvertToCHD`); no functional changes.

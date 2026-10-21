@@ -85,7 +85,7 @@ plain image before converting it to CHD with `chdman` or [CHDSharp](https://www.
 | Target frameworks | `net8.0`, `net9.0`, `net10.0` |
 | Runtime | .NET 8, .NET 9 or .NET 10 |
 | Platforms | Windows, Linux, macOS (pure managed code) |
-| Dependencies | [SharpCompress](https://www.nuget.org/packages/SharpCompress) 0.50.4 (bzip2) |
+| Dependencies | [SharpCompress](https://www.nuget.org/packages/SharpCompress) 0.50.7 (bzip2) |
 
 The package contains a separate assembly for each target framework, so the correct build is selected
 automatically by NuGet.
@@ -398,6 +398,13 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
   against.
 
 ## Version history
+
+### 1.0.3
+
+- Repository and package metadata now point at **CHD Studio** (`https://github.com/purelogiccode/CHDStudio`) instead of the old `BatchConvertToCHD` name.
+- SharpCompress dependency updated to **0.50.7**, with matching analyzer updates.
+- Internal chunk-table size arithmetic was simplified and the public `IszSegment` model is annotated for analyzer correctness.
+- No public API or decoding-behavior changes; the package still targets `net8.0`, `net9.0` and `net10.0`.
 
 ### 1.0.2
 
