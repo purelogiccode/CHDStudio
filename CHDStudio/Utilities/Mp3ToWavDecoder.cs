@@ -130,7 +130,7 @@ internal sealed class Mp3ToWavDecoder : IMp3Decoder
                     // corrupt MP3) stays diagnosable.
                     throw new InvalidDataException(
                         $"Failed to decode MP3 '{Path.GetFileName(mp3Path)}' with Media Foundation ({primaryError.Message}) and the built-in decoder ({builtInEx.Message}).",
-                        primaryError ?? builtInEx
+                        primaryError
                     );
                 }
             },

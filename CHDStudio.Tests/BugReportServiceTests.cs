@@ -112,7 +112,7 @@ public class BugReportServiceTests
     {
         var sb = new StringBuilder();
         var ex = new InvalidOperationException("No stack");
-        var record = Record.Exception(() => BugReportService.AppendExceptionDetails(sb, ex, 0));
+        var record = Record.Exception(() => BugReportService.AppendExceptionDetails(sb, ex));
         Assert.Null(record);
         Assert.Contains("No stack", sb.ToString(), StringComparison.Ordinal);
     }
@@ -170,7 +170,7 @@ public class BugReportServiceTests
     public void AppendExceptionDetailsHandlesExceptionWithoutSource()
     {
         var sb = new StringBuilder();
-        var ex = Record.Exception(() => BugReportService.AppendExceptionDetails(sb, new InvalidOperationException(), 0)
+        var ex = Record.Exception(() => BugReportService.AppendExceptionDetails(sb, new InvalidOperationException())
         );
 
         Assert.Null(ex);

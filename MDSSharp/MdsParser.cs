@@ -294,7 +294,7 @@ public static partial class MdsParser
         var count = (int)Math.Min(fileCount, MaxFooterFiles);
         for (var index = 0; index < count; index++)
         {
-            var footerBase = (long)footerOffset + (long)index * FooterBlockSize;
+            var footerBase = footerOffset + index * FooterBlockSize;
             var name = ReadFooterFileName(bytes, footerBase);
             if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
         }
@@ -326,7 +326,7 @@ public static partial class MdsParser
     /// <param name="nameOffset">Offset of the first character.</param>
     internal static string? ReadWideName(byte[] bytes, uint nameOffset)
     {
-        var maxBytes = (int)Math.Min(MaxFileNameChars * 2L, bytes.Length - (long)nameOffset);
+        var maxBytes = (int)Math.Min(MaxFileNameChars * 2L, bytes.Length - nameOffset);
         var length = 0;
         while (length + 1 < maxBytes)
         {
@@ -343,7 +343,7 @@ public static partial class MdsParser
     /// <param name="nameOffset">Offset of the first character.</param>
     private static string? ReadNarrowName(byte[] bytes, uint nameOffset)
     {
-        var maxBytes = (int)Math.Min(MaxFileNameChars, bytes.Length - (long)nameOffset);
+        var maxBytes = (int)Math.Min(MaxFileNameChars, bytes.Length - nameOffset);
         var length = 0;
         while (length < maxBytes && bytes[nameOffset + length] != 0) length++;
 

@@ -332,7 +332,7 @@ internal static class MdsV2DataDecoder
             );
         }
 
-        var maxGroupBytes = (long)group * sectorSize;
+        var maxGroupBytes = group * sectorSize;
         if (maxGroupBytes > MaxCompressionGroupBytes)
         {
             throw new InvalidDataException(
@@ -425,7 +425,7 @@ internal static class MdsV2DataDecoder
     )
     {
         var expected = entries * 2;
-        var toRead = (long)expected + CompressionTableSlack * 2L;
+        var toRead = expected + CompressionTableSlack * 2L;
         var position = (long)fragment.StartOffset + (long)fragment.CompressionTableOffset;
 
         var available = (int)Math.Min(toRead, Math.Max(0, data.Length - position));
@@ -624,7 +624,7 @@ internal static class MdsV2DataDecoder
                     var count = (int)Math.Min(Math.Max(footerCount, 1u), MaxFooterFiles);
                     for (var footerIndex = 0; footerIndex < count; footerIndex++)
                     {
-                        var footerBase = (long)footerOffset + (long)footerIndex * FooterBlockSize;
+                        var footerBase = footerOffset + footerIndex * FooterBlockSize;
                         if (footerBase < 0 || footerBase + FooterBlockSize > descriptor.Length) break;
 
                         var flags = descriptor[footerBase + 4];

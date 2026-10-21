@@ -339,8 +339,7 @@ public class CsoFileTests : IDisposable
         var target = new byte[K4os.Compression.LZ4.LZ4Codec.MaximumOutputSize(raw.Length)];
         var size = K4os.Compression.LZ4.LZ4Codec.Encode(
             raw,
-            target.AsSpan(),
-            K4os.Compression.LZ4.LZ4Level.L00_FAST
+            target.AsSpan()
         );
         return target[..size];
     }

@@ -30,7 +30,16 @@ internal sealed class FileWatcherService : IDisposable
     /// <summary>
     ///     Gets the number of files with a recorded event. Exposed for diagnostics and tests.
     /// </summary>
-    internal int RecordedEventCount => _lastEventByFile.Count;
+    internal int RecordedEventCount
+    {
+        get
+        {
+            lock (_historyLock)
+            {
+                return _lastEventByFile.Count;
+            }
+        }
+    }
 
     /// <summary>
     ///     Gets the recorded event for a file path, when one exists. Exposed for diagnostics and tests.
@@ -40,7 +49,10 @@ internal sealed class FileWatcherService : IDisposable
     /// <returns><see langword="true" /> when an event was recorded for the path.</returns>
     internal bool TryGetRecordedEvent(string filePath, out FileEventRecord? record)
     {
-        return _lastEventByFile.TryGetValue(filePath, out record);
+        lock (_historyLock)
+        {
+            return _lastEventByFile.TryGetValue(filePath, out record);
+        }
     }
 
     /// <inheritdoc />
@@ -131,7 +143,13 @@ internal sealed class FileWatcherService : IDisposable
         if (!IsWatching)
             return null;
 
-        if (!_lastEventByFile.TryGetValue(filePath, out var record))
+        FileEventRecord? record;
+        lock (_historyLock)
+        {
+            _lastEventByFile.TryGetValue(filePath, out record);
+        }
+
+        if (record is null)
         {
             // File was never seen by the watcher. This could mean:
             // - The drive was disconnected before watcher started

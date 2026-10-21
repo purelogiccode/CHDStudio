@@ -252,7 +252,7 @@ public static partial class MdsParser
         var count = GetV2FooterCount(fileCount);
         for (var index = 0; index < count; index++)
         {
-            var footerBase = (long)footerOffset + (long)index * V2FooterBlockSize;
+            var footerBase = footerOffset + index * V2FooterBlockSize;
             if (footerBase < 0 || footerBase + V2FooterBlockSize > bytes.Length) break;
 
             var nameOffset = BinaryPrimitives.ReadUInt32LittleEndian(
@@ -281,7 +281,7 @@ public static partial class MdsParser
         var count = GetV2FooterCount(fileCount);
         for (var index = 0; index < count; index++)
         {
-            var footerBase = (long)footerOffset + (long)index * V2FooterBlockSize;
+            var footerBase = footerOffset + index * V2FooterBlockSize;
             if (footerBase < 0 || footerBase + V2FooterBlockSize > bytes.Length) break;
 
             if ((bytes[footerBase + V2FooterFlagsOffset] & V2FooterCompressedFlag) != 0)
@@ -318,7 +318,7 @@ public static partial class MdsParser
         long total = 0;
         for (var index = 0; index < count; index++)
         {
-            var footerBase = (long)footerOffset + (long)index * V2FooterBlockSize;
+            var footerBase = footerOffset + index * V2FooterBlockSize;
             if (footerBase < 0 || footerBase + V2FooterBlockSize > bytes.Length) break;
 
             total += (long)BinaryPrimitives.ReadUInt64LittleEndian(

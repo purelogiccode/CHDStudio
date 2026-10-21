@@ -103,7 +103,6 @@ internal partial class MainWindow : Window, IDisposable
     private readonly Lock _logQueueLock = new();
     private readonly Lock _performanceCounterLock = new();
     private readonly Queue<string> _pendingLogLines = new();
-    private readonly string _sevenZipExePath;
 
     // Services
     private readonly UpdateService _updateService;
@@ -180,7 +179,7 @@ internal partial class MainWindow : Window, IDisposable
             appDirectory,
             GetChdmanCandidates()
         );
-        (_sevenZipExePath, _, var isSevenZipAvailable) = ResolveToolExecutable(
+        var (sevenZipExePath, _, isSevenZipAvailable) = ResolveToolExecutable(
             appDirectory,
             GetSevenZipCandidates()
         );
@@ -190,7 +189,7 @@ internal partial class MainWindow : Window, IDisposable
         {
             ShowUpdatePromptAsync = ShowUpdatePromptAsync
         };
-        _archiveService = new ArchiveService(_sevenZipExePath, isSevenZipAvailable);
+        _archiveService = new ArchiveService(sevenZipExePath, isSevenZipAvailable);
 
         // F8 screenshot hotkey (window-scoped on every platform)
         KeyDown += MainWindow_KeyDown;
@@ -3054,7 +3053,7 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         return await ClassifyRecoveredImageAsync(
-            decoded.OutputPath!,
+            decodedPath,
             tempDir,
             "Decoded image",
             "the decoded image is not a whole number of 2352-byte CD sectors or 2048-byte data sectors, so the .ecm file is probably damaged.",
@@ -6253,7 +6252,7 @@ internal partial class MainWindow : Window, IDisposable
         // chdman runs out of process, so its disk writes do not show up in this app's own
         // counters; sample the child process instead, or the speed card would sit at 0 MB/s
         // for every chdman conversion.
-        using var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
+        var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
 
         var speedMonitoringTask = Task.Run(
             async () =>
@@ -6269,8 +6268,12 @@ internal partial class MainWindow : Window, IDisposable
                 catch (OperationCanceledException)
                 {
                 }
+                finally
+                {
+                    chdmanSpeedCounter?.Dispose();
+                }
             },
-            speedToken
+            CancellationToken.None
         );
 
         var cleanupAfterProcessKill = false;
@@ -6321,7 +6324,9 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             ctsSpeed.Cancel();
-            await Task.WhenAny(speedMonitoringTask, Task.Delay(500, CancellationToken.None));
+            // Wait for the sampler to observe cancellation before the enclosing `using`
+            // disposes the performance counter it reads.
+            await speedMonitoringTask.ConfigureAwait(false);
             process.CancelOutputRead();
             process.CancelErrorRead();
 

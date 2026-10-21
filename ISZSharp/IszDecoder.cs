@@ -352,7 +352,7 @@ public static class IszDecoder
     {
         // The table is stored in the file, so a declared size larger than the file (or one that
         // overflows) is rejected before allocating.
-        var tableBytesLong = (long)header.ChunkCount * header.PointerLength;
+        var tableBytesLong = header.ChunkCount * header.PointerLength;
         if (tableBytesLong <= 0 || tableBytesLong > int.MaxValue || tableBytesLong > stream.Length)
         {
             throw new InvalidDataException(

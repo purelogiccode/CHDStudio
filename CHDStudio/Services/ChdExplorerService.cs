@@ -20,20 +20,13 @@ internal sealed class ChdExplorerService : IDisposable
     /// <summary>
     ///     Initializes a new instance of the <see cref="ChdExplorerService" /> class.
     /// </summary>
-    /// <param name="chdPath">Path of the CHD image that was opened.</param>
     /// <param name="container">The parsed container backing this explorer.</param>
     /// <param name="infoReport">The pre-built Image Info report for the CHD.</param>
-    private ChdExplorerService(string chdPath, ChdContainer container, string infoReport)
+    private ChdExplorerService(ChdContainer container, string infoReport)
     {
-        ChdPath = chdPath;
         _container = container;
         InfoReport = infoReport;
     }
-
-    /// <summary>
-    ///     Gets the path of the CHD image that is open.
-    /// </summary>
-    internal string ChdPath { get; }
 
     /// <summary>
     ///     Gets the Image Info report (header, metadata, tracks, hunk codecs) for the open image.
@@ -88,7 +81,7 @@ internal sealed class ChdExplorerService : IDisposable
                 infoReport = $"Image info unavailable: {ex.Message}";
             }
 
-            return new ChdExplorerService(chdPath, container, infoReport);
+            return new ChdExplorerService(container, infoReport);
         }
         catch (Exception ex)
         {

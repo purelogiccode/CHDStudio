@@ -325,7 +325,8 @@ public sealed class PbpFile : IDisposable
             }
 
             sfoData.Entries = entries;
-            sfoData.Size = (uint)Math.Min((ulong)sfoData.DataTableOffset + dataTableSize, uint.MaxValue);
+            var sfoSize = sfoData.DataTableOffset + dataTableSize;
+            sfoData.Size = sfoSize >= uint.MaxValue ? uint.MaxValue : Convert.ToUInt32(sfoSize);
         }
         catch
         {

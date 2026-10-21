@@ -124,7 +124,7 @@ internal sealed class PbpTestFileBuilder
     public PbpTestFileBuilder AsMultiDisc(params int[] positions)
     {
         _multiDisc = true;
-        _multiDiscPositions = positions?.ToList();
+        _multiDiscPositions = positions.ToList();
         return this;
     }
 

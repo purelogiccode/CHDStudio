@@ -3,6 +3,8 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:CHDStudio.Controls"
+    xmlns:models="using:CHDStudio.Models"
+    xmlns:vgfs="using:VideoGameFileSystemParser.Models"
     Title="CHD Studio"
     Height="800"
     Width="1064"
@@ -303,7 +305,7 @@
                                                     <TextBlock Text="Select" ToolTip.Tip="Check or uncheck to select files for processing" />
                                                 </DataGridTemplateColumn.Header>
                                                 <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
+                                                    <DataTemplate x:DataType="models:FileItem">
                                                         <CheckBox
                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                             HorizontalAlignment="Center"
@@ -446,7 +448,7 @@
                                                     <TextBlock Text="Select" ToolTip.Tip="Check or uncheck to select files for processing" />
                                                 </DataGridTemplateColumn.Header>
                                                 <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
+                                                    <DataTemplate x:DataType="models:FileItem">
                                                         <CheckBox
                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                             HorizontalAlignment="Center"
@@ -639,7 +641,7 @@
                                                     <TextBlock Text="Select" ToolTip.Tip="Check or uncheck to select files for processing" />
                                                 </DataGridTemplateColumn.Header>
                                                 <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
+                                                    <DataTemplate x:DataType="models:FileItem">
                                                         <CheckBox
                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                             HorizontalAlignment="Center"
@@ -735,7 +737,7 @@
                                             SelectionChanged="ExplorerParserComboBox_SelectionChangedAsync"
                                             ToolTip.Tip="Select the file system parser for this image (e.g. Xbox, PS2, Dreamcast, ISO 9660)">
                                             <ComboBox.ItemTemplate>
-                                                <DataTemplate>
+                                                <DataTemplate x:DataType="vgfs:ConsoleTypeInfo">
                                                     <TextBlock Text="{Binding DisplayName}" ToolTip.Tip="File system parser name" />
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
@@ -802,7 +804,7 @@
                                                     <TextBlock Text="Name" ToolTip.Tip="Entry name inside the image" />
                                                 </DataGridTemplateColumn.Header>
                                                 <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
+                                                    <DataTemplate x:DataType="models:ChdExplorerItem">
                                                         <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="Entry icon and name">
                                                             <TextBlock
                                                                 Text="{Binding Icon}"

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -15,6 +16,11 @@ namespace CHDStudio;
 ///     Explorer tab: opens a CHD image, parses its file system with the selected
 ///     VideoGameFileSystemParser console parser, and lets the user browse and extract its contents.
 /// </summary>
+[SuppressMessage(
+    "ReSharper",
+    "UnusedParameter.Local",
+    Justification = "Event handler signatures are fixed by Avalonia."
+)]
 internal partial class MainWindow
 {
     private const string ExplorerTempFolderName = "Explorer";
@@ -328,7 +334,7 @@ internal partial class MainWindow
         LogMessage($"Explorer: opening '{chdPath}' with the {parserName} parser...");
 
         ChdExplorerService? service = null;
-        string? error = null;
+        string? error;
         try
         {
             var token = _explorerCts.Token;

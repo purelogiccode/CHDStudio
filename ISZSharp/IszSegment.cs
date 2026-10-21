@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace ISZSharp;
 
 /// <summary>
@@ -10,6 +12,11 @@ namespace ISZSharp;
 /// <param name="FirstChunkNumber">Index of the first chunk in this segment.</param>
 /// <param name="ChunkOffset">Offset within this segment where its first chunk starts.</param>
 /// <param name="LeftSize">Bytes of a chunk that spill over into the next segment.</param>
+[SuppressMessage(
+    "ReSharper",
+    "NotAccessedPositionalProperty.Global",
+    Justification = "Part of the public ISZ segment model."
+)]
 public sealed record IszSegment(
     long Size,
     int ChunkCount,

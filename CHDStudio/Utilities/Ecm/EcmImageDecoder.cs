@@ -203,7 +203,7 @@ internal static class EcmImageDecoder
 
             output.Flush();
 
-            return EcmDecodeResult.Succeeded(destinationPath, written);
+            return EcmDecodeResult.Succeeded(written);
         }
         catch (OperationCanceledException)
         {

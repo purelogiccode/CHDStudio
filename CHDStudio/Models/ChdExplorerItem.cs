@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using VideoGameFileSystemParser.Models;
 
@@ -22,11 +23,21 @@ internal sealed class ChdExplorerItem
     /// <summary>
     ///     Gets the formatted size for files (empty for directories).
     /// </summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedAutoPropertyAccessor.Global",
+        Justification = "Bound from the Explorer DataGrid."
+    )]
     public string SizeFormatted { get; init; } = string.Empty;
 
     /// <summary>
     ///     Gets the formatted modified time (empty when the file system does not report one).
     /// </summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedAutoPropertyAccessor.Global",
+        Justification = "Bound from the Explorer DataGrid."
+    )]
     public string ModifiedFormatted { get; init; } = string.Empty;
 
     /// <summary>

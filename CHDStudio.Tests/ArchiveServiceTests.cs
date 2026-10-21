@@ -539,8 +539,7 @@ public class ArchiveServiceTests : IDisposable
                 _ =>
                 {
                     openCallCount++;
-                    int index;
-                    throw new ArgumentOutOfRangeException(nameof(index));
+                    throw new ArgumentOutOfRangeException(nameof(openCallCount));
                 },
                 CancellationToken.None
             );
@@ -556,7 +555,7 @@ public class ArchiveServiceTests : IDisposable
     {
         var service = new ArchiveService("7za.exe", false);
         var partPath = Path.Combine(_tempDir, "game.part03.rar");
-        File.WriteAllText(partPath, "Rar!\x1A\x07\x00dummy");
+        File.WriteAllText(partPath, "Rar!\u001A\u0007\u0000dummy");
         var tempDir = Path.Combine(_tempDir, "extract_missing_first");
 
         var result = await service.ExtractArchiveAsync(
@@ -580,7 +579,7 @@ public class ArchiveServiceTests : IDisposable
         var service = new ArchiveService("7za.exe", false);
         File.WriteAllText(
             Path.Combine(_tempDir, "set.part01.rar"),
-            "Rar!\x1A\x07\x00not a real archive body"
+            "Rar!\u001A\u0007\u0000not a real archive body"
         );
         File.WriteAllText(Path.Combine(_tempDir, "set.part02.rar"), "still not a volume");
         var tempDir = Path.Combine(_tempDir, "extract_corrupt_set");
@@ -602,7 +601,7 @@ public class ArchiveServiceTests : IDisposable
         // A ".001" file whose content is a RAR: the extension says nothing, the signature does.
         var service = new ArchiveService("7za.exe", false);
         var firstVolume = Path.Combine(_tempDir, "hidden.001");
-        File.WriteAllText(firstVolume, "Rar!\x1A\x07\x00dummy volume");
+        File.WriteAllText(firstVolume, "Rar!\u001A\u0007\u0000dummy volume");
         File.WriteAllText(Path.Combine(_tempDir, "hidden.002"), "dummy volume 2");
         var tempDir = Path.Combine(_tempDir, "extract_hidden_rar");
 

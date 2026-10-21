@@ -113,7 +113,7 @@ public class App : Application
 
         _singleInstanceMutex = new Mutex(false, name, out _);
 
-        var acquired = false;
+        bool acquired;
         try
         {
             acquired = _singleInstanceMutex.WaitOne(0);

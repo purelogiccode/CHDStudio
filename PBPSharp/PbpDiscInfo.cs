@@ -275,7 +275,7 @@ public sealed class PbpDiscInfo
 
         // 64-bit math: the PSAR offset plus a large block offset can overflow int32 on
         // multi-gigabyte files.
-        var thisOffset = (long)_psarOffset + PsarIsoOffset + entry.Offset;
+        var thisOffset = _psarOffset + PsarIsoOffset + entry.Offset;
         _stream.Seek(thisOffset, SeekOrigin.Begin);
 
         // A full-size block, or any block explicitly flagged as stored/uncompressed, is
@@ -331,7 +331,7 @@ public sealed class PbpDiscInfo
         Exception exception
     )
     {
-        var absoluteOffset = (long)_psarOffset + PsarIsoOffset + entry.Offset;
+        var absoluteOffset = _psarOffset + PsarIsoOffset + entry.Offset;
         var previewLength = Math.Min(16, entry.Length);
         var preview = Convert.ToHexString(inBuffer.AsSpan(0, previewLength));
 

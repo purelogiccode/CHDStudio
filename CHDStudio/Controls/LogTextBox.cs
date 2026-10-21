@@ -42,7 +42,7 @@ internal sealed class LogTextBox : TextBox
     /// </summary>
     public new string SelectedText
     {
-        get => base.SelectedText ?? string.Empty;
+        get => base.SelectedText;
         set
         {
             var text = Text;

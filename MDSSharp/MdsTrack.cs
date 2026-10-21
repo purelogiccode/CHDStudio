@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace MDSSharp;
 
 /// <summary>
@@ -41,9 +43,19 @@ public sealed record MdsTrack(int Number, byte ModeByte, int SectorSize, long St
     public long StoredDataSectors { get; init; }
 
     /// <summary>Subchannel mode byte from the descriptor (0x08 is 96-byte interleaved P-W).</summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedAutoPropertyAccessor.Global",
+        Justification = "Part of the public MDS track model."
+    )]
     public byte SubchannelMode { get; init; }
 
     /// <summary>ADR/CTL byte from the descriptor's subchannel Q information.</summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedAutoPropertyAccessor.Global",
+        Justification = "Part of the public MDS track model."
+    )]
     public byte AdrCtl { get; init; }
 
     /// <summary>True for a CDDA audio track.</summary>
