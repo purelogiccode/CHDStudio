@@ -61,3 +61,5 @@ Out of scope:
 We will not pursue legal action for good-faith security research that follows
 this policy, avoids privacy violations, data destruction and service
 disruption, and gives us reasonable time to fix the issue before publication.
+
+<!-- CI verification marker -->
