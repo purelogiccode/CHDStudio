@@ -191,7 +191,12 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
 10. **Verify after CI**:
     ```powershell
     gh release view release_3.11.0
-    gh attestation verify release_3.11.0_win-x64.zip --repo purelogiccode/CHDStudio
+    $attestDir = Join-Path $env:TEMP 'chdstudio-attest'
+    New-Item -ItemType Directory -Force -Path $attestDir | Out-Null
+    gh release download release_3.11.0 `
+        --pattern release_3.11.0_win-x64.zip --dir $attestDir --clobber
+    gh attestation verify (Join-Path $attestDir 'release_3.11.0_win-x64.zip') `
+        --repo purelogiccode/CHDStudio
     gh run list --limit 10
     ```
     The release must be the latest, non-prerelease release with all six assets
