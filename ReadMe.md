@@ -1,6 +1,9 @@
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d7.svg)](https://github.com/purelogiccode/CHDStudio)
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-512bd4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml/badge.svg)](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/purelogiccode/CHDStudio/badge)](https://securityscorecards.dev/viewer/?uri=github.com/purelogiccode/CHDStudio)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![GitHub release](https://img.shields.io/github/v/release/purelogiccode/CHDStudio)](https://github.com/purelogiccode/CHDStudio/releases)
 [![Downloads](https://img.shields.io/github/downloads/purelogiccode/CHDStudio/total.svg)](https://github.com/purelogiccode/CHDStudio/releases)
@@ -180,6 +183,12 @@ Generated cue sheets reference the disc image where it already lies rather than 
 4.  Launch the application.
 
 Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.10.1_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
+
+Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
+
+```sh
+gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio
+```
 
 ---
 

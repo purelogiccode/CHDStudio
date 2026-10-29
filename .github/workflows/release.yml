@@ -35,16 +35,17 @@ jobs:
   meta:
     name: Resolve version & release notes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.TAG }}
 
       - name: Set up Node 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -56,7 +57,7 @@ jobs:
         run: node scripts/ci/release-notes.mjs --version "${{ steps.version.outputs.version }}" --out release-notes.md
 
       - name: Upload release notes
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-notes
           path: release-notes.md
@@ -66,14 +67,15 @@ jobs:
     name: Test
     needs: meta
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.TAG }}
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.x
 
@@ -90,6 +92,11 @@ jobs:
     name: Package ${{ matrix.rid }}
     needs: [meta, test]
     runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -108,12 +115,12 @@ jobs:
             tfm: net10.0
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.TAG }}
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.x
 
@@ -157,8 +164,13 @@ jobs:
               $zip.Dispose()
           }
 
+      - name: Attest release zip provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip
+
       - name: Upload release zip
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-${{ matrix.rid }}
           path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip
@@ -168,11 +180,12 @@ jobs:
     name: Create GitHub release
     needs: [meta, package]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - name: Download all release artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: release-*
           path: release
@@ -208,3 +221,19 @@ jobs:
               "${prerelease[@]}" \
               release/*.zip
           fi
+
+      - name: Verify all six release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
+            name="release_${VERSION}_${rid}.zip"
+            if ! gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$name"; then
+              echo "::error::Release $TAG is missing $name"
+              exit 1
+            fi
+          done
+          echo "All six release zips are attached to $TAG."
