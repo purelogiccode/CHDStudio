@@ -42,6 +42,21 @@ const stripFrontMatter = (text) => {
     return after === -1 ? '' : normalized.slice(after + 1).replace(/^\n+/, '');
 };
 
+// GitHub Pages resolves `page.md` links to `page.html`; the wiki does not. Rewrite
+// relative Markdown links to the flat wiki page names so the same docs tree works in
+// both homes. Absolute URLs, anchors and external links are left untouched.
+const toWikiLinks = (text) =>
+    text.replace(
+        /\]\((?!https?:\/\/)([^()\s]+?)\.md(#[^)]+)?\)/g,
+        (match, target, anchor = '') => {
+            const page = target
+                .replace(/^\.\//, '')
+                .replace(/^docs\//, '')
+                .replace(/^index$/, 'Home');
+            return `](${page}${anchor})`;
+        }
+    );
+
 try {
     git(['-c', 'core.autocrlf=false', 'clone', '--depth', '1', remote, wikiDir]);
     git(['config', 'core.autocrlf', 'false'], wikiDir);
@@ -54,7 +69,9 @@ try {
         }
         const target = name === 'index.md' ? 'Home.md' : name;
         expectedTargets.add(target);
-        const content = stripFrontMatter(readFileSync(join(docsDir, name), 'utf8'));
+        const content = toWikiLinks(
+            stripFrontMatter(readFileSync(join(docsDir, name), 'utf8'))
+        );
         const targetPath = join(wikiDir, target);
         let previous = '';
         try {
@@ -68,8 +85,8 @@ try {
         }
     }
 
-    const whatsNew = stripFrontMatter(
-        readFileSync(join(repoRoot, 'WhatsNew.md'), 'utf8')
+    const whatsNew = toWikiLinks(
+        stripFrontMatter(readFileSync(join(repoRoot, 'WhatsNew.md'), 'utf8'))
     ).replace(/\r\n/g, '\n');
     const whatsNewTarget = join(wikiDir, 'WhatsNew.md');
     expectedTargets.add('WhatsNew.md');
