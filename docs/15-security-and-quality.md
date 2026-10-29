@@ -67,6 +67,10 @@ build-provenance attestation. Verify a downloaded asset with the GitHub CLI:
 gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio
 ```
 
+The local `CHDStudio/bin/Release/` archive is built separately and is not
+byte-identical to CI's assets, so verify the downloaded GitHub release asset,
+not the local archive copy.
+
 The release workflow also checks that `release_<version>_win-x64.zip`,
 `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64` are all
 attached before the job finishes.

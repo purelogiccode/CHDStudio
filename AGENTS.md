@@ -202,6 +202,11 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
     must see the new tag; and `CHDStudio/bin/Release/` must contain the six new
     zips beside every older file.
 
+    The local `CHDStudio/bin/Release/` zips are built locally and are not
+    byte-identical to CI's assets, so their hashes have no attestation. Run
+    `gh attestation verify` against the downloaded GitHub release asset, not
+    the local archive copy.
+
 ### Deployment invariants
 
 - The app is framework-dependent and single-file: **never** use
