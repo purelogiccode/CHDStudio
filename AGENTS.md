@@ -237,13 +237,38 @@ a real file on each runtime).
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `.github/workflows/ci.yml` | push/PR to `master`, manual | Restore, build, test; uploads trx results |
-| `.github/workflows/release.yml` | tag `release_*`, manual with tag | Validate version, test, package zips for all six RIDs (Windows/Linux/macOS, x64+arm64), publish GitHub release |
+| `.github/workflows/ci.yml` | push/PR to `master`, manual | Restore, build, test; uploads trx + coverage results |
+| `.github/workflows/release.yml` | tag `release_*`, manual with tag | Validate version, test, package zips for all six RIDs (Windows/Linux/macOS, x64+arm64), attest provenance, publish and verify the GitHub release |
 | `.github/workflows/docs.yml` | push/PR to `master`, manual | PR: build the Jekyll Pages site; master: also deploy Pages and sync `docs/` to the GitHub wiki |
+| `.github/workflows/codeql.yml` | push/PR to `master`, weekly, manual | CodeQL code scanning for C# and the Actions workflows (`security-and-quality`) |
+| `.github/workflows/dependency-review.yml` | PR to `master` | Fail PRs that add high/critical vulnerable dependencies |
+| `.github/workflows/scorecard.yml` | push to `master`, weekly, branch protection changes, manual | OpenSSF Scorecard; publishes results and uploads SARIF to code scanning |
 
-All workflows set up Node 24 where scripts run. Use the latest action majors
+All workflows set up Node 24 where scripts run. Every `uses:` reference is
+pinned to a full commit SHA (with a `# vX` comment for Dependabot) because the
+repository requires SHA pinning. Use the latest action majors
 (`actions/checkout@v7`, `setup-dotnet@v6`, `setup-node@v7`, artifacts v7/v8) so
 the runner's Node 24 runtime is used.
+
+## Security and quality settings
+
+- Dependabot alerts and security updates are enabled; `.github/dependabot.yml`
+  adds weekly grouped NuGet and GitHub Actions version updates.
+- Secret scanning and push protection are enabled. Private vulnerability
+  reporting is enabled and `SECURITY.md` is the public reporting policy.
+- Code scanning uses the advanced CodeQL workflow, not default setup (the two
+  cannot run together). Do not enable CodeQL default setup without disabling
+  `codeql.yml`.
+- GitHub Code Quality default setup is enabled for C# and the Node helper
+  scripts (`javascript-typescript`). It runs the dynamic
+  `CodeQL - Code Quality` workflow.
+- The `Protect master` ruleset requires a pull request and the CI/CodeQL/Docs/
+  Dependency Review checks, blocks deletion and force-pushes, and lets
+  repository admins bypass it for direct maintenance pushes.
+- Actions are limited to SHA-pinned references, external fork PR workflows need
+  approval, and the default `GITHUB_TOKEN` is read-only.
+- Release zips get a signed build-provenance attestation. Verify a download with
+  `gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio`.
 
 ## Docs = GitHub Pages + GitHub wiki
 
