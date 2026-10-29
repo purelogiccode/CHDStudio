@@ -34,6 +34,7 @@ internal sealed class PbpTestFileBuilder
     private int _corruptBlockIndex = -1;
     private int _truncatedBlockIndex = -1;
     private int _zeroLengthStoredBlockIndex = -1;
+    private int _zeroLengthCompressedBlockIndex = -1;
     private int _trailingPaddingBlockIndex = -1;
     private int _trailingPaddingBytes;
     private int _shortIndexBlockIndex = -1;
@@ -171,6 +172,18 @@ internal sealed class PbpTestFileBuilder
     public PbpTestFileBuilder WithZeroLengthStoredBlock(int blockIndex)
     {
         _zeroLengthStoredBlockIndex = blockIndex;
+        return this;
+    }
+
+    /// <summary>
+    ///     Writes a compressed (no stored flag) index entry that declares no data at all and
+    ///     omits the block's stream. Used to prove a corrupt zero-length compressed entry is
+    ///     rejected instead of reading the following block's stream as this block.
+    /// </summary>
+    /// <param name="blockIndex">Zero-based block index to replace.</param>
+    public PbpTestFileBuilder WithZeroLengthCompressedBlock(int blockIndex)
+    {
+        _zeroLengthCompressedBlockIndex = blockIndex;
         return this;
     }
 
@@ -426,6 +439,15 @@ internal sealed class PbpTestFileBuilder
                 continue;
             }
 
+            if (i == _zeroLengthCompressedBlockIndex)
+            {
+                // A compressed entry that declares no data and has no stream: a corrupt index.
+                entry.Clear();
+                BinaryPrimitives.WriteUInt32LittleEndian(entry[..4], currentOffset);
+                stream.Write(entry);
+                continue;
+            }
+
             var storedLength = _compressBlocks ? GetStoredBlock(blockData, i).Length : BlockSize;
             var entryLength = storedLength;
             if (i == _shortIndexBlockIndex)
@@ -466,7 +488,7 @@ internal sealed class PbpTestFileBuilder
     {
         for (var i = 0; i < blockCount; i++)
         {
-            if (i == _zeroLengthStoredBlockIndex)
+            if (i == _zeroLengthStoredBlockIndex || i == _zeroLengthCompressedBlockIndex)
                 continue;
 
             var blockData = GetBlockData(i);

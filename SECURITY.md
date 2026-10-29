@@ -7,8 +7,8 @@ newest release before reporting an issue.
 
 | Version | Supported |
 | --- | --- |
-| 3.10.x | Yes |
-| Older versions | No - upgrade to 3.10.x first |
+| 3.11.x | Yes |
+| Older versions | No - upgrade to 3.11.x first |
 
 ## Reporting a vulnerability
 

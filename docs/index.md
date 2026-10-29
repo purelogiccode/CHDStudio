@@ -28,13 +28,14 @@ This documentation covers the project from both a user and a developer perspecti
 | 13 | [Troubleshooting](13-troubleshooting.md) | Users & devs | Common errors, their meaning, and how to resolve them |
 | 14 | [Release & Deployment](14-release-and-deployment.md) | Maintainers | Versioning, six-RID bundle creation, GitHub release, Pages and wiki deployment |
 | 15 | [What's New](WhatsNew.md) | Everyone | The changelog for each release |
+| 16 | [Security & Quality](15-security-and-quality.md) | Everyone | Vulnerability reporting, CodeQL, Dependency Review, Scorecard, Code Quality, branch protection and release provenance |
 
 ## 🔑 Quick Facts
 
 | Fact | Value |
 |------|-------|
 | **Application name** | `CHDStudio` |
-| **Latest version** | 3.10.2 |
+| **Latest version** | 3.11.0 |
 | **Target framework** | .NET 10.0 (`net10.0;net10.0-windows`), Avalonia |
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
@@ -44,7 +45,8 @@ This documentation covers the project from both a user and a developer perspecti
 | **Output format** | `.chd` (Compressed Hunks of Data) |
 | **Logs** | `%LocalAppData%\CHDStudio\logs` |
 | **Screenshots** | `%LocalAppData%\CHDStudio\screenshots` (F8 hotkey; falls back to a `screenshots` folder next to the app) |
-| **Bug reporting** | Automatic, opt-out by design — sent to the PureLogicCode BugReport API |
+| **Bug reporting** | Automatic, opt-out by design - sent to the PureLogicCode BugReport API |
+| **Security & quality** | CodeQL, Dependency Review, OpenSSF Scorecard, Code Quality, secret scanning, private vulnerability reporting and signed release provenance |
 
 ## 🗺️ Repository Layout
 
@@ -59,7 +61,7 @@ CHDStudio/
 │   ├── Services/                   # Archive, BugReport, FileWatcher, Stats, Update, ...
 │   └── Utilities/                  # PathUtils, CueNormalizer, GameFileParser, ...
 │       └── Ecm/                    # in-process ECM decoding
-├── CHDStudio.Tests/        # xUnit test suite (1162 tests)
+├── CHDStudio.Tests/        # xUnit test suite (1175 tests)
 ├── CCDSharp/                       # CloneCD (.ccd/.img/.sub) parsing library
 ├── CSOSharp/                       # CSO/CISO decompression library (deflate + LZ4)
 ├── PBPSharp/                       # PlayStation PBP extraction + SFO parsing library

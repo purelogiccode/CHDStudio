@@ -20,12 +20,12 @@ All four values must match, and `WhatsNew.md` must contain a section whose
 heading starts with that exact version:
 
 ```markdown
-## 3.10.1 (2026-10-21)
+## 3.11.0 (2026-10-29)
 ```
 
 `scripts/ci/version.mjs` validates all of this locally and in CI. A release tag
 is `release_<version>` and must match the project version exactly, for example
-`release_3.10.1`.
+`release_3.11.0`.
 
 ## 14.2 Build the six runtime bundles
 
@@ -46,7 +46,7 @@ Avalonia libraries and the matching bundled tools.
 From the repository root:
 
 ```powershell
-$version = "3.10.1"
+$version = "3.11.0"
 $rids = @(
     @{ Rid = 'win-x64';     Tfm = 'net10.0-windows' },
     @{ Rid = 'win-arm64';   Tfm = 'net10.0-windows' },
@@ -96,12 +96,17 @@ is already there. The release archive is append-only.
 dotnet build CSharp_CHDStudio.sln -c Release
 dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 node scripts/ci/version.mjs
+jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
 ```
 
-For a non-Windows bundle, inspect `CHDStudio` and `7zz` inside the zip and
-confirm their Unix mode is `0100755`; the release workflow repeats this check.
-Confirm that each zip contains `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the
-single-file application, the native libraries and only the matching tools.
+The full suite must pass (**1175 tests**: 1145 unit + 30 integration), and
+InspectCode must report **zero warnings and zero errors**. The remaining
+InspectCode notes are suggestions, not release blockers. For a non-Windows
+bundle, inspect `CHDStudio` and `7zz` inside the zip and confirm their Unix mode
+is `0100755`; the release workflow repeats this check. Confirm that each zip
+contains `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the single-file
+application, the native libraries and only the matching tools. The .NET runtime
+must not be inside the executable.
 
 ## 14.4 Documentation, Pages and wiki
 
@@ -127,8 +132,8 @@ secret; without it the step reports that it skipped the sync.
 After the docs and version files are committed and pushed to `master`:
 
 ```powershell
-git tag release_3.10.1
-git push origin release_3.10.1
+git tag release_3.11.0
+git push origin release_3.11.0
 ```
 
 The `Release` workflow then:
@@ -137,10 +142,21 @@ The `Release` workflow then:
 2. runs the test suite on Windows;
 3. publishes all six RIDs with the framework-dependent single-file settings;
 4. packages and verifies the six `release_<version>_<rid>.zip` files;
-5. creates the GitHub release with the matching `WhatsNew.md` section as its body.
+5. creates a signed build-provenance attestation for each zip;
+6. creates the GitHub release with the matching `WhatsNew.md` section as its body;
+7. verifies that all six zip assets are attached.
 
 Re-running the workflow refreshes the release notes and uploads the assets with
-`--clobber`.
+`--clobber`. Verify a downloaded asset with:
+
+```powershell
+gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio
+```
+
+The `Protect master` ruleset requires a pull request and the CI, CodeQL, Docs
+and Dependency Review checks. Repository admins can bypass it for direct
+maintenance pushes; remove the bypass if every change must go through a PR. See
+[Security & Quality](15-security-and-quality.md) for the full CI/security setup.
 
 ## 14.6 Update-check compatibility
 
@@ -155,8 +171,11 @@ contract.
 
 * The GitHub release exists, is not marked prerelease, and has all six zips.
 * The release body is the new `WhatsNew.md` section.
-* Pages shows the new version and dark side menu.
-* The wiki `Home`, `WhatsNew` and `_Sidebar` pages reflect `docs/`.
+* Each asset has a build-provenance attestation (`gh attestation verify`).
+* The `CI`, `CodeQL`, `Docs` and `Scorecard` workflows are green on `master`.
+* Pages shows the new version, dark side menu and the Security & Quality page.
+* The wiki `Home`, `WhatsNew`, `_Sidebar` and Security & Quality pages reflect
+  `docs/`.
 * `CHDStudio/bin/Release/` contains the new six zips and no older file was
   removed.
-* The application's update check sees the new tag and offers it to 3.9.x users.
+* The application's update check sees the new tag and offers it to older users.

@@ -269,8 +269,12 @@ public sealed class PbpDiscInfo
         // The size field is 16 bits, so a value beyond the sane cap can only mean a corrupt
         // index. The cap only rejects entries far beyond any legitimate block: a deflate
         // stream for a 16-sector block never exceeds the raw block size by more than a few
-        // dozen bytes of framing.
+        // dozen bytes of framing. A zero-length compressed entry is also corrupt: reading up
+        // to the next entry would decode that block's stream as this one.
         if (entry.Length is < 0 or > MaxBlockEntrySize)
+            throw new InvalidDataException("Invalid ISO block length in PSAR index.");
+
+        if (!entry.Uncompressed && entry.Length < 4)
             throw new InvalidDataException("Invalid ISO block length in PSAR index.");
 
         // 64-bit math: the PSAR offset plus a large block offset can overflow int32 on

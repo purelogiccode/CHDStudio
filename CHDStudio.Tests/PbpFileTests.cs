@@ -884,6 +884,32 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
+    public void ExtractToBinCueWithZeroLengthCompressedBlockReturnsDecompressionError()
+    {
+        // A compressed entry with no data must not borrow the next block's stream. The reader
+        // extends a short entry only when it has at least a minimal deflate stream; a zero-length
+        // entry is a corrupt index.
+        var path = Path.Combine(_tempDir, $"zerolen_compressed_{Guid.NewGuid():N}.pbp");
+        new PbpTestFileBuilder()
+            .WithBlockCount(3)
+            .WithCompressedBlocks(true)
+            .WithZeroLengthCompressedBlock(2)
+            .BuildTo(path);
+
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            var binPath = Path.Combine(_tempDir, $"zerolen_compressed_{Guid.NewGuid():N}.bin");
+            var cuePath = Path.ChangeExtension(binPath, ".cue");
+            var result = pbp.Discs[0].ExtractToBinCue(binPath, cuePath);
+            Assert.Equal(PbpError.DecompressionError, result);
+        }
+    }
+
+    [Fact]
     public void OpenSyntheticSingleDiscCompressedReturnsSuccess()
     {
         var path = Path.Combine(_tempDir, $"synth_compressed_{Guid.NewGuid():N}.pbp");

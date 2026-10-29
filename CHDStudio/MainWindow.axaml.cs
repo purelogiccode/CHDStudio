@@ -6817,6 +6817,7 @@ internal partial class MainWindow : Window, IDisposable
             {
                 if (!token.IsCancellationRequested && timeoutMinutes is not null)
                 {
+                    chdSharpFailure = "the encoder timed out";
                     LogMessage(
                         $"TIMEOUT: Conversion of '{Path.GetFileName(originalInputFile)}' exceeded {timeoutMinutes.Value} minute(s). Marking as failed."
                     );
@@ -6894,28 +6895,26 @@ internal partial class MainWindow : Window, IDisposable
                 return false;
             }
 
+            ChdResult stagedCheck;
             try
             {
                 using var stagedStream = File.OpenRead(outputFile);
-                var stagedCheck = Chd.CheckFile(
-                    stagedStream,
-                    Path.GetFileName(outputFile),
-                    false
-                );
-                if (!stagedCheck.IsSuccess)
-                {
-                    chdSharpFailure = stagedCheck.Error.GetMessage();
-                    LogError(
-                        $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {stagedCheck.Error.GetMessage()}."
-                    );
-                    TryBestEffortDelete(outputFile);
-                    return false;
-                }
+                stagedCheck = Chd.CheckFile(stagedStream, Path.GetFileName(outputFile), false);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 chdSharpFailure = ex.Message;
                 LogError($" CHDSharp output could not be validated: {ex.Message}");
+                TryBestEffortDelete(outputFile);
+                return false;
+            }
+
+            if (!stagedCheck.IsSuccess)
+            {
+                chdSharpFailure = stagedCheck.Error.GetMessage();
+                LogError(
+                    $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {stagedCheck.Error.GetMessage()}."
+                );
                 TryBestEffortDelete(outputFile);
                 return false;
             }
@@ -6924,6 +6923,7 @@ internal partial class MainWindow : Window, IDisposable
             // produced in this batch.
             if (!TryReserveBatchOutputPath(originalOutputFile))
             {
+                chdSharpFailure = "the output file was already produced earlier in this batch";
                 LogMessage(
                     $" {Path.GetFileName(originalOutputFile)} was already produced earlier in this batch; keeping the first one."
                 );

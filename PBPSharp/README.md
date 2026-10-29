@@ -1,6 +1,9 @@
 [![NuGet](https://img.shields.io/nuget/v/PBPSharp.svg)](https://www.nuget.org/packages/PBPSharp)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/PBPSharp.svg)](https://www.nuget.org/packages/PBPSharp)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml/badge.svg)](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/purelogiccode/CHDStudio/badge)](https://securityscorecards.dev/viewer/?uri=github.com/purelogiccode/CHDStudio)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](https://github.com/purelogiccode/CHDStudio/blob/master/SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/purelogiccode/CHDStudio)
 [![.NET 8 | 9 | 10](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512bd4.svg)](https://dotnet.microsoft.com/download)
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d7.svg)](https://github.com/purelogiccode/CHDStudio)
@@ -550,6 +553,7 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 
 - A block is now accepted as soon as it has produced one full 16-sector block; inflation no longer parses bytes that follow it. Writer padding, the next stream's first bytes when an index length overstates a block, and an unfinished deflate stream therefore stop producing bogus `DecompressionError` failures ("broken uncompressed block", "Unknown block type 6/7", "Encountered invalid codelength 0", "Illegal rep dist code", and similar) once the block itself was complete. This matches the popstation/PSX2PSP/iPoPS reference readers, which stop when the output is full.
 - A compressed block is read up to the next index entry's offset when that offset is later than the entry's declared length, so a writer that under-states a length (a lagging length or a final flush not included in the index) no longer fails with a short stream.
+- A zero-length compressed index entry is rejected as corrupt instead of reading the following block's stream as this block, which would silently shift the extracted image.
 - The `.NET` zlib fallback accepts a stream that throws at its unfinished tail after producing the full block, matching the SharpZipLib path.
 - Block failure diagnostics now record both the index length (`length=`) and the number of bytes actually read (`read=`), and a short block reports how many bytes it produced of the expected 16-sector block.
 - No public API changes.

@@ -5,23 +5,38 @@ nav_order: 16
 
 # What's New
 
-## 3.10.2 (2026-10-28)
+## 3.11.0 (2026-10-29)
 
 ### PBP extraction - PBPSharp 1.1.6
 
 *   **Blocks that carry trailing bytes now extract.** A PSAR block is accepted as soon as it has produced one full 16-sector block; inflation no longer parses whatever follows it. Writer padding, the next stream's first bytes when an index length overstates a block, and a stream that never sets `BFINAL` no longer turn a complete block into a `DecompressionError` ("broken uncompressed block", "Unknown block type 6/7", "Encountered invalid codelength 0", "Illegal rep dist code", ...). This fixes the batch of PBP failures reported on 3.10.1 and matches the popstation/PSX2PSP/iPoPS reference readers, which stop when the output is full.
 *   **A block whose index length under-states its stream is read up to the next entry.** When the following index entry starts further away, that distance is the block's real extent, so a length recorded before the writer's final flush no longer fails with a short stream.
+*   **A zero-length compressed index entry is rejected.** It is a corrupt index, not an under-stated stream; reading the following block's data as this block would silently shift the extracted image.
 *   **Block diagnostics now include the number of bytes actually read** (`read=` next to `length=`) and a short block reports how many of the expected bytes it produced, making a genuinely truncated block distinguishable from a padded one.
 
 ### Encoder failure reporting
 
 *   **A C++ runtime abort inside `chdman` is recognised from its output.** `libc++abi: Pure virtual function called!` and the `terminate called ...` family exit with a positive code on Windows, so the crash was previously treated as a normal conversion error and re-filed for every following file. It now switches the rest of the batch to the built-in encoder and the raw runtime line is no longer sent as a bug report.
 *   **A failed CHDSharp fallback keeps its real cause.** The generic "the built-in CHDSharp encoder did not produce a usable output" message is only logged when the encoder failed without logging a reason; a truncated image, a cue both encoders reject, or an I/O error now appears as the specific, classified message instead of being hidden (and reported twice).
-*   **CHDSharp output is checked before it replaces the destination.** A missing, empty or unreadable staging file is reported as a failed conversion instead of being moved into place.
+*   **CHDSharp output is checked before it replaces the destination.** A missing, empty or unreadable staging file is reported as a failed conversion instead of being moved into place. Any validation failure, not only an I/O error, is treated as a failed conversion.
+*   **Timeouts and duplicate outputs keep their own message.** They no longer add a second, generic "did not produce a usable output" line after the specific timeout or duplicate-output notice.
+
+### CI, security and release engineering
+
+*   **CodeQL code scanning** runs for C# and the GitHub Actions workflows with the `security-and-quality` query suite on every push/PR to `master`, weekly, and on demand.
+*   **Dependency Review** blocks pull requests that introduce high or critical vulnerable dependencies.
+*   **OpenSSF Scorecard** runs weekly and on branch-protection changes; results are published and uploaded to code scanning.
+*   **Dependabot** keeps NuGet packages and SHA-pinned GitHub Actions up to date with weekly grouped pull requests.
+*   **GitHub Code Quality** is enabled for C# and the Node helper scripts.
+*   **Repository hardening**: secret scanning and push protection, private vulnerability reporting, SHA-pinned Actions, approval for external fork workflows, a read-only default `GITHUB_TOKEN`, and a `Protect master` ruleset that requires pull requests plus the CI/CodeQL/Docs/Dependency Review checks (admins can bypass it for direct maintenance).
+*   **Release provenance**: every release zip gets a signed build-provenance attestation; verify it with `gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio`.
+*   **Release verification**: the release workflow now checks that all six RID zips are attached before it finishes.
+*   **Documentation**: a new security and quality page, side menus for Pages and the wiki, badges on every README, and updated 3.11.0 package tables.
 
 ### Verification
 
-*   New regression tests cover padded unfinished blocks, an index length that lags the next entry, C++ runtime abort detection and the new bug-report exclusions. The full suite passes (1174 tests, integration included).
+*   New regression tests cover padded unfinished blocks, an index length that lags the next entry, a zero-length compressed entry, C++ runtime abort detection and the new bug-report exclusions. The full suite passes (1175 tests, integration included); CI runs the 1145 unit tests.
+*   JetBrains InspectCode reports zero warnings and zero errors.
 
 ## 3.10.1 (2026-10-21)
 

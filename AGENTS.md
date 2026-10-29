@@ -105,7 +105,7 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
   GitHub release (title = version, body = the `WhatsNew.md` section).
   Re-running the workflow refreshes the notes and uploads assets with `--clobber`.
 
-### Standard release routine (used for 3.10.0)
+### Standard release routine (used for 3.11.0)
 
 1. **Review the changes since the previous tag** and fix regressions before
    changing versions. Run the full suite, not only the CI filter.
@@ -120,11 +120,15 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
    dotnet build CSharp_CHDStudio.sln -c Release
    dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
    node scripts/ci/version.mjs
+   jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
    ```
+   InspectCode must report zero warnings and zero errors before tagging.
 4. **Publish all six framework-dependent single-file bundles**, never
-   self-contained:
+   self-contained. Package to a versioned `dist/<version>` folder, never
+   directly into the release archive:
    ```powershell
-   $version = "3.10.0"
+   $ErrorActionPreference = 'Stop'
+   $version = "3.11.0"
    $rids = [ordered]@{
        'win-x64'     = 'net10.0-windows'
        'win-arm64'   = 'net10.0-windows'
@@ -133,44 +137,86 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
        'osx-x64'     = 'net10.0'
        'osx-arm64'   = 'net10.0'
    }
+   $outRoot = "dist/$version"
+   New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
    foreach ($entry in $rids.GetEnumerator()) {
+       $publishDir = "publish/$version/$($entry.Key)"
        dotnet publish CHDStudio/CHDStudio.csproj -c Release `
            -f $entry.Value -r $entry.Key --self-contained false `
-           -p:PublishSingleFile=true -o "publish/$($entry.Key)"
+           -p:PublishSingleFile=true -o $publishDir
+       if ($LASTEXITCODE -ne 0) { throw "publish failed: $($entry.Key)" }
        ./scripts/ci/package-release.ps1 -Rid $entry.Key -Version $version `
-           -PublishDir "publish/$($entry.Key)" -OutputDir "dist"
+           -PublishDir $publishDir -OutputDir $outRoot
+       if ($LASTEXITCODE -ne 0) { throw "package failed: $($entry.Key)" }
    }
    ```
-   Each zip must contain `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the
-   single-file `CHDStudio.exe`/`CHDStudio`, its native libraries, and only that
-   RID's tools. Never embed the .NET runtime. Keep the names
-   `release_<version>_<rid>.zip`.
-5. **Archive locally without deleting anything**: copy the six new zips into
-   `CHDStudio/bin/Release/`. That folder is an append-only local release
-   archive; do not remove older zips, posters, or other files in it. Package to
-   `dist/` or a temp folder first so the packaging script cannot remove an
-   existing release-path file.
-6. **Commit and push `master`**, then tag and push the tag:
+   If a publish fails with `MSB4018 ... deps.json ... being used by another
+   process`, run `dotnet build-server shutdown`, wait a few seconds, and retry
+   that RID. Do not delete the release archive to clear a lock.
+5. **Verify every zip before archiving**:
+   - required files: `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`;
+   - the single-file `CHDStudio.exe`/`CHDStudio`, its native libraries, and only
+     that RID's tools (`chdman.exe` + `7za.exe`, `chdman_arm64.exe` +
+     `7za_arm64.exe`, or `7zz` + `7-Zip-License.txt`);
+   - no other-architecture tools, no `*.pdb`, no `*.xml`, no .NET runtime
+     (`hostfxr`, `hostpolicy`, `coreclr`, `System.Private.CoreLib`);
+   - Linux/macOS entries `CHDStudio` and `7zz` have Unix mode `0100755`.
+   Keep the names `release_<version>_<rid>.zip`.
+6. **Archive locally without deleting anything**: copy the six new zips from
+   `dist/<version>/` into `CHDStudio/bin/Release/`. That folder is an
+   append-only local release archive; never remove older zips, posters, or any
+   other file in it. Record the before/after file count.
+7. **Commit and push `master`**, then tag and push the tag:
    ```powershell
-   git tag release_3.10.0
+   git add -A
+   git commit -m "release: prepare 3.11.0"
+   git tag release_3.11.0
    git push origin master
-   git push origin release_3.10.0
+   git push origin release_3.11.0
    ```
-7. **Let CI do the GitHub work**: the `Release` workflow validates the tag,
-   tests, publishes all six RIDs, verifies the Linux/macOS execute bits, creates
-   or updates the GitHub release, and uploads all six assets. Do not create a
-   second handwritten release for the same tag.
-8. **Let the `Docs` workflow deploy documentation**: it builds Jekyll from
+   The tag must exactly match the csproj version and the `## 3.11.0` heading in
+   `WhatsNew.md`. The `Protect master` ruleset lets repository admins bypass the
+   PR requirement for this maintenance push; the release tag itself is not
+   blocked.
+8. **Let CI do the GitHub work**: the `Release` workflow validates the tag,
+   runs the tests, publishes all six RIDs, verifies the Linux/macOS execute
+   bits, creates a signed build-provenance attestation for each zip, creates or
+   updates the GitHub release, and verifies that all six zip assets are
+   attached. Do not create a second handwritten release for the same tag.
+9. **Let the `Docs` workflow deploy documentation**: it builds Jekyll from
    `docs/`, verifies `docs/WhatsNew.md` is identical to the root file, deploys
    the GitHub Pages site and syncs the wiki (`Home.md`, `WhatsNew.md`,
-   `_Sidebar.md` and the numbered pages). Confirm Pages is using
-   `build_type: workflow`.
-9. **Verify after CI**:
-   `gh release view release_<version>` shows all six assets and the expected
-   notes; `gh run list` shows both `CI`/`Docs` green; Pages and the wiki show
-   the new version and side menu; the app's update check
-   (`releases/latest`) sees the new tag; and the local release folder contains
-   exactly the new six zips alongside every older file.
+   `_Sidebar.md` and the numbered pages). The wiki push needs the `WIKI_TOKEN`
+   secret. Confirm Pages is using `build_type: workflow`.
+10. **Verify after CI**:
+    ```powershell
+    gh release view release_3.11.0
+    gh attestation verify release_3.11.0_win-x64.zip --repo purelogiccode/CHDStudio
+    gh run list --limit 10
+    ```
+    The release must be the latest, non-prerelease release with all six assets
+    and the expected `WhatsNew.md` body; `CI`, `CodeQL`, `Docs`, `Dependency
+    Review` (on PRs) and `Scorecard` must be green; Pages and the wiki must show
+    3.11.0 and the side menu; the app's update check
+    (`https://api.github.com/repos/purelogiccode/CHDStudio/releases/latest`)
+    must see the new tag; and `CHDStudio/bin/Release/` must contain the six new
+    zips beside every older file.
+
+### Deployment invariants
+
+- The app is framework-dependent and single-file: **never** use
+  `--self-contained true` or embed the .NET runtime.
+- Publish all six RIDs: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`,
+  `osx-x64`, `osx-arm64`.
+- Every zip carries `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`.
+- Version is in `CHDStudio/CHDStudio.csproj`, `CHDStudio.Tests/CHDStudio.Tests.csproj`,
+  `WhatsNew.md` and `docs/WhatsNew.md`; `scripts/ci/version.mjs` enforces it.
+- `docs/` is the only documentation source. Keep the Pages front matter and the
+  wiki `_Sidebar.md` in sync; never edit the wiki UI.
+- `CHDStudio/bin/Release/` is append-only. Copy in, never delete.
+- Run `jb inspectcode` before tagging; the release gate is zero warnings and
+  zero errors (notes are allowed).
+- Run the full test suite before tagging; CI runs the unit filter only.
 
 
 ## Library NuGet packages (manual publish)
