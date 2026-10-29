@@ -293,19 +293,29 @@ public sealed class PbpDiscInfo
         }
         else
         {
-            var inBuffer = ArrayPool<byte>.Shared.Rent(entry.Length);
+            // The index length is not always exactly the stored stream length: writers pad a
+            // block, leave a few bytes of the next stream in the range, or record a length that
+            // lags the next entry. The next entry's offset is where this block's data really
+            // ends, so read up to it. The inflater stops as soon as one full 16-sector block has
+            // been produced, so trailing bytes inside that range are never parsed as deflate
+            // data; they only make a cut-short stream whole.
+            var readLength = GetStoredBlockLength(blockIndex, entry);
+
+            var inBuffer = ArrayPool<byte>.Shared.Rent(readLength);
             try
             {
-                _stream.ReadExactly(inBuffer, 0, entry.Length);
+                _stream.ReadExactly(inBuffer, 0, readLength);
                 try
                 {
-                    bytesRead = DecompressBlock(inBuffer, entry.Length, buffer);
+                    bytesRead = DecompressBlock(inBuffer, readLength, buffer);
                 }
                 catch (Exception ex)
                 {
                     // The bare error code loses the failing block's identity; record it so callers
                     // can attach it to logs and bug reports.
-                    PbpDiagnostics.SetDetail(DescribeBlockFailure(blockIndex, entry, inBuffer, ex));
+                    PbpDiagnostics.SetDetail(
+                        DescribeBlockFailure(blockIndex, entry, readLength, inBuffer, ex)
+                    );
                     throw;
                 }
             }
@@ -317,26 +327,51 @@ public sealed class PbpDiscInfo
     }
 
     /// <summary>
+    ///     Returns how many bytes to read for a compressed block. The index entry's own length is
+    ///     the baseline; when the following entry starts further away, that distance is the real
+    ///     extent of this block's stored data, because a writer may pad the block or under-state
+    ///     its length while the next offset still points past the padding. The value is capped at
+    ///     <see cref="MaxBlockEntrySize" /> so a corrupt neighbour cannot drive a huge read.
+    /// </summary>
+    /// <param name="blockIndex">Zero-based index of the block being read.</param>
+    /// <param name="entry">The block's index entry.</param>
+    /// <returns>The number of bytes to read for this block.</returns>
+    private int GetStoredBlockLength(int blockIndex, IsoIndexEntry entry)
+    {
+        if (blockIndex + 1 >= _isoIndex.Count)
+            return entry.Length;
+
+        var distance = (long)_isoIndex[blockIndex + 1].Offset - entry.Offset;
+        if (distance <= entry.Length)
+            return entry.Length;
+
+        return (int)Math.Min(distance, MaxBlockEntrySize);
+    }
+
+    /// <summary>
     ///     Builds the diagnostic text for a failed block: where the block lives in the file, its
     ///     index entry, the image geometry and a preview of the stored bytes.
     /// </summary>
     /// <param name="blockIndex">Zero-based index of the failing block.</param>
     /// <param name="entry">The failing block's index entry.</param>
+    /// <param name="readLength">The number of bytes read for the block.</param>
     /// <param name="inBuffer">The stored bytes, for the preview.</param>
     /// <param name="exception">The decompression failure.</param>
     private string DescribeBlockFailure(
         int blockIndex,
         IsoIndexEntry entry,
+        int readLength,
         byte[] inBuffer,
         Exception exception
     )
     {
         var absoluteOffset = _psarOffset + PsarIsoOffset + entry.Offset;
-        var previewLength = Math.Min(16, entry.Length);
+        var previewLength = Math.Min(16, readLength);
         var preview = Convert.ToHexString(inBuffer.AsSpan(0, previewLength));
 
         return $"block {blockIndex} of {_isoIndex.Count} (disc {Index}, id {DiscId}): "
-               + $"fileOffset=0x{absoluteOffset:X}, length={entry.Length}, uncompressed={entry.Uncompressed}, "
+               + $"fileOffset=0x{absoluteOffset:X}, length={entry.Length}, read={readLength}, "
+               + $"uncompressed={entry.Uncompressed}, "
                + $"isoSize={IsoSize}, first bytes {preview}; {exception.Message}";
     }
 
@@ -492,11 +527,16 @@ public sealed class PbpDiscInfo
     ///     Decompresses one PSAR ISO block into the caller's buffer. Raw deflate (the layout used by
     ///     popstation, PSX2PSP and iPoPS) is attempted first; a stream that fails raw inflation is
     ///     retried as a zlib-wrapped stream (2-byte header plus Adler-32 trailer), as written by
-    ///     authoring tools that use zlib rather than raw deflate. Both attempts accept a stream whose
-    ///     final deflate block never sets BFINAL (a writer that flushed with <c>Z_SYNC_FLUSH</c>
-    ///     instead of finishing the stream) once it has produced a full block: SharpZipLib's stream
-    ///     wrapper reports that shape as "Unexpected EOF", but the raw inflater has all the data.
+    ///     authoring tools that use zlib rather than raw deflate.
     /// </summary>
+    /// <remarks>
+    ///     A block is complete once it has produced one full 16-sector block. Parsing stops exactly
+    ///     there: a writer that flushed with <c>Z_SYNC_FLUSH</c> leaves a stream whose final deflate
+    ///     block never sets BFINAL, and a writer that padded the block leaves bytes after the stream.
+    ///     In both cases the bytes after the block are not part of it, and continuing to parse them
+    ///     only turns harmless padding into a bogus "unknown block type"/"invalid codelength" error.
+    ///     This matches the reference tools, which take the block as soon as the output is full.
+    /// </remarks>
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
     /// <param name="output">The buffer that receives the decompressed data.</param>
@@ -536,8 +576,8 @@ public sealed class PbpDiscInfo
 
     /// <summary>
     ///     Inflates one block with the .NET zlib implementation as a fallback for streams that
-    ///     SharpZipLib's inflater rejects. The result must be exactly one full 16-sector block,
-    ///     matching the PSAR layout; a short or overlong stream is not accepted.
+    ///     SharpZipLib's inflater rejects. Inflation stops as soon as one full 16-sector block has
+    ///     been produced, matching <see cref="Inflate" />: bytes after the block are not parsed.
     /// </summary>
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
@@ -554,6 +594,8 @@ public sealed class PbpDiscInfo
     )
     {
         size = 0;
+        var blockSize = 16 * IsoBlockSize;
+        var written = 0;
 
         try
         {
@@ -562,28 +604,25 @@ public sealed class PbpDiscInfo
                 ? new DeflateStream(input, CompressionMode.Decompress)
                 : new ZLibStream(input, CompressionMode.Decompress);
 
-            var blockSize = 16 * IsoBlockSize;
-            var written = 0;
             while (written < blockSize)
             {
                 var read = inflater.Read(output, written, blockSize - written);
                 if (read == 0) break;
                 written += read;
             }
-
-            if (written != blockSize) return false;
-
-            // Any additional byte means the stream expands past one PSAR block.
-            var extra = new byte[1];
-            if (inflater.Read(extra, 0, 1) != 0) return false;
-
-            size = written;
-            return true;
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
-            return false;
+            // The runtime's zlib-backed stream needs a clean end-of-stream marker and throws when
+            // the writer never finished the stream (Z_SYNC_FLUSH). Everything up to the throw is
+            // valid output, so a block that already reached its full size is still good.
+            if (written < blockSize) return false;
         }
+
+        if (written != blockSize) return false;
+
+        size = written;
+        return true;
     }
 
     /// <summary>
@@ -623,10 +662,9 @@ public sealed class PbpDiscInfo
     /// <summary>
     ///     Inflates one block with SharpZipLib's raw inflater, bounded to exactly one full block.
     ///     The stream wrapper is deliberately not used: it reports a stream whose final block never
-    ///     sets BFINAL as "Unexpected EOF" even though every byte has been decoded, while the raw
-    ///     inflater lets that shape be accepted once a full block is present. A stream that ends
-    ///     before a full block, or that expands past one, is rejected instead of producing a short
-    ///     or shifted image.
+    ///     sets BFINAL as "Unexpected EOF" even though every byte has been decoded. Inflation stops
+    ///     the moment the output block is full; a stream that ends before then is rejected so a
+    ///     short block can never shift every later block in the extracted image.
     /// </summary>
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
@@ -645,47 +683,30 @@ public sealed class PbpDiscInfo
 
         var blockSize = 16 * IsoBlockSize;
         var written = 0;
-        var overflow = new byte[1];
 
         try
         {
-            while (true)
+            while (written < blockSize)
             {
-                if (written < blockSize)
-                {
-                    written += inflater.Inflate(output, written, blockSize - written);
-                }
-                else
-                {
-                    // The output is full: give the inflater room to process the end of the final
-                    // block (its state machine only advances on a call with output space). Any
-                    // byte that still comes out means the stream expands past one block.
-                    if (inflater.Inflate(overflow, 0, overflow.Length) > 0)
-                        throw new InvalidDataException(
-                            "the deflate stream expands past one ISO block."
-                        );
-                }
+                var read = inflater.Inflate(output, written, blockSize - written);
+                if (read == 0)
+                    break;
 
-                if (inflater.IsFinished)
-                    return written;
-
-                if (inflater.IsNeedingDictionary)
-                    throw new InvalidDataException(
-                        "the deflate stream needs a preset dictionary."
-                    );
-
-                if (inflater.IsNeedingInput)
-                {
-                    // A writer that flushed with Z_SYNC_FLUSH leaves a complete block whose final
-                    // deflate block never sets BFINAL; once a full block is present it is complete.
-                    if (written == blockSize)
-                        return written;
-
-                    throw new InvalidDataException(
-                        "the deflate stream ends before the block is complete."
-                    );
-                }
+                written += read;
             }
+
+            // A full block is complete regardless of what follows in the input: trailing padding,
+            // the next entry's stream, or a final deflate block that never set BFINAL because the
+            // writer flushed with Z_SYNC_FLUSH. Parsing past this point would reject valid blocks.
+            if (written == blockSize)
+                return written;
+
+            if (inflater.IsNeedingDictionary)
+                throw new InvalidDataException("the deflate stream needs a preset dictionary.");
+
+            throw new InvalidDataException(
+                $"the deflate stream produced only {written:N0} of {blockSize:N0} bytes."
+            );
         }
         catch (IndexOutOfRangeException ex)
         {

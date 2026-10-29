@@ -6178,6 +6178,12 @@ internal partial class MainWindow : Window, IDisposable
             return false;
         }
 
+        // chdSharpFailure carries the concrete reason the last CHDSharp attempt failed. Callers use
+        // it to avoid logging a generic "did not produce a usable output" message that hides the
+        // real cause (and files a bug report for a user-data problem that the specific message
+        // already classified).
+        string? chdSharpFailure = null;
+
         // --- Primary encoder: chdman on Windows; the built-in CHDSharp encoder elsewhere ---
         var useChdman =
             OperatingSystem.IsWindows() && File.Exists(chdmanPath) && !_chdmanUnusableThisBatch;
@@ -6195,9 +6201,17 @@ internal partial class MainWindow : Window, IDisposable
                 return false;
             }
 
-            LogError(
-                $" Failed to convert '{Path.GetFileName(originalInputFile)}': the built-in CHDSharp encoder did not produce a usable output."
-            );
+            // The encoder logs the concrete reason (a truncated image, a cue both encoders reject,
+            // an I/O error). Only when it failed without one does the generic summary add
+            // information; otherwise it would hide the real cause and file a second, misleading
+            // bug report for a condition the specific message already classified.
+            if (chdSharpFailure is null)
+            {
+                LogError(
+                    $" Failed to convert '{Path.GetFileName(originalInputFile)}': the built-in CHDSharp encoder did not produce a usable output."
+                );
+            }
+
             TryCleanupAsciiTemp();
             return false;
         }
@@ -6341,6 +6355,7 @@ internal partial class MainWindow : Window, IDisposable
         try
         {
             var exitCode = process.ExitCode;
+            var chdmanCrashed = false;
             var success = exitCode == 0 && !token.IsCancellationRequested;
 
             if (!success && !token.IsCancellationRequested && exitCode != 0)
@@ -6349,14 +6364,17 @@ internal partial class MainWindow : Window, IDisposable
 
                 // A negative exit code means Windows terminated chdman abnormally (illegal
                 // instruction on a CPU without the build's SIMD extensions, a missing DLL entry
-                // point, antivirus damage). The startup probe cannot catch every case - it only
-                // runs `chdman help` - so the first conversion that crashes switches the rest of
-                // the batch to the built-in encoder instead of crashing once per file.
-                if (exitCode < 0 && !_chdmanUnusableThisBatch)
+                // point, antivirus damage). A C++ runtime abort can also exit with a positive
+                // code, so the error text is checked too. The startup probe cannot catch every
+                // case - it only runs `chdman help` - so the first conversion that crashes
+                // switches the rest of the batch to the built-in encoder instead of crashing
+                // once per file.
+                chdmanCrashed = exitCode < 0 || IsChdmanRuntimeCrashText(errorText);
+                if (chdmanCrashed && !_chdmanUnusableThisBatch)
                 {
                     _chdmanUnusableThisBatch = true;
                     LogWarning(
-                        $" chdman.exe crashed while converting '{Path.GetFileName(originalInputFile)}' (exit code {exitCode}{DescribeChdmanCrash(exitCode)}). It may be incompatible with this computer's CPU or Windows version; the built-in CHDSharp encoder will be used for the rest of this batch."
+                        $" chdman.exe crashed while converting '{Path.GetFileName(originalInputFile)}' (exit code {exitCode}{DescribeChdmanCrash(exitCode)}). It may be incompatible with this computer's CPU or Windows version, or its C++ runtime; the built-in CHDSharp encoder will be used for the rest of this batch."
                     );
                 }
 
@@ -6574,33 +6592,48 @@ internal partial class MainWindow : Window, IDisposable
             }
             else if (errorTextFinal.Length > 0)
             {
-                var errorLine = SelectChdmanErrorLine(errorTextFinal);
-                LogError(
-                    $" Failed to convert '{Path.GetFileName(originalInputFile)}': {errorLine}"
-                );
-
-                if (
-                    errorLine.Contains("couldn't find bin file", StringComparison.OrdinalIgnoreCase)
-                    || errorLine.Contains("Unknown error", StringComparison.OrdinalIgnoreCase)
-                )
+                if (chdmanCrashed)
                 {
-                    LogWarning(
-                        $"       Files found in input directory ({Path.GetDirectoryName(originalInputFile) ?? "?"}): {GetDirectoryDiagnostics(originalInputFile)}"
+                    // The crash notice above already told the user what happened; the raw C++
+                    // runtime line ("libc++abi: Pure virtual function called!") is not an
+                    // actionable conversion error and must not become a bug report.
+                    LogMessage(
+                        "       chdman produced no usable error; see the crash notice above."
                     );
                 }
-
-                if (errorLine.Contains("Unknown error", StringComparison.OrdinalIgnoreCase))
+                else
                 {
-                    LogMessage(
-                        "       'Unknown error' from chdman typically indicates a corrupt source file, an unsupported disc format, or an I/O issue. Try converting the file from a local drive."
+                    var errorLine = SelectChdmanErrorLine(errorTextFinal);
+                    LogError(
+                        $" Failed to convert '{Path.GetFileName(originalInputFile)}': {errorLine}"
                     );
-                }
 
-                if (errorLine.Contains("Input/output error", StringComparison.OrdinalIgnoreCase))
-                {
-                    LogMessage(
-                        "       An input/output error while reading the source usually means a failing or disconnected drive, a file locked by antivirus or cloud sync, or a damaged disc image. Check the drive for errors and try converting from a local drive."
-                    );
+                    if (
+                        errorLine.Contains(
+                            "couldn't find bin file",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        || errorLine.Contains("Unknown error", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        LogWarning(
+                            $"       Files found in input directory ({Path.GetDirectoryName(originalInputFile) ?? "?"}): {GetDirectoryDiagnostics(originalInputFile)}"
+                        );
+                    }
+
+                    if (errorLine.Contains("Unknown error", StringComparison.OrdinalIgnoreCase))
+                    {
+                        LogMessage(
+                            "       'Unknown error' from chdman typically indicates a corrupt source file, an unsupported disc format, or an I/O issue. Try converting the file from a local drive."
+                        );
+                    }
+
+                    if (errorLine.Contains("Input/output error", StringComparison.OrdinalIgnoreCase))
+                    {
+                        LogMessage(
+                            "       An input/output error while reading the source usually means a failing or disconnected drive, a file locked by antivirus or cloud sync, or a damaged disc image. Check the drive for errors and try converting from a local drive."
+                        );
+                    }
                 }
             }
             else if (exitCode < 0)
@@ -6673,6 +6706,7 @@ internal partial class MainWindow : Window, IDisposable
         // removes the path the encoder actually wrote to.
         async Task<bool> TryChdSharpInProcessAsync()
         {
+            chdSharpFailure = null;
             if (asciiOutputFile != null)
             {
                 try
@@ -6697,7 +6731,13 @@ internal partial class MainWindow : Window, IDisposable
             {
                 var stagingDir = Path.GetDirectoryName(originalOutputFile);
                 if (string.IsNullOrEmpty(stagingDir))
+                {
+                    chdSharpFailure = "the output folder could not be determined";
+                    LogError(
+                        $" Failed to convert '{Path.GetFileName(originalInputFile)}': the output folder for '{originalOutputFile}' could not be determined."
+                    );
                     return false;
+                }
 
                 if (!Directory.Exists(stagingDir))
                 {
@@ -6710,6 +6750,7 @@ internal partial class MainWindow : Window, IDisposable
                     {
                         // The output drive vanished mid-batch (unplugged, unmounted). Report the
                         // folder rather than letting the raw exception surface as an app bug.
+                        chdSharpFailure = $"the output folder is not available: {stagingDir}";
                         LogError($" Output folder is not available: {stagingDir}");
                         return false;
                     }
@@ -6788,11 +6829,13 @@ internal partial class MainWindow : Window, IDisposable
                 // A device or permission error (drive unplugged, disk failing, full disk, denied
                 // access) is an environment condition, not an encoder defect; report the OS error
                 // without raising a bug report.
+                chdSharpFailure = ex.Message;
                 LogError($" CHDSharp could not read or write the image: {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
+                chdSharpFailure = ex.Message;
                 LogError($" CHDSharp encoding failed: {ex.Message}");
 
                 if (
@@ -6837,8 +6880,48 @@ internal partial class MainWindow : Window, IDisposable
                 await Task.WhenAny(fallbackSpeedTask, Task.Delay(500, CancellationToken.None));
             }
 
-            // CHDSharp internally validates its output; trust the exit code. The same duplicate
-            // guard as the chdman path applies: keep the first product produced in this batch.
+            // The encoder returns only after it has written the whole file, but a failure in its
+            // own output stage can still leave nothing usable behind. Validate the staging output
+            // before moving it into place so a zero-length or truncated file is never reported as
+            // a successful conversion (CHDSharp validates the hunks it writes; the header check
+            // here catches a missing/short file without a second full pass over the image).
+            if (!File.Exists(outputFile) || new FileInfo(outputFile).Length == 0)
+            {
+                chdSharpFailure = "the encoder did not produce an output file";
+                LogError(
+                    $" CHDSharp reported success for '{Path.GetFileName(originalInputFile)}' but produced no output file."
+                );
+                return false;
+            }
+
+            try
+            {
+                using var stagedStream = File.OpenRead(outputFile);
+                var stagedCheck = Chd.CheckFile(
+                    stagedStream,
+                    Path.GetFileName(outputFile),
+                    false
+                );
+                if (!stagedCheck.IsSuccess)
+                {
+                    chdSharpFailure = stagedCheck.Error.GetMessage();
+                    LogError(
+                        $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {stagedCheck.Error.GetMessage()}."
+                    );
+                    TryBestEffortDelete(outputFile);
+                    return false;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                chdSharpFailure = ex.Message;
+                LogError($" CHDSharp output could not be validated: {ex.Message}");
+                TryBestEffortDelete(outputFile);
+                return false;
+            }
+
+            // The same duplicate guard as the chdman path applies: keep the first product
+            // produced in this batch.
             if (!TryReserveBatchOutputPath(originalOutputFile))
             {
                 LogMessage(
@@ -6974,6 +7057,32 @@ internal partial class MainWindow : Window, IDisposable
             -1073740791 => "; 0xC0000409, stack buffer overrun / fail fast",
             _ => string.Empty
         };
+    }
+
+    /// <summary>
+    ///     Returns whether chdman's error output is a C++ runtime abort rather than a conversion
+    ///     error. An abort (a broken build calling a pure virtual function, an uncaught exception)
+    ///     exits with a positive code on Windows, so it cannot be recognised from the exit code
+    ///     alone; the runtime's message is the only signal. Detecting it marks chdman unusable for
+    ///     the rest of the batch, exactly like a negative NTSTATUS exit.
+    /// </summary>
+    /// <param name="errorText">The captured standard-error text from the chdman process.</param>
+    /// <returns><see langword="true" /> when the text is a C++ runtime abort message.</returns>
+    internal static bool IsChdmanRuntimeCrashText(string errorText)
+    {
+        return errorText.Contains("libc++abi", StringComparison.OrdinalIgnoreCase)
+               || errorText.Contains(
+                   "pure virtual function called",
+                   StringComparison.OrdinalIgnoreCase
+               )
+               || errorText.Contains(
+                   "terminate called after throwing",
+                   StringComparison.OrdinalIgnoreCase
+               )
+               || errorText.Contains(
+                   "terminate called without an active exception",
+                   StringComparison.OrdinalIgnoreCase
+               );
     }
 
     /// <summary>

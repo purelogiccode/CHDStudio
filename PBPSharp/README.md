@@ -66,7 +66,7 @@ The library is the PBP extraction engine used by [CHD Studio](https://github.com
 - **ISO extraction with CUE generation** — `ExtractToBinCue` writes the disc as a BIN file and generates a matching CUE sheet, including `INDEX 00` positions for audio tracks.
 - **Stream-friendly** — extract to any writable `Stream`, or open a PBP from a `Stream` you own, so it works with archives, network streams, and in-memory data.
 - **Progress and cancellation** — every long-running extraction accepts a byte-progress callback and a `CancellationToken`.
-- **Authoring-tool compatibility** — reads PSAR block indexes written by popstation, PSX2PSP, iPoPS and pop-fe (both the 16-bit and 32-bit index layouts, stored/uncompressed blocks, and zlib-wrapped or raw-deflate blocks).
+- **Authoring-tool compatibility** — reads PSAR block indexes written by popstation, PSX2PSP, iPoPS and pop-fe (both the 16-bit and 32-bit index layouts, stored/uncompressed blocks, and zlib-wrapped or raw-deflate blocks). A block is accepted as soon as one full 16-sector block has been decoded, so writer padding after the stream, a length that lags the next index entry, or a stream that never sets BFINAL do not fail the file.
 - **No native dependencies** — pure managed code, cross-platform, read-only by design.
 
 ## Requirements
@@ -508,8 +508,10 @@ PBP files are produced by several authoring tools, and PBPSharp reads the layout
 - **popstation / PSX2PSP / iPoPS** — 32-bit ISO index size field, raw deflate blocks.
 - **pop-fe** — official 16-bit index size field with a stored/uncompressed flag byte, uncompressed (stored) blocks when compression is disabled, zlib-wrapped deflate blocks, and multi-disc `PSTITLEIMG` headers with zeroed template fields.
 - **Unfinished deflate streams** — a raw stream whose final block never sets BFINAL (a writer that flushed with `Z_SYNC_FLUSH` instead of finishing the stream) is accepted once a full 16-sector block has been decoded; SharpZipLib's stream wrapper would report it as "Unexpected EOF" even though every byte is present.
+- **Trailing bytes after a block** — padding a writer appended to a block, or the first bytes of the next stream when an index length overstates the block, are not parsed as a continuation. Inflation stops at the full 16-sector block, so those bytes cannot turn a valid block into a bogus "unknown block type"/"invalid codelength" error.
+- **Under-stated index lengths** — when the next index entry starts after the declared length, the reader takes the block's stored data up to that offset, so a length recorded before the writer's last flush still yields the whole stream.
 - **Incompressible blocks** — deflate streams a few bytes larger than the raw 16-sector block are accepted.
-- **Strict inflater edge cases** — a complete block that SharpZipLib rejects is retried with the runtime's .NET zlib implementation, but only when it expands to exactly one full block.
+- **Strict inflater edge cases** — a complete block that SharpZipLib rejects is retried with the runtime's .NET zlib implementation, and is accepted when it produces the full 16-sector block.
 - **Truncated PBPs** — a valid disc container with no ISO index, an index that points past the end of the file, or a block whose data runs past end-of-stream is reported as `PbpError.TruncatedPsar` rather than a generic corruption or I/O error.
 - **Trailing index-area data** — entries listed after the ISO size the disc declares (for example the subchannel blob pop-fe can append to the index area) are not image data and are not read, so a complete image still extracts.
 - **PSP applications** — PBPs whose PSAR is not a PlayStation disc image are reported as `PbpError.InvalidPsarHeader` and are skipped cleanly.
@@ -543,6 +545,14 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 ```
 
 ## Version history
+
+### 1.1.6
+
+- A block is now accepted as soon as it has produced one full 16-sector block; inflation no longer parses bytes that follow it. Writer padding, the next stream's first bytes when an index length overstates a block, and an unfinished deflate stream therefore stop producing bogus `DecompressionError` failures ("broken uncompressed block", "Unknown block type 6/7", "Encountered invalid codelength 0", "Illegal rep dist code", and similar) once the block itself was complete. This matches the popstation/PSX2PSP/iPoPS reference readers, which stop when the output is full.
+- A compressed block is read up to the next index entry's offset when that offset is later than the entry's declared length, so a writer that under-states a length (a lagging length or a final flush not included in the index) no longer fails with a short stream.
+- The `.NET` zlib fallback accepts a stream that throws at its unfinished tail after producing the full block, matching the SharpZipLib path.
+- Block failure diagnostics now record both the index length (`length=`) and the number of bytes actually read (`read=`), and a short block reports how many bytes it produced of the expected 16-sector block.
+- No public API changes.
 
 ### 1.1.5
 

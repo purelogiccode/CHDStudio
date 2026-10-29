@@ -34,6 +34,10 @@ internal sealed class PbpTestFileBuilder
     private int _corruptBlockIndex = -1;
     private int _truncatedBlockIndex = -1;
     private int _zeroLengthStoredBlockIndex = -1;
+    private int _trailingPaddingBlockIndex = -1;
+    private int _trailingPaddingBytes;
+    private int _shortIndexBlockIndex = -1;
+    private int _shortIndexBytes;
 
     private string _title = "Test Game";
 
@@ -167,6 +171,39 @@ internal sealed class PbpTestFileBuilder
     public PbpTestFileBuilder WithZeroLengthStoredBlock(int blockIndex)
     {
         _zeroLengthStoredBlockIndex = blockIndex;
+        return this;
+    }
+
+    /// <summary>
+    ///     Appends <paramref name="count" /> bytes of non-deflate padding to one block's stored
+    ///     stream and includes them in the index length, the shape a writer that pads blocks (or
+    ///     records a length longer than the stream) leaves behind. Used with
+    ///     <see cref="WithUnfinishedDeflateBlocks" />, parsing that padding as the continuation of
+    ///     the stream reproduces the "unknown block type" / "invalid codelength" failures reported
+    ///     for real PBPs; extraction must stop at the full block instead.
+    /// </summary>
+    /// <param name="blockIndex">Zero-based block index to pad. Pick an index above 1 so the open-time ISO size probe still succeeds.</param>
+    /// <param name="count">Number of <c>0xFF</c> padding bytes to append.</param>
+    public PbpTestFileBuilder WithTrailingPadding(int blockIndex, int count)
+    {
+        _trailingPaddingBlockIndex = blockIndex;
+        _trailingPaddingBytes = count;
+        return this;
+    }
+
+    /// <summary>
+    ///     Makes one index entry under-state its stored length by <paramref name="count" /> bytes
+    ///     while the following entry still points at the true end of the stream, the shape a writer
+    ///     that records a lagging length leaves behind. Extraction must read the whole stream from
+    ///     the data area instead of failing with a short block. Pick an index above 1 so the
+    ///     open-time ISO size probe still succeeds.
+    /// </summary>
+    /// <param name="blockIndex">Zero-based block index whose length is under-stated.</param>
+    /// <param name="count">Number of bytes omitted from the index length.</param>
+    public PbpTestFileBuilder WithShortIndexLength(int blockIndex, int count)
+    {
+        _shortIndexBlockIndex = blockIndex;
+        _shortIndexBytes = count;
         return this;
     }
 
@@ -390,6 +427,9 @@ internal sealed class PbpTestFileBuilder
             }
 
             var storedLength = _compressBlocks ? GetStoredBlock(blockData, i).Length : BlockSize;
+            var entryLength = storedLength;
+            if (i == _shortIndexBlockIndex)
+                entryLength = Math.Max(0, entryLength - _shortIndexBytes);
 
             // Write index entry (32 bytes)
             entry.Clear();
@@ -400,7 +440,7 @@ internal sealed class PbpTestFileBuilder
                 // uncompressed block, set by pop-fe with compression disabled), SHA-1 at 8.
                 BinaryPrimitives.WriteUInt16LittleEndian(
                     entry.Slice(4, 2),
-                    (ushort)(_compressBlocks ? storedLength : BlockSize)
+                    (ushort)(_compressBlocks ? entryLength : BlockSize)
                 );
                 if (!_compressBlocks)
                     entry[6] = 0x01;
@@ -409,7 +449,7 @@ internal sealed class PbpTestFileBuilder
             {
                 BinaryPrimitives.WriteInt32LittleEndian(
                     entry[4..8],
-                    _compressBlocks ? storedLength : BlockSize
+                    _compressBlocks ? entryLength : BlockSize
                 );
             }
 
@@ -455,7 +495,8 @@ internal sealed class PbpTestFileBuilder
     /// <summary>
     ///     Returns the bytes stored for one block, applying the requested per-block damage: a
     ///     truncated block keeps only the first half of its deflate stream so the index length and
-    ///     the stored bytes still agree.
+    ///     the stored bytes still agree, and a padded block carries non-deflate bytes after the
+    ///     stream that the index length also covers.
     /// </summary>
     /// <param name="blockData">The uncompressed block.</param>
     /// <param name="blockIndex">Zero-based block index.</param>
@@ -465,6 +506,14 @@ internal sealed class PbpTestFileBuilder
         var compressed = CompressBlock(blockData);
         if (blockIndex == _truncatedBlockIndex && compressed.Length > 4)
             return compressed[..(compressed.Length / 2)];
+
+        if (blockIndex == _trailingPaddingBlockIndex && _trailingPaddingBytes > 0)
+        {
+            var padded = new byte[compressed.Length + _trailingPaddingBytes];
+            Buffer.BlockCopy(compressed, 0, padded, 0, compressed.Length);
+            Array.Fill(padded, (byte)0xFF, compressed.Length, _trailingPaddingBytes);
+            return padded;
+        }
 
         return compressed;
     }

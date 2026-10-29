@@ -47,6 +47,13 @@ internal class BugReportService
         // their maintainer wants extraction bugs (with debug details) in the bug API.
         "Fatal error occurred",
         "cannot create std::vector",
+        // A C++ runtime abort inside the bundled chdman build (for example a pure virtual call)
+        // is an installation/binary problem; the app logs an actionable crash notice and switches
+        // to the built-in encoder. The runtime's raw message must not become a separate report.
+        "libc++abi",
+        "Pure virtual function called",
+        "terminate called after throwing",
+        "terminate called without an active exception",
         // chdman.cpp:1517 wraps every failure inside its compression phase ("Error during
         // compression: <OS error>"); the message is the user's storage failing, not app logic.
         "Error during compression",

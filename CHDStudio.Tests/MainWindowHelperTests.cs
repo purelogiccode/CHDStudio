@@ -151,6 +151,21 @@ public class MainWindowHelperTests : IDisposable
         Assert.Equal("Unhandled exception: cannot create std::vector larger than max_size()", line);
     }
 
+    [Theory]
+    [InlineData("libc++abi: Pure virtual function called!", true)]
+    [InlineData("terminate called after throwing an instance of 'std::bad_alloc'", true)]
+    [InlineData("terminate called without an active exception", true)]
+    [InlineData("LIBC++ABI: PURE VIRTUAL FUNCTION CALLED!", true)]
+    [InlineData("ERROR: couldn't find bin file [track1.bin]", false)]
+    [InlineData("Fatal error occurred: 1", false)]
+    [InlineData("", false)]
+    public void IsChdmanRuntimeCrashText_DetectsCppRuntimeAborts(string errorText, bool expected)
+    {
+        // A C++ runtime abort exits with a positive code on Windows, so the text is the only
+        // signal that chdman crashed rather than reporting a conversion error.
+        Assert.Equal(expected, MainWindow.IsChdmanRuntimeCrashText(errorText));
+    }
+
     [Fact]
     public void GetChdExtractionErrorMessage_DecompressionFailure_AddsGuidance()
     {

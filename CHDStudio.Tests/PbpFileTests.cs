@@ -772,6 +772,67 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
+    public void ExtractToBinCueWithPaddedUnfinishedBlockSucceeds()
+    {
+        // Regression for the "the PSAR block did not inflate as raw deflate (broken
+        // uncompressed block / Unknown block type 7 / Encountered invalid codelength 0)"
+        // reports: a writer flushed each block without setting BFINAL and padded the stored
+        // stream, so the index length covers bytes that are not part of the deflate stream.
+        // Parsing those bytes as a continuation produced a bogus decompression error even
+        // though the 16-sector block was complete. Inflation must stop at the full block.
+        var path = Path.Combine(_tempDir, $"paddedblock_{Guid.NewGuid():N}.pbp");
+        new PbpTestFileBuilder()
+            .WithBlockCount(4)
+            .WithCompressedBlocks(true)
+            .WithUnfinishedDeflateBlocks()
+            .WithTrailingPadding(2, 64)
+            .BuildTo(path);
+
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            var binPath = Path.Combine(_tempDir, $"paddedblock_{Guid.NewGuid():N}.bin");
+            var cuePath = Path.ChangeExtension(binPath, ".cue");
+            var result = pbp.Discs[0].ExtractToBinCue(binPath, cuePath);
+            Assert.Equal(PbpError.None, result);
+            Assert.True(File.Exists(binPath));
+            Assert.Equal(4 * 16 * 0x930, new FileInfo(binPath).Length);
+        }
+    }
+
+    [Fact]
+    public void ExtractToBinCueWithUnderstatedBlockLengthSucceeds()
+    {
+        // Regression: the index entry can under-state the stored stream length (a writer
+        // that records a length before its final flush, or a lagging length). The next
+        // entry still points at the true end of the block, so the reader must take the block
+        // from the data area instead of failing with a short stream.
+        var path = Path.Combine(_tempDir, $"shortindex_{Guid.NewGuid():N}.pbp");
+        new PbpTestFileBuilder()
+            .WithBlockCount(4)
+            .WithCompressedBlocks(true)
+            .WithShortIndexLength(2, 6)
+            .BuildTo(path);
+
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            var binPath = Path.Combine(_tempDir, $"shortindex_{Guid.NewGuid():N}.bin");
+            var cuePath = Path.ChangeExtension(binPath, ".cue");
+            var result = pbp.Discs[0].ExtractToBinCue(binPath, cuePath);
+            Assert.Equal(PbpError.None, result);
+            Assert.True(File.Exists(binPath));
+            Assert.Equal(4 * 16 * 0x930, new FileInfo(binPath).Length);
+        }
+    }
+
+    [Fact]
     public void ExtractToBinCueWithTruncatedDeflateBlockReturnsDecompressionError()
     {
         // A block cut in half must fail, never be accepted as a short block: silently writing

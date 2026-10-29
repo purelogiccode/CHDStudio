@@ -395,6 +395,9 @@ public class BugReportServiceTests
     [InlineData(
         "The CHD's CD track metadata is missing or damaged (no tracks could be read). [CHD v5 compression=Cdlzma,Cdzlib,Cdflac,None hunks=13870 tracks=0 metadata=CHT2(93)]"
     )]
+    [InlineData("Failed to convert 'NanoTek Warrior (USA).cue': libc++abi: Pure virtual function called!")]
+    [InlineData("terminate called after throwing an instance of 'std::bad_alloc'")]
+    [InlineData("terminate called without an active exception")]
     public void IsExcludedFromBugReport_KnownPatterns_ReturnsTrue(string message)
     {
         Assert.True(BugReportService.IsExcludedFromBugReport(message));

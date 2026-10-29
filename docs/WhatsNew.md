@@ -5,6 +5,24 @@ nav_order: 16
 
 # What's New
 
+## 3.10.2 (2026-10-28)
+
+### PBP extraction - PBPSharp 1.1.6
+
+*   **Blocks that carry trailing bytes now extract.** A PSAR block is accepted as soon as it has produced one full 16-sector block; inflation no longer parses whatever follows it. Writer padding, the next stream's first bytes when an index length overstates a block, and a stream that never sets `BFINAL` no longer turn a complete block into a `DecompressionError` ("broken uncompressed block", "Unknown block type 6/7", "Encountered invalid codelength 0", "Illegal rep dist code", ...). This fixes the batch of PBP failures reported on 3.10.1 and matches the popstation/PSX2PSP/iPoPS reference readers, which stop when the output is full.
+*   **A block whose index length under-states its stream is read up to the next entry.** When the following index entry starts further away, that distance is the block's real extent, so a length recorded before the writer's final flush no longer fails with a short stream.
+*   **Block diagnostics now include the number of bytes actually read** (`read=` next to `length=`) and a short block reports how many of the expected bytes it produced, making a genuinely truncated block distinguishable from a padded one.
+
+### Encoder failure reporting
+
+*   **A C++ runtime abort inside `chdman` is recognised from its output.** `libc++abi: Pure virtual function called!` and the `terminate called ...` family exit with a positive code on Windows, so the crash was previously treated as a normal conversion error and re-filed for every following file. It now switches the rest of the batch to the built-in encoder and the raw runtime line is no longer sent as a bug report.
+*   **A failed CHDSharp fallback keeps its real cause.** The generic "the built-in CHDSharp encoder did not produce a usable output" message is only logged when the encoder failed without logging a reason; a truncated image, a cue both encoders reject, or an I/O error now appears as the specific, classified message instead of being hidden (and reported twice).
+*   **CHDSharp output is checked before it replaces the destination.** A missing, empty or unreadable staging file is reported as a failed conversion instead of being moved into place.
+
+### Verification
+
+*   New regression tests cover padded unfinished blocks, an index length that lags the next entry, C++ runtime abort detection and the new bug-report exclusions. The full suite passes (1174 tests, integration included).
+
 ## 3.10.1 (2026-10-21)
 
 ### Multisession cues now encode byte-identically to chdman
