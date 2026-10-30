@@ -125,9 +125,7 @@ internal sealed class FileWatcherService : IDisposable
         lock (_historyLock)
         {
             _lastEventByFile.Clear();
-            while (_trackedKeys.TryDequeue(out _))
-            {
-            }
+            _trackedKeys.Clear();
         }
     }
 
@@ -242,9 +240,7 @@ internal sealed class FileWatcherService : IDisposable
             lock (_historyLock)
             {
                 _lastEventByFile.Clear();
-                while (_trackedKeys.TryDequeue(out _))
-                {
-                }
+                _trackedKeys.Clear();
             }
         }
     }

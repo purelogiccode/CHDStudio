@@ -6266,7 +6266,7 @@ internal partial class MainWindow : Window, IDisposable
         // chdman runs out of process, so its disk writes do not show up in this app's own
         // counters; sample the child process instead, or the speed card would sit at 0 MB/s
         // for every chdman conversion.
-        var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
+        using var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
 
         var speedMonitoringTask = Task.Run(
             async () =>
@@ -6281,10 +6281,7 @@ internal partial class MainWindow : Window, IDisposable
                 }
                 catch (OperationCanceledException)
                 {
-                }
-                finally
-                {
-                    chdmanSpeedCounter?.Dispose();
+                    // Expected when the conversion stops or the process exits.
                 }
             },
             CancellationToken.None
@@ -6338,7 +6335,7 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             ctsSpeed.Cancel();
-            // Wait for the sampler to finish so it can dispose the performance counter it owns.
+            // Wait for the sampler to stop reading before the counter is disposed.
             await speedMonitoringTask;
             process.CancelOutputRead();
             process.CancelErrorRead();
@@ -6497,8 +6494,7 @@ internal partial class MainWindow : Window, IDisposable
                     }
                 }
 
-                if (success)
-                    return true;
+                return true;
             }
 
             if (token.IsCancellationRequested) return false;
@@ -6786,6 +6782,7 @@ internal partial class MainWindow : Window, IDisposable
                     }
                     catch (OperationCanceledException)
                     {
+                        // Expected when the conversion stops.
                     }
                 },
                 fallbackSpeedToken

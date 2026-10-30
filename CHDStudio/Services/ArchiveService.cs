@@ -723,13 +723,13 @@ internal class ArchiveService
                     if (string.IsNullOrEmpty(entry.Name))
                         continue;
 
-                    var destinationPath = Path.Combine(outputDirectory, entry.FullName);
-                    if (
-                        !IsPathWithinDirectory(
-                            Path.GetFullPath(destinationPath),
-                            fullOutputDirectory
-                        )
-                    )
+                    var destinationPath = Path.GetFullPath(
+                        Path.Combine(outputDirectory, entry.FullName)
+                    );
+                    var comparison = OperatingSystem.IsWindows()
+                        ? StringComparison.OrdinalIgnoreCase
+                        : StringComparison.Ordinal;
+                    if (!destinationPath.StartsWith(fullOutputDirectory, comparison))
                     {
                         throw new SecurityException(
                             "Attempted to extract file outside of the target directory."
@@ -1109,21 +1109,6 @@ internal class ArchiveService
     }
 
     /// <summary>
-    ///     Determines whether a fully qualified path stays inside the output directory, using a
-    ///     case-sensitive comparison on Unix so that differently cased prefixes cannot escape.
-    /// </summary>
-    /// <param name="fullPath">Fully qualified destination path.</param>
-    /// <param name="fullDirectory">Output directory with a trailing separator.</param>
-    /// <returns><see langword="true" /> when the path is inside the directory.</returns>
-    private static bool IsPathWithinDirectory(string fullPath, string fullDirectory)
-    {
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        return fullPath.StartsWith(fullDirectory, comparison);
-    }
-
-    /// <summary>
     ///     Writes every file entry of an opened SharpCompress archive, rejecting entries that would
     ///     escape the output directory.
     /// </summary>
@@ -1144,10 +1129,11 @@ internal class ArchiveService
             if (entry.Key == null)
                 continue;
 
-            var destinationPath = Path.Combine(outputDirectory, entry.Key);
-            if (
-                !IsPathWithinDirectory(Path.GetFullPath(destinationPath), fullOutputDirectory)
-            )
+            var destinationPath = Path.GetFullPath(Path.Combine(outputDirectory, entry.Key));
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!destinationPath.StartsWith(fullOutputDirectory, comparison))
             {
                 throw new SecurityException(
                     "Attempted to extract file outside of the target directory."

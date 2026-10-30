@@ -19,10 +19,10 @@ internal class BugReportApiSink : ILogEventSink
 {
     private static readonly Lock DedupeLock = new();
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromMinutes(10);
-    private static string? _lastSentMessage;
-    private static DateTimeOffset _lastSentAt;
-    private static int _isSending;
-    private static int _sendGeneration;
+    private string? _lastSentMessage;
+    private DateTimeOffset _lastSentAt;
+    private int _isSending;
+    private int _sendGeneration;
     private readonly BugReportService _bugReportService;
 
     /// <summary>
@@ -102,7 +102,7 @@ internal class BugReportApiSink : ILogEventSink
     ///     so a late safety-net timer cannot clear the flag for a newer report that is still running.
     /// </summary>
     /// <param name="generation">Generation of the send that scheduled the clear.</param>
-    private static void ClearSendingFlag(int generation)
+    private void ClearSendingFlag(int generation)
     {
         lock (DedupeLock)
         {

@@ -31,7 +31,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void StreamPropertiesAreCorrect()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         Assert.True(stream.CanRead);
@@ -44,7 +44,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void ReadZeroBytesReturnsZero()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         var buffer = new byte[10];
@@ -56,7 +56,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void ReadBeyondLengthReturnsZero()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
         stream.Position = stream.Length;
 
@@ -72,7 +72,7 @@ public class CsoStreamTests : IDisposable
         var expectedData = new byte[2048];
         for (var i = 0; i < expectedData.Length; i++) expectedData[i] = (byte)(i % 256);
 
-        var cso = CreateCsoWithData(expectedData, 1);
+        using var cso = CreateCsoWithData(expectedData, 1);
         using var stream = cso.OpenStream();
 
         var buffer = new byte[2048];
@@ -94,7 +94,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SeekBeginSetsPosition()
     {
-        var cso = CreateCsoWithBlocks(2, 2048, 1);
+        using var cso = CreateCsoWithBlocks(2, 2048, 1);
         using var stream = cso.OpenStream();
 
         var pos = stream.Seek(1000, SeekOrigin.Begin);
@@ -106,7 +106,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SeekCurrentAdjustsPosition()
     {
-        var cso = CreateCsoWithBlocks(2, 2048, 1);
+        using var cso = CreateCsoWithBlocks(2, 2048, 1);
         using var stream = cso.OpenStream();
         stream.Position = 500;
 
@@ -119,7 +119,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SeekEndSetsPositionFromEnd()
     {
-        var cso = CreateCsoWithBlocks(2, 2048, 1);
+        using var cso = CreateCsoWithBlocks(2, 2048, 1);
         using var stream = cso.OpenStream();
 
         var pos = stream.Seek(-100, SeekOrigin.End);
@@ -131,7 +131,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SeekNegativeThrowsIoException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         Assert.Throws<IOException>(() => stream.Seek(-9999, SeekOrigin.Begin));
@@ -141,7 +141,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SetLengthThrowsNotSupportedException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         Assert.Throws<NotSupportedException>(() => stream.SetLength(100));
@@ -151,7 +151,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void WriteThrowsNotSupportedException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         Assert.Throws<NotSupportedException>(() => stream.Write([1, 2, 3], 0, 3));
@@ -161,7 +161,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void FlushDoesNotThrow()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         using var stream = cso.OpenStream();
 
         var exception = Record.Exception(stream.Flush);
@@ -172,7 +172,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void ReadAfterDisposeThrowsObjectDisposedException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         var stream = cso.OpenStream();
         stream.Dispose();
 
@@ -183,7 +183,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void SeekAfterDisposeThrowsObjectDisposedException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         var stream = cso.OpenStream();
         stream.Dispose();
 
@@ -194,7 +194,7 @@ public class CsoStreamTests : IDisposable
     [Fact]
     public void PositionSetAfterDisposeThrowsObjectDisposedException()
     {
-        var cso = CreateCsoWithBlocks(1, 2048, 1);
+        using var cso = CreateCsoWithBlocks(1, 2048, 1);
         var stream = cso.OpenStream();
         stream.Dispose();
 
@@ -209,7 +209,7 @@ public class CsoStreamTests : IDisposable
         var data = new byte[4096];
         for (var i = 0; i < data.Length; i++) data[i] = (byte)(i % 256);
 
-        var cso = CreateCsoWithData(data, 1);
+        using var cso = CreateCsoWithData(data, 1);
         using var stream = cso.OpenStream();
 
         // Read starting near the end of first block
@@ -233,7 +233,7 @@ public class CsoStreamTests : IDisposable
         var data = new byte[2048];
         for (var i = 0; i < data.Length; i++) data[i] = (byte)(i % 256);
 
-        var cso = CreateCsoWithData(data, 1);
+        using var cso = CreateCsoWithData(data, 1);
         using var stream = cso.OpenStream();
 
         var buffer = new byte[2048];
@@ -250,7 +250,7 @@ public class CsoStreamTests : IDisposable
         var data = new byte[6144]; // 3 blocks
         for (var i = 0; i < data.Length; i++) data[i] = (byte)(i % 256);
 
-        var cso = CreateCsoWithData(data, 1);
+        using var cso = CreateCsoWithData(data, 1);
         using var stream = cso.OpenStream();
 
         // Seek to block 2

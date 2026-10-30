@@ -85,7 +85,7 @@ internal sealed class ChdExplorerService : IDisposable
         }
         catch (Exception ex)
         {
-            container?.Dispose();
+            if (container is not null) container.Dispose();
             error = ex.Message;
             return null;
         }
