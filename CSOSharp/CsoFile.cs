@@ -84,27 +84,22 @@ public sealed class CsoFile : IDisposable
         if (!File.Exists(path))
             return CsoError.FileNotFound;
 
+        FileStream? stream = null;
         try
         {
-            var stream = File.OpenRead(path);
-            CsoError error;
-            try
-            {
-                error = Open(stream, true, out cso);
-            }
-            catch
-            {
-                stream.Dispose();
-                throw;
-            }
-
-            if (error != CsoError.None) stream.Dispose();
+            stream = File.OpenRead(path);
+            var error = Open(stream, true, out cso);
+            if (error == CsoError.None) stream = null;
 
             return error;
         }
         catch (IOException)
         {
             return CsoError.IoError;
+        }
+        finally
+        {
+            stream?.Dispose();
         }
     }
 

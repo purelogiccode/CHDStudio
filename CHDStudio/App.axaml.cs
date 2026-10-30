@@ -112,7 +112,6 @@ public class App : Application
             : $"{AppConfig.ApplicationName}_SingleInstance";
 
         var mutex = new Mutex(false, name, out _);
-        var keepMutex = false;
         try
         {
             bool acquired;
@@ -126,15 +125,19 @@ public class App : Application
                 acquired = true;
             }
 
-            if (!acquired) return false;
+            if (!acquired)
+            {
+                mutex.Dispose();
+                return false;
+            }
 
             _singleInstanceMutex = mutex;
-            keepMutex = true;
             return true;
         }
-        finally
+        catch
         {
-            if (!keepMutex) mutex.Dispose();
+            mutex.Dispose();
+            throw;
         }
     }
 

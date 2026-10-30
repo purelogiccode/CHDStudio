@@ -63,6 +63,7 @@ internal sealed class ChdExplorerService : IDisposable
             container = new ChdContainer(chdPath);
             if (!container.MountAndParse(consoleType))
             {
+                container.Dispose();
                 error = "the file system could not be parsed";
                 return null;
             }
@@ -86,12 +87,9 @@ internal sealed class ChdExplorerService : IDisposable
         }
         catch (Exception ex)
         {
+            if (container is not null) container.Dispose();
             error = ex.Message;
             return null;
-        }
-        finally
-        {
-            container?.Dispose();
         }
     }
 
