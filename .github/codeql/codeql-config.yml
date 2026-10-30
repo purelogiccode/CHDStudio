@@ -1,0 +1,8 @@
+name: CHD Studio CodeQL configuration
+
+paths-ignore:
+  - "**/bin/**"
+  - "**/obj/**"
+  - "**/publish/**"
+  - "**/dist/**"
+  - "**/TestResults/**"

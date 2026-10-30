@@ -87,7 +87,17 @@ public sealed class CsoFile : IDisposable
         try
         {
             var stream = File.OpenRead(path);
-            var error = Open(stream, true, out cso);
+            CsoError error;
+            try
+            {
+                error = Open(stream, true, out cso);
+            }
+            catch
+            {
+                stream.Dispose();
+                throw;
+            }
+
             if (error != CsoError.None) stream.Dispose();
 
             return error;

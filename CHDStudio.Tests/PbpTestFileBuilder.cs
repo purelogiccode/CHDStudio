@@ -603,7 +603,7 @@ internal sealed class PbpTestFileBuilder
         byte[] raw;
         if (_unfinishedDeflateBlocks)
         {
-            var ms = new MemoryStream();
+            using var ms = new MemoryStream();
             var outStream = new DeflaterOutputStream(ms, new Deflater(6, true));
             outStream.Write(data, 0, data.Length);
             outStream.Flush();
@@ -668,8 +668,8 @@ internal sealed class PbpTestFileBuilder
         ms.Write(new byte[20]);
 
         // Directory entries
-        var keyTable = new MemoryStream();
-        var dataTable = new MemoryStream();
+        using var keyTable = new MemoryStream();
+        using var dataTable = new MemoryStream();
         var dirEntries = new List<byte[]>();
 
         foreach (var (key, format, data) in entries)

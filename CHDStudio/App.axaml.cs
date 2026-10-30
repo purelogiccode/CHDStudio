@@ -111,24 +111,31 @@ public class App : Application
             ? $"Global\\{AppConfig.ApplicationName}_SingleInstance"
             : $"{AppConfig.ApplicationName}_SingleInstance";
 
-        _singleInstanceMutex = new Mutex(false, name, out _);
-
-        bool acquired;
+        var mutex = new Mutex(false, name, out _);
+        var keepMutex = false;
         try
         {
-            acquired = _singleInstanceMutex.WaitOne(0);
+            bool acquired;
+            try
+            {
+                acquired = mutex.WaitOne(0);
+            }
+            catch (AbandonedMutexException)
+            {
+                // Previous instance terminated abnormally; we now own the mutex
+                acquired = true;
+            }
+
+            if (!acquired) return false;
+
+            _singleInstanceMutex = mutex;
+            keepMutex = true;
+            return true;
         }
-        catch (AbandonedMutexException)
+        finally
         {
-            // Previous instance terminated abnormally; we now own the mutex
-            acquired = true;
+            if (!keepMutex) mutex.Dispose();
         }
-
-        if (acquired) return true;
-
-        _singleInstanceMutex.Dispose();
-        _singleInstanceMutex = null;
-        return false;
     }
 
     private void ConfigureSerilog()

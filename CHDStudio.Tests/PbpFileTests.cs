@@ -527,8 +527,8 @@ public class PbpFileTests : IDisposable
 
         var entryCount = (uint)entries.Count;
 
-        var keyTable = new MemoryStream();
-        var dataTable = new MemoryStream();
+        using var keyTable = new MemoryStream();
+        using var dataTable = new MemoryStream();
         var dirEntries = new List<byte[]>();
 
         foreach (var (key, format, data) in entries)
@@ -1213,7 +1213,7 @@ public class PbpFileTests : IDisposable
     public void OpenSyntheticPbpFromStreamWithoutOwnershipDoesNotDisposeStream()
     {
         var bytes = new PbpTestFileBuilder().Build();
-        var stream = new MemoryStream(bytes);
+        using var stream = new MemoryStream(bytes);
 
         var error = PbpFile.Open(stream, false, out var pbp);
         Assert.Equal(PbpError.None, error);
