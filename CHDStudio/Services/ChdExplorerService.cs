@@ -81,9 +81,7 @@ internal sealed class ChdExplorerService : IDisposable
                 infoReport = $"Image info unavailable: {ex.Message}";
             }
 
-            var explorer = new ChdExplorerService(container, infoReport);
-            container = null;
-            return explorer;
+            return new ChdExplorerService(container, infoReport);
         }
         catch (Exception ex)
         {
