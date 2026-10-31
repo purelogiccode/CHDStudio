@@ -12,7 +12,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/issues)
 [![Release](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/release.yml?label=Release)](https://github.com/purelogiccode/CHDStudio/actions/workflows/release.yml)
 [![Docs](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/docs.yml?label=Docs)](https://github.com/purelogiccode/CHDStudio/actions/workflows/docs.yml)
-[![Part of CHD Studio](https://img.shields.io/badge/Part%20of-Batch%20Convert%20to%20CHD-blue.svg)](https://github.com/purelogiccode/CHDStudio)
+[![Part of CHD Studio](https://img.shields.io/badge/Part%20of-CHD%20Studio-blue.svg)](https://github.com/purelogiccode/CHDStudio)
 [![GitHub contributors](https://img.shields.io/github/contributors/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/graphs/contributors)
 [![GitHub forks](https://img.shields.io/github/forks/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/network/members)
 [![GitHub watchers](https://img.shields.io/github/watchers/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/watchers)
@@ -23,6 +23,14 @@
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/purelogiccode/CHDStudio/pulls)
 [![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/purelogiccode/CHDStudio)
+[![CHD Studio release](https://img.shields.io/github/v/release/purelogiccode/CHDStudio?label=CHD%20Studio&sort=semver)](https://github.com/purelogiccode/CHDStudio/releases)
+[![Latest tag](https://img.shields.io/github/v/tag/purelogiccode/CHDStudio?label=latest%20tag&sort=semver)](https://github.com/purelogiccode/CHDStudio/tags)
+[![Release downloads](https://img.shields.io/github/downloads/purelogiccode/CHDStudio/total?label=release%20downloads)](https://github.com/purelogiccode/CHDStudio/releases)
+[![Release date](https://img.shields.io/github/release-date/purelogiccode/CHDStudio?label=released)](https://github.com/purelogiccode/CHDStudio/releases)
+[![C#](https://img.shields.io/badge/C%23-100%25-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/dotnet/csharp/)
+[![NuGet TFMs](https://img.shields.io/badge/NuGet-net8.0%20%7C%20net9.0%20%7C%20net10.0-004880?logo=nuget&logoColor=white)](https://www.nuget.org/packages/CCDSharp)
+[![Format](https://img.shields.io/badge/format-CloneCD%20%2F%20CCD%20%2F%20IMG%20%2F%20SUB-6f42c1)](https://www.nuget.org/packages/CCDSharp)
+[![Output](https://img.shields.io/badge/output-ISO%20%2B%20CUE%2FBIN-0b7285)](https://www.nuget.org/packages/CCDSharp)
 
 # CCDSharp
 
@@ -406,6 +414,11 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 ```
 
 ## Version history
+
+### 1.0.2
+
+- Package metadata and README refreshed for the CHD Studio rename: `PackageProjectUrl` and `RepositoryUrl` now point to <https://github.com/purelogiccode/CHDStudio>, and the README links, badges and build instructions use the current repository name.
+- No code or public API changes.
 
 ### 1.0.1
 

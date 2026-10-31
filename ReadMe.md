@@ -164,9 +164,9 @@ Generated cue sheets reference the disc image where it already lies rather than 
 *   **Library Dependencies**:
     * [Avalonia](https://avaloniaui.net/) (v12.1.4) — Cross-platform Fluent Design UI framework and controls
     * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.6.0) - Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
-    * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.1) — Pure C# CSO/CISO decompression (deflate + LZ4)
+    * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.2) — Pure C# CSO/CISO decompression (deflate + LZ4)
     * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.7) - Pure C# PBP extraction and SFO parsing
-    * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.1) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
+    * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.2) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
     * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.2) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
     * [ISZSharp](https://www.nuget.org/packages/ISZSharp) (v1.0.3) — Pure C# UltraISO ISZ decompression
     * [SharpCompress](https://github.com/adamhathcock/sharpcompress) (v0.50.7) - Archive extraction, and bzip2 decompression for ISZ images
