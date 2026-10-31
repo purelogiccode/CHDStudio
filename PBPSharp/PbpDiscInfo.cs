@@ -38,6 +38,12 @@ public sealed class PbpDiscInfo
 
     private readonly Stream _stream;
 
+    /// <summary>Cached ISO size; null until <see cref="IsoSize" /> is first read.</summary>
+    private uint? _isoSize;
+
+    /// <summary>Whether the ISO size has already been resolved (guards against re-entrancy).</summary>
+    private bool _isoSizeResolved;
+
     /// <summary>
     ///     Initializes a new instance of the <see cref="PbpDiscInfo" /> class by parsing the disc's
     ///     game ID, TOC and ISO index from the PSAR area of the supplied stream.
@@ -69,7 +75,13 @@ public sealed class PbpDiscInfo
         if (_isoIndex.Count == 0)
             throw new NoIsoIndexException();
 
-        IsoSize = ReadIsoSize();
+        // IsoSize is derived from the decompressed contents of block 1, so computing it here
+        // would make opening a PBP depend on being able to decompress its first data block.
+        // A file whose container structure is perfectly readable but whose block 1 trips the
+        // codec (an unusual authoring layout, an index entry the decoder rejects) would then
+        // fail as an opaque "corrupt file" before a single byte of the disc was read. The size
+        // is only needed to reserve temp space and to stop extracting at the declared end, so
+        // it is resolved on first use instead and simply reports 0 when it cannot be derived.
     }
 
     /// <summary>
@@ -88,9 +100,26 @@ public sealed class PbpDiscInfo
     public IReadOnlyList<TocEntry> Toc { get; }
 
     /// <summary>
-    ///     The total uncompressed ISO size in bytes.
+    ///     The total uncompressed ISO size in bytes, derived from the sector count stored in the
+    ///     ISO9660 volume descriptor inside block 1. Resolved on first use: opening a PBP never
+    ///     decompresses disc data. Returns 0 when the size cannot be derived (fewer than two
+    ///     indexed blocks, or block 1 cannot be decoded), which callers treat as "unknown size".
     /// </summary>
-    public uint IsoSize { get; }
+    public uint IsoSize
+    {
+        get
+        {
+            // The flag is set before the work starts so a re-entrant call (ReadIsoSize reads
+            // block 1, whose failure diagnostics describe the image) cannot recurse forever.
+            if (!_isoSizeResolved)
+            {
+                _isoSizeResolved = true;
+                _isoSize = ReadIsoSize();
+            }
+
+            return _isoSize ?? 0;
+        }
+    }
 
     /// <summary>
     ///     The number of ISO data blocks.
@@ -218,8 +247,16 @@ public sealed class PbpDiscInfo
                     }
                 );
 
-                if (isoIndex.Count >= MaxIndexes)
+                // The index area holds at most MaxIndexes entries, so a count of exactly
+                // MaxIndexes is a fully populated (legal) table, not an overrun. Rejecting it
+                // made a disc that fills the index area fail to open as a corrupt file.
+                if (isoIndex.Count > MaxIndexes)
+                {
+                    PbpDiagnostics.SetDetailIfEmpty(
+                        $"the ISO index lists more than {MaxIndexes} blocks (disc {Index}, id {DiscId})"
+                    );
                     throw new InvalidDataException("Number of indexes exceeds maximum allowed.");
+                }
             }
         }
 
@@ -231,7 +268,11 @@ public sealed class PbpDiscInfo
     ///     the second ISO block (the ISO9660 volume descriptor), matching the reference
     ///     implementation. The sector count is multiplied by <see cref="IsoBlockSize" />.
     /// </summary>
-    /// <returns>The ISO size in bytes.</returns>
+    /// <returns>
+    ///     The ISO size in bytes, or 0 when it cannot be derived. A PBP whose block 1 cannot be
+    ///     decoded is still openable and extractable: the size only bounds the output, and
+    ///     extraction reports the block failure itself with full diagnostics.
+    /// </returns>
     private uint ReadIsoSize()
     {
         var outBuffer = ArrayPool<byte>.Shared.Rent(16 * IsoBlockSize);
@@ -246,6 +287,20 @@ public sealed class PbpDiscInfo
                     | (outBuffer[107] << 24)
                 ) * IsoBlockSize
             );
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Fewer than two indexed blocks: the format has no place to store the sector count.
+            PbpDiagnostics.SetDetailIfEmpty(
+                $"the ISO index lists {_isoIndex.Count} block(s); block 1 is required to derive the ISO size"
+            );
+            return 0;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // ReadBlock already recorded the block-level detail (index, offset, stored length and
+            // a preview of the bytes), which is more useful than anything this method could add.
+            return 0;
         }
         finally
         {
@@ -272,10 +327,20 @@ public sealed class PbpDiscInfo
         // dozen bytes of framing. A zero-length compressed entry is also corrupt: reading up
         // to the next entry would decode that block's stream as this one.
         if (entry.Length is < 0 or > MaxBlockEntrySize)
+        {
+            PbpDiagnostics.SetDetail(
+                $"block {blockIndex} of {_isoIndex.Count} (disc {Index}, id {DiscId}) has an invalid stored length {entry.Length}; the maximum for a 16-sector block is {MaxBlockEntrySize}"
+            );
             throw new InvalidDataException("Invalid ISO block length in PSAR index.");
+        }
 
         if (!entry.Uncompressed && entry.Length < 4)
+        {
+            PbpDiagnostics.SetDetail(
+                $"block {blockIndex} of {_isoIndex.Count} (disc {Index}, id {DiscId}) is flagged as compressed but stores only {entry.Length} byte(s), which cannot be a deflate stream"
+            );
             throw new InvalidDataException("Invalid ISO block length in PSAR index.");
+        }
 
         // 64-bit math: the PSAR offset plus a large block offset can overflow int32 on
         // multi-gigabyte files.
@@ -290,7 +355,12 @@ public sealed class PbpDiscInfo
             // so a zero or oversized length can only be a corrupt index. Accepting the zero
             // would silently write no data and shift every later block in the image.
             if (entry.Length is 0 or > 16 * IsoBlockSize)
+            {
+                PbpDiagnostics.SetDetail(
+                    $"stored block {blockIndex} of {_isoIndex.Count} (disc {Index}, id {DiscId}) declares {entry.Length} bytes; a stored block is 1 to {16 * IsoBlockSize} bytes"
+                );
                 throw new InvalidDataException("Invalid ISO block length in PSAR index.");
+            }
 
             _stream.ReadExactly(buffer, 0, entry.Length);
             bytesRead = entry.Length;

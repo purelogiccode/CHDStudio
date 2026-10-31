@@ -5,6 +5,32 @@ nav_order: 16
 
 # What's New
 
+## 3.11.1 (2026-10-31)
+
+### PBP extraction - PBPSharp 1.1.7
+
+*   **Opening a PBP no longer decompresses disc data.** `PbpDiscInfo` used to decode ISO block 1 in its constructor just to derive `IsoSize`; a container whose structure was perfectly readable but whose first block tripped the decoder therefore failed the whole file with a bare `CorruptFile`. `IsoSize` is now resolved on first use and reports 0 ("unknown") when it cannot be derived, so the disc opens and extraction reports the real block failure instead of refusing the file.
+*   **A fully populated ISO index is accepted.** The parser rejected the 32,256th index entry as an overflow even though the index area holds exactly that many, so a disc that filled it could never be opened.
+*   **PBP failures now carry a cause.** Every invalid block-length rejection records the block index, block count, disc, disc id and stored length in `PbpDiagnostics`; `PbpFile.Open` records the exception type and message instead of returning only an error code. The `Failed to open PBP file` and `Failed to extract PBP file` messages include that detail.
+*   **Fewer false bug reports.** A damaged `.ecm` download (whole-image checksum mismatch) and a laserdisc AVI whose video/audio codec is not YUY2/VYUY/UYVY now log without filing a bug report; `chdman`'s avhuff has the same codec restriction, and the messages already tell the user what to do.
+
+### CHDSharp diagnostics
+
+*   **CHDSharp's internal log now reaches the application log.** `Chd.LoggerFactory` was never assigned, so the library logged into a null logger and its hunk-level diagnostics (failing hunk, codec, compressed length, file offset and the codec's own reason) were discarded. The new `ChdSharpLoggerFactory` bridges them to Serilog and attaches the captured detail to the messages that previously said only `Decompression failed` / `Invalid or corrupt data`.
+*   **CHDSharp warnings no longer file bug reports on their own.** The bridge writes the library's Warning level at Serilog Information, because CHDSharp also uses Warning for user-data notices such as "track has subcode data; it will be omitted". Genuine failures are still reported by the app's own classified error message, now with the hunk detail attached.
+*   **Stale diagnostics cannot leak between files.** Each CHD open and staged-output validation clears the previous captured warning first; a `ChdFile.Open` failure now includes the header/map reason too.
+
+### Security and dependencies
+
+*   **CodeQL code-scanning findings fixed.** Archive entry paths are validated inline before extraction (the Zip Slip guard is now visible to CodeQL), the single-instance mutex, CHD container, CSO stream and chdman speed counter are disposed on every failure path, and empty catch/loop blocks were replaced with documented handling.
+*   **CHDSharp 1.6.0** is the bundled encoder/reader.
+*   **CodeQL** ignores generated `bin`, `obj`, `publish`, `dist` and `TestResults` output.
+
+### Verification
+
+*   New regression tests cover the lazy ISO size, a fully populated index area, corrupt block diagnostics, the CHDSharp log bridge and the new bug-report exclusions. The full suite passes (1182 tests: 1153 unit + 29 integration, 59 test classes); CI runs the 1153 unit tests.
+*   JetBrains InspectCode reports zero warnings and zero errors.
+
 ## 3.11.0 (2026-10-29)
 
 ### PBP extraction - PBPSharp 1.1.6

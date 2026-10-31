@@ -180,7 +180,16 @@ internal class BugReportService
         "CHDSharp encoding failed: Unexpected end of file",
         // A CD CHD whose track metadata cannot be parsed is a damaged user file. A valid CHD
         // created from the same source extracts correctly; re-creating it is the fix.
-        "CD track metadata is missing or damaged"
+        "CD track metadata is missing or damaged",
+        // A damaged .ecm download: the decoder regenerates the stripped parity and validates the
+        // whole restored image against the checksum stored in the file. A mismatch means the
+        // file itself is corrupt, and the message already tells the user to re-download it.
+        "checksum does not match the data it decoded to",
+        // A laserdisc AVI whose video codec is not YUY2/VYUY/UYVY cannot be encoded by chdman
+        // either - its avhuff codec has exactly the same restriction - so the source has to be
+        // re-encoded. Filing a bug for a limitation of the input format is noise.
+        "Unsupported AVI video format",
+        "Unsupported AVI audio format"
     ];
 
     private static readonly string[] DirectlyReportedMessagePatterns =

@@ -5364,12 +5364,21 @@ internal partial class MainWindow : Window, IDisposable
             success = await Task.Run(
                 async () =>
                 {
+                    // Discard any diagnostic left by an earlier file so only this open's own
+                    // warning can be attached to its failure message.
+                    ChdSharpLoggerFactory.TakeLastWarning();
+
                     var err = ChdFile.Open(chdFile, out var chd);
                     if (err != ChdError.Chderrnone || chd == null)
                     {
-                        LogError(
-                            $" Failed to open '{Path.GetFileName(chdFile)}': {err.GetMessage()}"
-                        );
+                        // CHDSharp logs the header/map reason at Warning level; without it the
+                        // message carries only the bare error code.
+                        var openDetail = ChdSharpLoggerFactory.TakeLastWarning();
+                        var openReason = string.IsNullOrWhiteSpace(openDetail)
+                            ? err.GetMessage()
+                            : $"{err.GetMessage()} ({openDetail})";
+
+                        LogError($" Failed to open '{Path.GetFileName(chdFile)}': {openReason}");
                         return false;
                     }
 
@@ -5432,11 +5441,15 @@ internal partial class MainWindow : Window, IDisposable
                         {
                             // Attach the CHD header fields that identify the image while it is
                             // still open, then surface the enriched failure to the handler below
-                            // for the chdman fallback.
-                            throw new InvalidDataException(
-                                $"{ex.Message} [{BuildChdDiagnostics(chd)}]",
-                                ex
-                            );
+                            // for the chdman fallback. CHDSharp's own diagnostic (failing hunk,
+                            // codec, file offset, codec reason) is included when it logged one,
+                            // because the bare error code cannot be acted on.
+                            var hunkDetail = ChdSharpLoggerFactory.TakeLastWarning();
+                            var detail = string.IsNullOrWhiteSpace(hunkDetail)
+                                ? BuildChdDiagnostics(chd)
+                                : $"{BuildChdDiagnostics(chd)}; {hunkDetail}";
+
+                            throw new InvalidDataException($"{ex.Message} [{detail}]", ex);
                         }
                     }
 
@@ -6895,6 +6908,9 @@ internal partial class MainWindow : Window, IDisposable
             ChdResult stagedCheck;
             try
             {
+                // Discard any diagnostic left by an earlier encode so this check's own failure
+                // reason is the one attached to the message below.
+                ChdSharpLoggerFactory.TakeLastWarning();
                 using var stagedStream = File.OpenRead(outputFile);
                 stagedCheck = Chd.CheckFile(stagedStream, Path.GetFileName(outputFile), false);
             }
@@ -6908,9 +6924,17 @@ internal partial class MainWindow : Window, IDisposable
 
             if (!stagedCheck.IsSuccess)
             {
-                chdSharpFailure = stagedCheck.Error.GetMessage();
+                // The bare error code ("Decompression failed") cannot be acted on. CHDSharp logs
+                // the failing hunk, its codec, offset and the codec's own reason; carry that into
+                // the message so the report identifies the exact hunk.
+                var verificationDetail = ChdSharpLoggerFactory.TakeLastWarning();
+                var reason = string.IsNullOrWhiteSpace(verificationDetail)
+                    ? stagedCheck.Error.GetMessage()
+                    : $"{stagedCheck.Error.GetMessage()} ({verificationDetail})";
+
+                chdSharpFailure = reason;
                 LogError(
-                    $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {stagedCheck.Error.GetMessage()}."
+                    $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {reason}."
                 );
                 TryBestEffortDelete(outputFile);
                 return false;
@@ -7585,6 +7609,12 @@ internal partial class MainWindow : Window, IDisposable
         catch
         {
             // Fall back to the compressed file size; the extraction itself reports the real error.
+        }
+        finally
+        {
+            // This probe is only an estimate: any failure detail it recorded on this thread must
+            // not be attached to a later, unrelated report.
+            PbpDiagnostics.TakeDetail();
         }
 
         return fallbackBytes > 0 ? fallbackBytes : 0;

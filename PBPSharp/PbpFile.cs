@@ -179,12 +179,20 @@ public sealed class PbpFile : IDisposable
             // before its data area, which is the signature of a truncated or incomplete download.
             return PbpError.TruncatedPsar;
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex)
         {
+            // Inner parsers record the precise cause (block index, offset, stored length); this
+            // only fills in when they could not.
+            PbpDiagnostics.SetDetailIfEmpty($"the PBP structure is invalid: {ex.Message}");
             return PbpError.CorruptFile;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // An unexpected shape or a parser bug must not surface as a bare error code: the
+            // report needs the exception type and message to be actionable.
+            PbpDiagnostics.SetDetailIfEmpty(
+                $"unexpected {ex.GetType().Name} while reading the PBP structure: {ex.Message}"
+            );
             return PbpError.CorruptFile;
         }
     }

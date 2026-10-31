@@ -398,6 +398,16 @@ public class BugReportServiceTests
     [InlineData("Failed to convert 'NanoTek Warrior (USA).cue': libc++abi: Pure virtual function called!")]
     [InlineData("terminate called after throwing an instance of 'std::bad_alloc'")]
     [InlineData("terminate called without an active exception")]
+    // A damaged .ecm download: the whole-image checksum stored in the file does not match the
+    // data the decoder restored. The file is corrupt, not the decoder.
+    [InlineData(
+        "Cool Boarders 3 [NTSC-U] [SCUS-94251].bin.ecm: the ECM file's checksum does not match the data it decoded to (expected D81CF2FD, got C42AEB94), so the file is damaged."
+    )]
+    // A laserdisc AVI whose video codec chdman's avhuff cannot handle either (Indeo 5 here).
+    [InlineData(
+        "CHDSharp encoding failed: Unsupported AVI video format 'IV50'; YUY2, VYUY or UYVY is required"
+    )]
+    [InlineData("Unsupported AVI audio format (PCM 8/16-bit required, got 24-bit)")]
     public void IsExcludedFromBugReport_KnownPatterns_ReturnsTrue(string message)
     {
         Assert.True(BugReportService.IsExcludedFromBugReport(message));

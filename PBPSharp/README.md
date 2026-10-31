@@ -436,6 +436,7 @@ switch (error)
 Notes:
 
 - `ReadBlock` throws `ArgumentOutOfRangeException` for an out-of-range `blockIndex` and `InvalidDataException` when the index entry is corrupt.
+- Opening a PBP never decompresses disc data: `IsoSize` is computed lazily and returns `0` when block 1 cannot be decoded, so a readable container still opens and extraction reports the actual block failure.
 - `ExtractTo` propagates `OperationCanceledException` and `InvalidDataException`.
 - `ExtractToBinCue` writes the BIN first and deletes the partial file when extraction fails or is cancelled, so a returned error never leaves a short BIN behind.
 - A disc whose volume descriptor declares zero sectors (size unknown) has every index entry written in full instead of producing an empty BIN; a declared size stops extraction once it has been reached, so index-area data appended by an authoring tool is not read as image data.
@@ -473,7 +474,7 @@ Represents one disc inside a PBP.
 | `int Index` | 1-based disc index within the PBP. |
 | `string DiscId` | Disc ID read from the PSAR image header (for example `SCUS94163`). |
 | `IReadOnlyList<TocEntry> Toc` | Track entries of the disc, including data and audio tracks. Empty when the TOC is malformed. |
-| `uint IsoSize` | Total uncompressed ISO size in bytes. |
+| `uint IsoSize` | Total uncompressed ISO size in bytes, resolved on first use from the ISO9660 volume descriptor in block 1. `0` when the size cannot be derived (fewer than two indexed blocks, or block 1 cannot be decoded); callers must treat `0` as "unknown" and extract every index entry. |
 | `int BlockCount` | Number of indexed ISO blocks. |
 | `void ReadBlock(int blockIndex, byte[] buffer, out int bytesRead)` | Reads and decompresses one block. The buffer must be at least `16 * IsoBlockSize` bytes. |
 | `void ExtractTo(Stream outputStream, Action<uint>? progress = null, CancellationToken cancellationToken = default)` | Extracts the full ISO to a stream, reporting cumulative bytes written and honoring cancellation. |
@@ -548,6 +549,14 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 ```
 
 ## Version history
+
+### 1.1.7
+
+- `PbpFile.Open` no longer decompresses ISO block 1. `PbpDiscInfo.IsoSize` is resolved on first use and returns `0` when it cannot be derived (fewer than two indexed blocks, or block 1 cannot be decoded), so a PBP whose container is readable but whose first block is unusual opens and extracts instead of failing with `PbpError.CorruptFile`. Callers must treat `0` as "unknown size" and extract every index entry, which `ExtractTo` already does.
+- A fully populated ISO index area (32,256 entries) is accepted. The parser previously rejected the last legal entry as an overflow, so such a disc could not be opened at all.
+- Every invalid block-length rejection now records the block index, block count, disc, disc id and stored length in `PbpDiagnostics`. `PbpFile.Open` records the exception type and message for `InvalidDataException` and unexpected failures instead of returning a bare error code; a precise inner detail is never replaced by a generic wrapper.
+- `PbpDiagnostics.SetDetailIfEmpty` was added for the outer structure parsers.
+- `Open` semantics changed: a corrupt block no longer makes the container unopenable. This is a behavioural change for callers that treated `CorruptFile` as the signal for a bad block; check `IsoSize == 0` or let `ExtractTo` report the failure.
 
 ### 1.1.6
 

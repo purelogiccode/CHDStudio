@@ -20,12 +20,12 @@ All four values must match, and `WhatsNew.md` must contain a section whose
 heading starts with that exact version:
 
 ```markdown
-## 3.11.0 (2026-10-29)
+## 3.11.1 (2026-10-31)
 ```
 
 `scripts/ci/version.mjs` validates all of this locally and in CI. A release tag
 is `release_<version>` and must match the project version exactly, for example
-`release_3.11.0`.
+`release_3.11.1`.
 
 ## 14.2 Build the six runtime bundles
 
@@ -46,7 +46,7 @@ Avalonia libraries and the matching bundled tools.
 From the repository root:
 
 ```powershell
-$version = "3.11.0"
+$version = "3.11.1"
 $rids = @(
     @{ Rid = 'win-x64';     Tfm = 'net10.0-windows' },
     @{ Rid = 'win-arm64';   Tfm = 'net10.0-windows' },
@@ -99,7 +99,7 @@ node scripts/ci/version.mjs
 jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
 ```
 
-The full suite must pass (**1175 tests**: 1145 unit + 30 integration), and
+The full suite must pass (**1182 tests**: 1153 unit + 29 integration), and
 InspectCode must report **zero warnings and zero errors**. The remaining
 InspectCode notes are suggestions, not release blockers. For a non-Windows
 bundle, inspect `CHDStudio` and `7zz` inside the zip and confirm their Unix mode
@@ -132,8 +132,8 @@ secret; without it the step reports that it skipped the sync.
 After the docs and version files are committed and pushed to `master`:
 
 ```powershell
-git tag release_3.11.0
-git push origin release_3.11.0
+git tag release_3.11.1
+git push origin release_3.11.1
 ```
 
 The `Release` workflow then:

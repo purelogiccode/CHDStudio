@@ -23,6 +23,17 @@ public static class PbpDiagnostics
     }
 
     /// <summary>
+    ///     Records a failure detail for the current thread only when none is stored yet. Used by
+    ///     the outer structure parsers so a precise inner detail (the failing block's index,
+    ///     offset and byte preview) is never replaced by a generic wrapper message.
+    /// </summary>
+    /// <param name="detail">The detail text to record when no detail is currently stored.</param>
+    internal static void SetDetailIfEmpty(string detail)
+    {
+        _detail ??= detail;
+    }
+
+    /// <summary>
     ///     Returns the most recent failure detail recorded on the current thread (or <c>null</c> when
     ///     none was recorded) and clears it.
     /// </summary>

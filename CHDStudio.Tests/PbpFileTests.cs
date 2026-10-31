@@ -279,7 +279,7 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
-    public void OpenSingleDiscPbpWithNegativeBlockLengthReturnsCorruptFile()
+    public void OpenSingleDiscPbpWithNegativeBlockLengthSucceedsAndReportsAtExtraction()
     {
         var path = Path.Combine(_tempDir, $"negativelen_{Guid.NewGuid():N}.pbp");
 
@@ -309,11 +309,75 @@ public class PbpFileTests : IDisposable
         while (ms.Position < 0x200 + 0x100000)
             ms.WriteByte(0);
 
+        // Block 0's stored data, so extraction succeeds on it and reaches block 1.
+        ms.Write(new byte[16 * 0x930]);
+
+        File.WriteAllBytes(path, ms.ToArray());
+
+        // Opening no longer decompresses disc data, so a corrupt block entry cannot make a PBP
+        // unopenable. The ISO size cannot be derived from block 1, so it reports 0 (unknown).
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            Assert.Equal(0u, pbp.Discs[0].IsoSize);
+
+            // The corruption is reported when the block is actually read, together with the
+            // diagnostic detail that names the block, its length and the disc.
+            var thrown = Assert.Throws<InvalidDataException>(() =>
+            {
+                using var output = new MemoryStream();
+                pbp.Discs[0].ExtractTo(output);
+            });
+            Assert.Contains("Invalid ISO block length", thrown.Message);
+
+            var detail = PbpDiagnostics.TakeDetail();
+            Assert.NotNull(detail);
+            Assert.Contains("block 1", detail);
+            Assert.Contains("invalid stored length", detail);
+        }
+    }
+
+    [Fact]
+    public void OpenSingleDiscPbpWithFullIndexAreaSucceeds()
+    {
+        // A disc that fills the whole index area (0xFC000 bytes / 32 bytes per entry = 32,256
+        // blocks) is legal. The parser rejected the last entry as an overflow, so such a file
+        // could not be opened at all and surfaced as an opaque corrupt-file report.
+        var path = Path.Combine(_tempDir, $"fullindex_{Guid.NewGuid():N}.pbp");
+
+        using var ms = new MemoryStream();
+        WriteStandardPbpHeader(ms);
+        ms.Write(BuildMinimalSfo());
+
+        while (ms.Position < 0x200)
+            ms.WriteByte(0);
+
+        ms.Write("PSISOIMG0000"u8.ToArray());
+
+        while (ms.Position < 0x200 + 0x4000)
+            ms.WriteByte(0);
+
+        const int maxIndexes = 0x7E00;
+        for (var i = 0; i < maxIndexes; i++)
+        {
+            ms.Write(BitConverter.GetBytes((uint)(i * 0x9300)));
+            ms.Write(BitConverter.GetBytes(0x9300));
+            ms.Write(new byte[24]);
+        }
+
         File.WriteAllBytes(path, ms.ToArray());
 
         var error = PbpFile.Open(path, out var pbp);
-        Assert.Equal(PbpError.CorruptFile, error);
-        Assert.Null(pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            Assert.Equal(maxIndexes, pbp.Discs[0].BlockCount);
+        }
     }
 
     [Fact]
@@ -1396,18 +1460,28 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
-    public void OpenSyntheticSingleBlockPbpReturnsCorruptFile()
+    public void OpenSyntheticSingleBlockPbpSucceedsWithUnknownIsoSize()
     {
-        // The PSAR format stores the ISO size inside block index 1 (the second block),
-        // so a PSAR with a single indexed block cannot expose a usable ISO size. This
-        // mirrors the reference implementation, which also throws when reading the size
-        // from such a file.
+        // The PSAR format stores the ISO size inside block index 1 (the second block), so a PSAR
+        // with a single indexed block has no place to store it. That is a property of the image,
+        // not a reason to refuse the file: the disc is still extractable, and the size is simply
+        // unknown (0). Refusing it here used to surface as an opaque "corrupt file" report.
         var path = Path.Combine(_tempDir, $"synth_singleblock_{Guid.NewGuid():N}.pbp");
         new PbpTestFileBuilder().WithBlockCount(1).BuildTo(path);
 
         var error = PbpFile.Open(path, out var pbp);
-        Assert.Equal(PbpError.CorruptFile, error);
-        Assert.Null(pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            Assert.Equal(0u, pbp.Discs[0].IsoSize);
+
+            // The block itself is valid, so extraction still produces the one block of data.
+            using var output = new MemoryStream();
+            pbp.Discs[0].ExtractTo(output);
+            Assert.Equal(16 * PbpDiscInfo.IsoBlockSize, (int)output.Length);
+        }
     }
 
     [Fact]

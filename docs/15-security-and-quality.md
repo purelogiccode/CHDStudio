@@ -27,7 +27,7 @@ for the full scope, response timeline and safe-harbor terms.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `CI` | push/PR to `master`, manual | Restores, builds, runs the 1145 unit tests with coverage, builds the neutral TFM on Linux and macOS, and verifies the version script |
+| `CI` | push/PR to `master`, manual | Restores, builds, runs the 1153 unit tests with coverage, builds the neutral TFM on Linux and macOS, and verifies the version script |
 | `CodeQL` | push/PR to `master`, weekly, manual | CodeQL `security-and-quality` analysis for C# and the GitHub Actions workflows |
 | `Dependency Review` | pull request to `master` | Fails a PR that adds a high or critical vulnerable dependency |
 | `Scorecard` | push to `master`, weekly, branch-protection changes, manual | OpenSSF Scorecard supply-chain checks; publishes results and uploads SARIF |
@@ -86,7 +86,7 @@ node scripts/ci/version.mjs
 jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
 ```
 
-The full suite currently passes **1175 tests** (1145 unit tests plus 30
+The full suite currently passes **1182 tests** (1153 unit tests plus 29
 integration tests); CI runs the unit tests only because the integration classes
 need the maintainer's local sample folders. InspectCode reports **zero warnings
 and zero errors**; the remaining notes are suggestions, not release blockers.

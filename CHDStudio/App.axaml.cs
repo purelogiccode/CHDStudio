@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using CHDSharp;
 using CHDStudio.Dialogs;
 using CHDStudio.Models;
 using CHDStudio.Services;
@@ -169,6 +170,11 @@ public class App : Application
             .CreateLogger();
 
         Log.Information("=== Serilog initialized ===");
+
+        // CHDSharp logs into a null logger unless a factory is supplied. Bridging it here puts
+        // its hunk-level diagnostics (failing hunk, codec, offset, codec message) into the same
+        // log file and bug reports as the rest of the app, instead of losing them.
+        Chd.LoggerFactory = new ChdSharpLoggerFactory();
     }
 
     private static void DeleteOldDllFiles()
