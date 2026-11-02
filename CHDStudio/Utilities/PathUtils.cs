@@ -69,6 +69,9 @@ internal static class PathUtils
             }
         }
         catch (Exception ex)
+            when (ex is ArgumentException or IOException or NotSupportedException
+                or UnauthorizedAccessException
+            )
         {
             Logger.Verbose(ex, "Failed to create a temp directory under the system temp path");
         }
