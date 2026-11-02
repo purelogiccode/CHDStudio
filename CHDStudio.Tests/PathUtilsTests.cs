@@ -544,4 +544,69 @@ public class PathUtilsTests
     }
 
     #endregion
+
+    #region Directory creation and free space
+
+    [Fact]
+    public void TryCreateDirectory_CreatesNestedDirectory()
+    {
+        var directory = Path.Combine(ReserveTempDir, "nested", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.True(PathUtils.TryCreateDirectory(directory, out var error));
+            Assert.Equal(string.Empty, error);
+            Assert.True(Directory.Exists(directory));
+        }
+        finally
+        {
+            Cleanup(ReserveTempDir, null);
+        }
+    }
+
+    [Fact]
+    public void TryCreateDirectory_ExistingDirectorySucceeds()
+    {
+        Directory.CreateDirectory(ReserveTempDir);
+        try
+        {
+            Assert.True(PathUtils.TryCreateDirectory(ReserveTempDir, out var error));
+            Assert.Equal(string.Empty, error);
+        }
+        finally
+        {
+            Cleanup(ReserveTempDir, null);
+        }
+    }
+
+    [Fact]
+    public void TryCreateDirectory_FileInTheWay_ReturnsActionableError()
+    {
+        Directory.CreateDirectory(ReserveTempDir);
+        var path = Path.Combine(ReserveTempDir, "occupied");
+        File.WriteAllText(path, "not a directory");
+        try
+        {
+            Assert.False(PathUtils.TryCreateDirectory(path, out var error));
+            Assert.False(string.IsNullOrWhiteSpace(error));
+        }
+        finally
+        {
+            Cleanup(ReserveTempDir, path);
+        }
+    }
+
+    [Fact]
+    public void HasFreeSpaceForDirectory_NonPositiveRequirementAlwaysTrue()
+    {
+        Assert.True(PathUtils.HasFreeSpaceForDirectory(Path.GetTempPath(), 0));
+        Assert.True(PathUtils.HasFreeSpaceForDirectory(Path.GetTempPath(), -1));
+    }
+
+    [Fact]
+    public void HasFreeSpaceForDirectory_HugeRequirementIsReportedAsInsufficient()
+    {
+        Assert.False(PathUtils.HasFreeSpaceForDirectory(Path.GetTempPath(), long.MaxValue));
+    }
+
+    #endregion
 }

@@ -240,4 +240,52 @@ public class MainWindowHelperTests : IDisposable
         Assert.DoesNotContain("-ob", args, StringComparison.Ordinal);
         Assert.EndsWith("-f", args, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void GetChdExtractionErrorMessage_WriteFailure_AddsDriveGuidance()
+    {
+        var message = MainWindow.GetChdExtractionErrorMessage(
+            "Extraction failed; track 3: Chderrwriteerror [CHD v5 compression=Cdzstd]"
+        );
+
+        Assert.Contains("full, disconnected, read-only", message, StringComparison.Ordinal);
+        Assert.StartsWith("Extraction failed", message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Extraction failed; track 3: Chderrwriteerror", true)]
+    [InlineData("extraction failed; track 1: chderrwriteerror", true)]
+    [InlineData("Extraction failed; track 1: Chderrdecompressionerror", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsChdWriteFailure_ClassifiesWriteErrors(string? message, bool expected)
+    {
+        Assert.Equal(expected, MainWindow.IsChdWriteFailure(message));
+    }
+
+    [Fact]
+    public void IsDamagedPbpBlock_ShortDeflateStream_ReturnsTrue()
+    {
+        // Exact shape of the reports: a deflate stream that ends before the full 16-sector block.
+        const string error =
+            "Failed to extract disc 1 of 1: DecompressionError (code 8); blocks=19267, isoSize=725048688, "
+            + "discId=SCUS94358, psarOffset=0x10000; block 2380 of 19267 (disc 1, id SCUS94358): "
+            + "fileOffset=0x3481D91, length=28556, read=28556, uncompressed=False, isoSize=725048688, "
+            + "first bytes ECBC0B3894EDDA3F7CDDB333C6301BD2; the PSAR block did not inflate as raw "
+            + "deflate (the deflate stream produced only 28,130 of 37,632 bytes.) or as a zlib stream "
+            + "(Header checksum illegal).";
+
+        Assert.True(MainWindow.IsDamagedPbpBlock(error));
+    }
+
+    [Theory]
+    [InlineData("the PSAR block did not inflate as raw deflate (broken uncompressed block)", true)]
+    [InlineData("Invalid ISO block length in PSAR index.", true)]
+    [InlineData("Failed to open PBP file: CorruptFile (code 4)", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsDamagedPbpBlock_OtherMessages(string? message, bool expected)
+    {
+        Assert.Equal(expected, MainWindow.IsDamagedPbpBlock(message));
+    }
 }

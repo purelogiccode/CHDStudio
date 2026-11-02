@@ -31,8 +31,20 @@ internal static class ChdSharpEncoderService
     /// <summary>Default CD codecs (chdman's <c>createcd</c> defaults).</summary>
     private static readonly uint[] CdCodecs = ChdCodecs.ParseCodecTags("cdlz,cdzl,cdfl");
 
+    /// <summary>
+    ///     Fallback CD codec used when the default set produced an output that failed its own
+    ///     verification: zlib is the simplest and most widely compatible CD codec.
+    /// </summary>
+    private static readonly uint[] CdCodecsCompatible = ChdCodecs.ParseCodecTags("cdzl");
+
     /// <summary>Default raw/DVD/HDD codecs (chdman's defaults for those commands).</summary>
     private static readonly uint[] RawCodecs = ChdCodecs.ParseCodecTags("lzma,zlib,huff,flac");
+
+    /// <summary>
+    ///     Fallback raw/DVD/HDD codec used when the default set produced an output that failed
+    ///     its own verification.
+    /// </summary>
+    private static readonly uint[] RawCodecsCompatible = ChdCodecs.ParseCodecTags("zlib");
 
     /// <summary>Laserdisc codec (chdman's <c>createld</c> default).</summary>
     private static readonly uint[] AvhuCodecs = ChdCodecs.ParseCodecTags("avhu");
@@ -55,6 +67,10 @@ internal static class ChdSharpEncoderService
     ///     Optional per-hunk progress callback (invoked in hunk order while compressing), or
     ///     <c>null</c> for no reporting.
     /// </param>
+    /// <param name="conservativeCodecs">
+    ///     True to use the smallest, most widely compatible codec set (zlib only) instead of the
+    ///     chdman defaults. Used for the automatic retry when the first output fails verification.
+    /// </param>
     /// <exception cref="ArgumentException">The command is not a supported creation command.</exception>
     internal static void Encode(
         string command,
@@ -63,7 +79,8 @@ internal static class ChdSharpEncoderService
         bool rawUnits2352,
         int taskCount,
         CancellationToken token,
-        Action<HunkProgress>? onHunkCompleted = null
+        Action<HunkProgress>? onHunkCompleted = null,
+        bool conservativeCodecs = false
     )
     {
         var options = new ChdEncodeOptions
@@ -71,6 +88,9 @@ internal static class ChdSharpEncoderService
             TaskCount = Math.Clamp(taskCount, 1, 64),
             HunkCompleted = onHunkCompleted
         };
+
+        var cdCodecs = conservativeCodecs ? CdCodecsCompatible : CdCodecs;
+        var rawCodecs = conservativeCodecs ? RawCodecsCompatible : RawCodecs;
 
         // chdman refuses inputs whose size is not a whole number of units for the raw commands.
         // The built-in encoder has to reject them too: encoding a partial trailing unit would drop
@@ -104,7 +124,7 @@ internal static class ChdSharpEncoderService
                     outputPath,
                     CdHunkBytes,
                     CdUnitBytes,
-                    CdCodecs,
+                    cdCodecs,
                     options,
                     token
                 );
@@ -118,7 +138,7 @@ internal static class ChdSharpEncoderService
                     outputPath,
                     RawHunkBytes,
                     DvdUnitBytes,
-                    RawCodecs,
+                    rawCodecs,
                     options,
                     token
                 );
@@ -149,7 +169,7 @@ internal static class ChdSharpEncoderService
                     outputPath,
                     RawHunkBytes,
                     HardDiskUnitBytes,
-                    RawCodecs,
+                    rawCodecs,
                     options,
                     token
                 );
@@ -165,7 +185,7 @@ internal static class ChdSharpEncoderService
                     outputPath,
                     hunkBytes,
                     unitBytes,
-                    RawCodecs,
+                    rawCodecs,
                     options,
                     token
                 );

@@ -2290,8 +2290,18 @@ internal partial class MainWindow : Window, IDisposable
                 }
 
                 var resolvedOutputDir = Path.GetDirectoryName(outputChd) ?? outputFolder;
-                if (!Directory.Exists(resolvedOutputDir))
-                    Directory.CreateDirectory(resolvedOutputDir);
+                if (
+                    !PathUtils.TryCreateDirectory(
+                        resolvedOutputDir,
+                        out var resolvedOutputDirError
+                    )
+                )
+                {
+                    LogError(
+                        $" Output folder is not available: {resolvedOutputDir} ({resolvedOutputDirError})."
+                    );
+                    return false;
+                }
 
                 UpdateWriteSpeedDisplay(0);
                 if (resolved.PathToConvert is null)
@@ -2436,8 +2446,11 @@ internal partial class MainWindow : Window, IDisposable
 
             UpdateWriteSpeedDisplay(0);
             var outputDir = Path.GetDirectoryName(outputChd) ?? outputFolder;
-            if (!Directory.Exists(outputDir))
-                Directory.CreateDirectory(outputDir);
+            if (!PathUtils.TryCreateDirectory(outputDir, out var outputDirError))
+            {
+                LogError($" Output folder is not available: {outputDir} ({outputDirError}).");
+                return false;
+            }
 
             var success = await TryDirectConversionAsync(
                 chdmanPath,
@@ -2800,7 +2813,16 @@ internal partial class MainWindow : Window, IDisposable
             TempDirPrefix,
             totalBytes
         );
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         tempDirs.Add(tempDir);
 
         var joinedPath = Path.Combine(
@@ -2847,7 +2869,16 @@ internal partial class MainWindow : Window, IDisposable
             TempDirPrefix,
             totalBytes
         );
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         tempDirs.Add(tempDir);
 
         var extraction = await _archiveService.ExtractSplitArchiveWith7ZaAsync(
@@ -2902,7 +2933,16 @@ internal partial class MainWindow : Window, IDisposable
             TempDirPrefix,
             totalBytes
         );
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         tempDirs.Add(tempDir);
 
         var extraction = await _archiveService.ExtractArchiveAsync(
@@ -3037,7 +3077,16 @@ internal partial class MainWindow : Window, IDisposable
             TempDirPrefix,
             estimatedBytes
         );
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         tempDirs.Add(tempDir);
 
         var decodedPath = Path.Combine(tempDir, EcmImageDecoder.GetDecodedFileName(inputFile));
@@ -3097,7 +3146,16 @@ internal partial class MainWindow : Window, IDisposable
             TempDirPrefix,
             header.ImageSizeBytes
         );
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         tempDirs.Add(tempDir);
 
         var decodedPath = Path.Combine(tempDir, IszDecoder.GetDecodedFileName(inputFile));
@@ -3440,7 +3498,16 @@ internal partial class MainWindow : Window, IDisposable
             csoSize
         );
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
         var tempIso = PathUtils.GetSafeTempFileName(originalName, "iso", tempDir);
 
         var result = await ArchiveService.ExtractCsoAsync(
@@ -3456,8 +3523,11 @@ internal partial class MainWindow : Window, IDisposable
         var fileToProcess = result.FilePath;
         UpdateWriteSpeedDisplay(0);
         var outputDir = Path.GetDirectoryName(outputChd) ?? outputFolder;
-        if (!Directory.Exists(outputDir))
-            Directory.CreateDirectory(outputDir);
+        if (!PathUtils.TryCreateDirectory(outputDir, out var outputDirError))
+        {
+            LogError($" Output folder is not available: {outputDir} ({outputDirError}).");
+            return false;
+        }
 
         var success = await TryDirectConversionAsync(
             chdmanPath,
@@ -3606,8 +3676,14 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             var extractedOutputDir = Path.GetDirectoryName(extractedFileOutputChd) ?? outputFolder;
-            if (!Directory.Exists(extractedOutputDir))
-                Directory.CreateDirectory(extractedOutputDir);
+            if (!PathUtils.TryCreateDirectory(extractedOutputDir, out var extractedOutputDirError))
+            {
+                LogError(
+                    $" Output folder is not available: {extractedOutputDir} ({extractedOutputDirError})."
+                );
+                allSucceeded = false;
+                continue;
+            }
 
             LogMessage($"Converting extracted file: {Path.GetFileName(extractedFile)}");
 
@@ -3761,7 +3837,16 @@ internal partial class MainWindow : Window, IDisposable
             extractionBytes
         );
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
         if (!HasFreeSpaceForTempDirectory(tempDir, extractionBytes))
         {
@@ -3797,14 +3882,41 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             // PSP homebrew / application EBOOT.PBPs have no PlayStation disc image to convert,
-            // and a truncated PSX eboot has no readable index. Both are user-data conditions,
-            // so they are reported to the user without raising a bug report.
-            if (result.ErrorCode is PbpError.InvalidPsarHeader or PbpError.TruncatedPsar)
+            // a truncated PSX eboot has no readable index, and an unreadable header is a damaged
+            // or unsupported user file. All are user-data conditions, so they are reported to the
+            // user without raising a bug report.
+            if (
+                result.ErrorCode
+                is PbpError.InvalidPsarHeader
+                    or PbpError.TruncatedPsar
+                    or PbpError.CorruptFile
+                    or PbpError.InvalidSfo
+            )
             {
                 LogMessage(
-                    result.ErrorCode == PbpError.TruncatedPsar
-                        ? $" {originalName} does not contain a complete PlayStation disc image (the PBP is truncated or incomplete) — skipping. Re-download the file."
-                        : $" {originalName} does not contain a PlayStation disc image (PSP application, unsupported variant, or corrupt file) — skipping."
+                    result.ErrorCode switch
+                    {
+                        PbpError.TruncatedPsar =>
+                            $" {originalName} does not contain a complete PlayStation disc image (the PBP is truncated or incomplete) — skipping. Re-download the file.",
+                        PbpError.CorruptFile or PbpError.InvalidSfo =>
+                            $" {originalName} does not contain a readable PlayStation disc image (PSP application, damaged file, or unsupported variant) — skipping. Re-download it if it should be a PSX image.",
+                        _ =>
+                            $" {originalName} does not contain a PlayStation disc image (PSP application, unsupported variant, or corrupt file) — skipping."
+                    }
+                );
+            }
+            else if (
+                result.ErrorCode == PbpError.DecompressionError
+                && IsDamagedPbpBlock(result.Error)
+            )
+            {
+                // The container parsed but a PSAR block ends before its 16 sectors. That is
+                // damage in the downloaded file (a truncated or altered PBP), not a decoder
+                // defect: extracting the short block would shift every later block and produce
+                // a corrupt image, so the file is skipped with actionable guidance instead of
+                // filing a bug report for the user's data.
+                LogWarning(
+                    $" {originalName}: the PBP's disc data is damaged (a compressed block ends before a full 16-sector block) — skipping. Re-download the file."
                 );
             }
             else
@@ -3850,8 +3962,14 @@ internal partial class MainWindow : Window, IDisposable
                 outputFolder
             );
             var cueOutputDir = Path.GetDirectoryName(cueFileOutputChd) ?? outputFolder;
-            if (!Directory.Exists(cueOutputDir))
-                Directory.CreateDirectory(cueOutputDir);
+            if (!PathUtils.TryCreateDirectory(cueOutputDir, out var cueOutputDirError))
+            {
+                LogError(
+                    $" Output folder is not available: {cueOutputDir} ({cueOutputDirError})."
+                );
+                allSucceeded = false;
+                continue;
+            }
 
             if (result.CueFilePaths.Count > 1)
                 LogMessage($"Converting disc: {Path.GetFileName(cueFile)}");
@@ -3997,8 +4115,11 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         var outputDir = Path.GetDirectoryName(outputChd) ?? outputFolder;
-        if (!Directory.Exists(outputDir))
-            Directory.CreateDirectory(outputDir);
+        if (!PathUtils.TryCreateDirectory(outputDir, out var outputDirError))
+        {
+            LogError($" Output folder is not available: {outputDir} ({outputDirError}).");
+            return false;
+        }
 
         UpdateWriteSpeedDisplay(0);
         var success = await ConvertToChdAsync(
@@ -4071,14 +4192,28 @@ internal partial class MainWindow : Window, IDisposable
             imgSize
         );
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
         try
         {
             var cueFileOutputChd = ComputeOutputChdPath(inputFile, inputFolder, outputFolder);
             var cueOutputDir = Path.GetDirectoryName(cueFileOutputChd) ?? outputFolder;
-            if (!Directory.Exists(cueOutputDir))
-                Directory.CreateDirectory(cueOutputDir);
+            if (!PathUtils.TryCreateDirectory(cueOutputDir, out var cueOutputDirError))
+            {
+                LogError(
+                    $" Output folder is not available: {cueOutputDir} ({cueOutputDirError})."
+                );
+                return false;
+            }
 
             var converted = await ConvertCcdInTempDirAsync(
                 chdmanPath,
@@ -4233,7 +4368,16 @@ internal partial class MainWindow : Window, IDisposable
             requiredBytes
         );
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
         MdsInputPreparer.Result prepared;
         try
@@ -4274,8 +4418,11 @@ internal partial class MainWindow : Window, IDisposable
 
         var outputChd = ComputeOutputChdPath(inputFile, inputFolder, outputFolder);
         var outputDir = Path.GetDirectoryName(outputChd) ?? outputFolder;
-        if (!Directory.Exists(outputDir))
-            Directory.CreateDirectory(outputDir);
+        if (!PathUtils.TryCreateDirectory(outputDir, out var outputDirError))
+        {
+            LogError($" Output folder is not available: {outputDir} ({outputDirError}).");
+            return false;
+        }
 
         UpdateWriteSpeedDisplay(0);
 
@@ -4514,7 +4661,16 @@ internal partial class MainWindow : Window, IDisposable
             requiredBytes
         );
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
         MdsInputPreparer.Result prepared;
         try
@@ -4600,7 +4756,16 @@ internal partial class MainWindow : Window, IDisposable
     {
         var tempDir = PathUtils.GetBestTempDirectory(ccdPath, outputFolder, TempDirPrefix);
         tempDirs.Add(tempDir);
-        await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+        await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
         try
         {
@@ -4808,10 +4973,27 @@ internal partial class MainWindow : Window, IDisposable
                     $" Not enough disk space to convert {originalName}. Free up disk space and try again."
                 );
             }
-            else if (ex is DriveNotFoundException or DirectoryNotFoundException)
+            else if (
+                ex is DriveNotFoundException or DirectoryNotFoundException
+                || (
+                    ex is IOException
+                    && ex.Message.Contains(
+                        "is not available",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+            )
             {
                 LogError(
                     $" Cannot convert {originalName}: the output folder is not available ({ex.Message})."
+                );
+            }
+            else if (ex is IOException)
+            {
+                // A device or network error while reading the source or writing the output is an
+                // environment condition (failing disk, dropped share, full volume), not app logic.
+                LogError(
+                    $" Cannot convert {originalName}: the source or output could not be read or written ({ex.Message})."
                 );
             }
             else
@@ -4933,7 +5115,16 @@ internal partial class MainWindow : Window, IDisposable
                 totalBytesNeeded
             );
             tempDirs.Add(tempDir);
-            await Task.Run(() => Directory.CreateDirectory(tempDir), token);
+            await Task.Run(
+            () =>
+            {
+                if (!PathUtils.TryCreateDirectory(tempDir, out var tempDirError))
+                    throw new IOException(
+                        $"the temporary folder is not available ({tempDirError})"
+                    );
+            },
+            token
+        );
 
             try
             {
@@ -5295,8 +5486,11 @@ internal partial class MainWindow : Window, IDisposable
         var targetDir = string.Equals(relativePath, ".", StringComparison.Ordinal)
             ? outputFolder
             : Path.Combine(outputFolder, relativePath);
-        if (!Directory.Exists(targetDir))
-            Directory.CreateDirectory(targetDir);
+        if (!PathUtils.TryCreateDirectory(targetDir, out var targetDirError))
+        {
+            LogError($" Output folder is not available: {targetDir} ({targetDirError}).");
+            return false;
+        }
 
         // Get extraction type based on user-selected output format
         var extractCommand = await GetSelectedExtractCommandAsync(chdFile, token);
@@ -5348,7 +5542,14 @@ internal partial class MainWindow : Window, IDisposable
         if (ExtractionOutputExists(targetDir, fileName, outputExt))
         {
             var isolatedDir = PathUtils.ReserveFreeSubdirectory(targetDir, fileName);
-            Directory.CreateDirectory(isolatedDir);
+            if (!PathUtils.TryCreateDirectory(isolatedDir, out var isolatedDirError))
+            {
+                LogError(
+                    $" Output folder is not available: {isolatedDir} ({isolatedDirError})."
+                );
+                return false;
+            }
+
             targetDir = isolatedDir;
             outputFile = Path.Combine(isolatedDir, fileName + outputExt);
 
@@ -5386,6 +5587,28 @@ internal partial class MainWindow : Window, IDisposable
                     {
                         try
                         {
+                            // Extraction writes the whole decompressed image (or one file per
+                            // track), which is always larger than the CHD and can be several
+                            // gigabytes. Check the target volume up front so a full disk is
+                            // reported as such instead of surfacing as an opaque
+                            // "Chderrwriteerror" from the middle of the extraction.
+                            var extractionBytes = (long)Math.Min(
+                                chd.TotalBytes,
+                                (ulong)long.MaxValue
+                            );
+                            if (
+                                !PathUtils.HasFreeSpaceForDirectory(
+                                    targetDir,
+                                    extractionBytes
+                                )
+                            )
+                            {
+                                LogError(
+                                    $" Not enough disk space to extract '{Path.GetFileName(chdFile)}': about {extractionBytes / (1024.0 * 1024.0 * 1024.0):F1} GB are needed on the output drive. Free up disk space and try again."
+                                );
+                                return false;
+                            }
+
                             // Extraction reads hunks sequentially; pre-decompress the next hunks
                             // in the background so the disk write is not gated on one hunk at a time.
                             chd.ConfigureReadAhead(ExtractionReadAheadHunks);
@@ -5524,6 +5747,16 @@ internal partial class MainWindow : Window, IDisposable
                         );
                         success = true;
                     }
+                    else if (IsChdWriteFailure(reason))
+                    {
+                        // The built-in reader reached the data but could not write it (and
+                        // chdman could not either). That is a full, disconnected, read-only or
+                        // access-denied output volume, not an app defect, so it must not be
+                        // filed as a bug report.
+                        LogWarning(
+                            $" Could not write the extracted files for '{Path.GetFileName(chdFile)}': {reason}"
+                        );
+                    }
                     else
                     {
                         LogError(
@@ -5637,7 +5870,12 @@ internal partial class MainWindow : Window, IDisposable
             targetDir,
             "_extract_temp_" + Guid.NewGuid().ToString("N")
         );
-        Directory.CreateDirectory(tempExtractDir);
+        if (!PathUtils.TryCreateDirectory(tempExtractDir, out var tempExtractDirError))
+        {
+            throw new IOException(
+                $"the output folder is not available ({tempExtractDirError})"
+            );
+        }
 
         var allMoved = false;
         try
@@ -5687,7 +5925,12 @@ internal partial class MainWindow : Window, IDisposable
             if (extractedFiles.Any(f => File.Exists(Path.Combine(targetDir, Path.GetFileName(f)))))
             {
                 destinationDir = PathUtils.ReserveFreeSubdirectory(targetDir, baseFileName);
-                Directory.CreateDirectory(destinationDir);
+                if (!PathUtils.TryCreateDirectory(destinationDir, out var destinationDirError))
+                {
+                    throw new IOException(
+                        $"the output folder is not available ({destinationDirError})"
+                    );
+                }
 
                 LogMessage(
                     $" Files named after this disc already exist here; extracting into \"{Path.GetFileName(destinationDir)}\" so they are kept."
@@ -6126,7 +6369,12 @@ internal partial class MainWindow : Window, IDisposable
             // lives under the user profile and can contain non-ASCII characters or be overlong,
             // which would reproduce the very failure this fallback exists to avoid.
             asciiTempDir = PathUtils.CreateAsciiSafeTempDirectory(TempDirPrefix);
-            Directory.CreateDirectory(asciiTempDir);
+            if (!PathUtils.TryCreateDirectory(asciiTempDir, out var asciiTempDirError))
+            {
+                throw new IOException(
+                    $"the temporary folder is not available ({asciiTempDirError})"
+                );
+            }
 
             // Only the input needs staging when its own path is unsafe; an input chdman can read
             // in place (e.g. an ASCII cue whose destination path is overlong) keeps resolving its
@@ -6170,8 +6418,12 @@ internal partial class MainWindow : Window, IDisposable
             var stagingDir = Path.GetDirectoryName(originalOutputFile);
             if (!string.IsNullOrEmpty(stagingDir))
             {
-                if (!Directory.Exists(stagingDir))
-                    Directory.CreateDirectory(stagingDir);
+                if (!PathUtils.TryCreateDirectory(stagingDir, out var stagingDirError))
+                {
+                    throw new IOException(
+                        $"the output folder is not available ({stagingDirError})"
+                    );
+                }
 
                 asciiOutputFile = Path.Combine(
                     stagingDir,
@@ -6474,8 +6726,15 @@ internal partial class MainWindow : Window, IDisposable
                     try
                     {
                         var targetDir = Path.GetDirectoryName(originalOutputFile);
-                        if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
-                            Directory.CreateDirectory(targetDir);
+                        if (
+                            !string.IsNullOrEmpty(targetDir)
+                            && !PathUtils.TryCreateDirectory(targetDir, out var targetDirError)
+                        )
+                        {
+                            throw new IOException(
+                                $"the output folder is not available ({targetDirError})"
+                            );
+                        }
                         if (File.Exists(originalOutputFile))
                         {
                             var deleted = await RetryingFileOperations
@@ -6748,21 +7007,19 @@ internal partial class MainWindow : Window, IDisposable
                     return false;
                 }
 
-                if (!Directory.Exists(stagingDir))
+                if (
+                    !PathUtils.TryCreateDirectory(stagingDir, out var stagingDirError)
+                )
                 {
-                    try
-                    {
-                        Directory.CreateDirectory(stagingDir);
-                    }
-                    catch (Exception ex)
-                        when (ex is DriveNotFoundException or DirectoryNotFoundException)
-                    {
-                        // The output drive vanished mid-batch (unplugged, unmounted). Report the
-                        // folder rather than letting the raw exception surface as an app bug.
-                        chdSharpFailure = $"the output folder is not available: {stagingDir}";
-                        LogError($" Output folder is not available: {stagingDir}");
-                        return false;
-                    }
+                    // The output drive vanished mid-batch (unplugged, unmounted, unready card
+                    // reader) or is read-only. Report the folder rather than letting the raw
+                    // exception surface as an app bug.
+                    chdSharpFailure =
+                        $"the output folder is not available: {stagingDir} ({stagingDirError})";
+                    LogError(
+                        $" Output folder is not available: {stagingDir} ({stagingDirError})."
+                    );
+                    return false;
                 }
 
                 asciiOutputFile = Path.Combine(
@@ -6928,16 +7185,82 @@ internal partial class MainWindow : Window, IDisposable
                 // the failing hunk, its codec, offset and the codec's own reason; carry that into
                 // the message so the report identifies the exact hunk.
                 var verificationDetail = ChdSharpLoggerFactory.TakeLastWarning();
-                var reason = string.IsNullOrWhiteSpace(verificationDetail)
+                var firstReason = string.IsNullOrWhiteSpace(verificationDetail)
                     ? stagedCheck.Error.GetMessage()
                     : $"{stagedCheck.Error.GetMessage()} ({verificationDetail})";
 
-                chdSharpFailure = reason;
-                LogError(
-                    $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {reason}."
+                // A codec-specific encoder defect can make the first output unreadable while a
+                // zlib-only encode of the same source is valid. Retry once before treating the
+                // source as unencodable: reports described exactly this symptom ("CHDSharp
+                // produced an unusable CHD ... Decompression failed").
+                LogMessage(
+                    $" CHDSHARP: the CHD created for '{Path.GetFileName(originalInputFile)}' failed verification ({firstReason}). Retrying with the most compatible compression..."
                 );
                 TryBestEffortDelete(outputFile);
-                return false;
+
+                string? retryReason = null;
+                try
+                {
+                    await Task.Run(
+                        () =>
+                            ChdSharpEncoderService.Encode(
+                                command,
+                                inputFile,
+                                outputFile,
+                                isRaw,
+                                cores,
+                                fallbackTimeoutCts.Token,
+                                progress.ReportHunk,
+                                conservativeCodecs: true
+                            ),
+                        fallbackTimeoutCts.Token
+                    );
+
+                    ChdSharpLoggerFactory.TakeLastWarning();
+                    using var retryStream = File.OpenRead(outputFile);
+                    var retryCheck = Chd.CheckFile(
+                        retryStream,
+                        Path.GetFileName(outputFile),
+                        false
+                    );
+                    if (!retryCheck.IsSuccess)
+                    {
+                        var retryDetail = ChdSharpLoggerFactory.TakeLastWarning();
+                        retryReason = string.IsNullOrWhiteSpace(retryDetail)
+                            ? retryCheck.Error.GetMessage()
+                            : $"{retryCheck.Error.GetMessage()} ({retryDetail})";
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    TryBestEffortDelete(outputFile);
+                    if (!token.IsCancellationRequested && timeoutMinutes is not null)
+                    {
+                        chdSharpFailure = "the encoder timed out";
+                        LogMessage(
+                            $"TIMEOUT: Conversion of '{Path.GetFileName(originalInputFile)}' exceeded {timeoutMinutes.Value} minute(s). Marking as failed."
+                        );
+                    }
+
+                    return false;
+                }
+                catch (Exception retryEx) when (!IsCancellationException(retryEx))
+                {
+                    retryReason = retryEx.Message;
+                }
+
+                if (retryReason is not null)
+                {
+                    chdSharpFailure =
+                        $"{firstReason}; the compatible-codec retry also failed: {retryReason}";
+                    LogError(
+                        $" CHDSharp produced an unusable CHD for '{Path.GetFileName(originalInputFile)}': {chdSharpFailure}."
+                    );
+                    TryBestEffortDelete(outputFile);
+                    return false;
+                }
+
+                LogMessage(" CHDSHARP: the retry produced a valid CHD.");
             }
 
             // The same duplicate guard as the chdman path applies: keep the first product
@@ -6955,8 +7278,15 @@ internal partial class MainWindow : Window, IDisposable
             try
             {
                 var targetDir = Path.GetDirectoryName(originalOutputFile);
-                if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
-                    Directory.CreateDirectory(targetDir);
+                if (
+                    !string.IsNullOrEmpty(targetDir)
+                    && !PathUtils.TryCreateDirectory(targetDir, out var targetDirError)
+                )
+                {
+                    throw new IOException(
+                        $"the output folder is not available ({targetDirError})"
+                    );
+                }
                 if (File.Exists(originalOutputFile))
                 {
                     var deleted = await RetryingFileOperations
@@ -7117,6 +7447,12 @@ internal partial class MainWindow : Window, IDisposable
     {
         message ??= string.Empty;
 
+        if (IsChdWriteFailure(message))
+        {
+            return message
+                   + " The output drive could not be written: it may be full, disconnected, read-only, or access may be denied.";
+        }
+
         if (
             message.Contains("Chderrdecompressionerror", StringComparison.OrdinalIgnoreCase)
             || message.Contains("Failed to read hunk", StringComparison.OrdinalIgnoreCase)
@@ -7127,6 +7463,38 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         return message;
+    }
+
+    /// <summary>
+    ///     Returns whether a PBP extraction failure is damage inside the PBP's PSAR data rather
+    ///     than a decoder defect. A block whose deflate stream ends before its 16 sectors (or whose
+    ///     index entry is impossible) is a truncated/altered download: writing the short block
+    ///     would shift every later block, so the file cannot be repaired and must be re-downloaded.
+    /// </summary>
+    /// <param name="error">The extraction failure detail.</param>
+    /// <returns>True when the failure is damaged PSAR data.</returns>
+    internal static bool IsDamagedPbpBlock(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error)) return false;
+
+        return error.Contains("the PSAR block did not inflate", StringComparison.OrdinalIgnoreCase)
+               || error.Contains(
+                   "Invalid ISO block length in PSAR index",
+                   StringComparison.OrdinalIgnoreCase
+               );
+    }
+
+    /// <summary>
+    ///     Returns whether a CHDSharp extraction failure is a write failure
+    ///     (<c>Chderrwriteerror</c>) rather than a decode failure. The built-in reader reports every
+    ///     error raised while writing an extracted track with that code, so it identifies a full,
+    ///     disconnected, read-only or access-denied output volume rather than a damaged CHD.
+    /// </summary>
+    /// <param name="message">The extraction failure message.</param>
+    /// <returns>True when the failure is a write error.</returns>
+    internal static bool IsChdWriteFailure(string? message)
+    {
+        return message?.Contains("Chderrwriteerror", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     /// <summary>
@@ -7630,20 +7998,7 @@ internal partial class MainWindow : Window, IDisposable
     /// <returns>True when the volume appears to have enough free space.</returns>
     private static bool HasFreeSpaceForTempDirectory(string directory, long requiredBytes)
     {
-        if (requiredBytes <= 0) return true;
-
-        try
-        {
-            var root = Path.GetPathRoot(Path.GetFullPath(directory));
-            if (string.IsNullOrEmpty(root)) return true;
-
-            var drive = new DriveInfo(root);
-            return !drive.IsReady || drive.AvailableFreeSpace >= requiredBytes;
-        }
-        catch
-        {
-            return true;
-        }
+        return PathUtils.HasFreeSpaceForDirectory(directory, requiredBytes);
     }
 
     /// <summary>Extracts every disc in a PBP file to cue/bin pairs.</summary>

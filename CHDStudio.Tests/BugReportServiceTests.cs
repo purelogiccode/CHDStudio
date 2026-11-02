@@ -408,6 +408,17 @@ public class BugReportServiceTests
         "CHDSharp encoding failed: Unsupported AVI video format 'IV50'; YUY2, VYUY or UYVY is required"
     )]
     [InlineData("Unsupported AVI audio format (PCM 8/16-bit required, got 24-bit)")]
+    // A write failure while extracting a CHD: full, disconnected or read-only output volume.
+    [InlineData(
+        " Could not write the extracted files for 'Zusar Vasar (JP).chd': Extraction failed; track 3: Chderrwriteerror The output drive could not be written: it may be full, disconnected, read-only, or access may be denied."
+    )]
+    // Conversion-time permission guidance for a write-protected output folder.
+    [InlineData(
+        " Conversion of 'Need for Speed - Hot Pursuit 2 (Europe, Australia) (En,Fr,De,Es,It,Sv) (v2.00).iso' failed due to a permission error. The output folder may be write-protected or require administrator rights."
+    )]
+    // A device that became unready mid-batch (removable card reader, network share).
+    [InlineData(" Cannot create the output folder: The device is not ready. : 'H:\\roms\\ps1'.")]
+    [InlineData(" Cannot convert 'game.iso': the source or output could not be read or written (The device is not ready. : 'F:\\CHDStudio_Temp\\x.iso').")]
     public void IsExcludedFromBugReport_KnownPatterns_ReturnsTrue(string message)
     {
         Assert.True(BugReportService.IsExcludedFromBugReport(message));

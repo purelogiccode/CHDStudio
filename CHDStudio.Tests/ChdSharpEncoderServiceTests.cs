@@ -77,6 +77,33 @@ public class ChdSharpEncoderServiceTests : IDisposable
     }
 
     [Fact]
+    public void CreateCd_ConservativeCodecs_EncodesVerifiableCdChd()
+    {
+        // The verification-failure retry uses the zlib-only codec set; it must still produce a
+        // valid CHD from the same source.
+        File.WriteAllBytes(PathFor("compat.bin"), new byte[2352 * 5]);
+        var cuePath = PathFor("compat.cue");
+        File.WriteAllText(
+            cuePath,
+            "FILE \"compat.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+        var chdPath = PathFor("compat.chd");
+
+        ChdSharpEncoderService.Encode(
+            "createcd",
+            cuePath,
+            chdPath,
+            false,
+            2,
+            CancellationToken.None,
+            conservativeCodecs: true
+        );
+
+        AssertVerifies(chdPath);
+        Assert.Equal(2448u, ReadHeader(chdPath).UnitBytes);
+    }
+
+    [Fact]
     public void CreateCd_ZeroLeadOutMultisessionCue_EncodesInsteadOfGoingNegative()
     {
         // A single-bin multisession cue whose REM LEAD-OUT sits before the session's last track
@@ -258,6 +285,26 @@ public class ChdSharpEncoderServiceTests : IDisposable
         );
 
         Assert.Equal("extractcd", command);
+    }
+
+    [Fact]
+    public void CreateDvd_ConservativeCodecs_EncodesVerifiableChd()
+    {
+        // Raw/DVD images use the zlib-only set on the verification-failure retry.
+        File.WriteAllBytes(PathFor("compat.iso"), new byte[2048 * 20]);
+        var chdPath = PathFor("compat-dvd.chd");
+
+        ChdSharpEncoderService.Encode(
+            "createdvd",
+            PathFor("compat.iso"),
+            chdPath,
+            false,
+            2,
+            CancellationToken.None,
+            conservativeCodecs: true
+        );
+
+        AssertVerifies(chdPath);
     }
 
     [Fact]

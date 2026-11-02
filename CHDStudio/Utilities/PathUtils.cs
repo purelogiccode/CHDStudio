@@ -518,6 +518,125 @@ internal static class PathUtils
     }
 
     /// <summary>
+    ///     Creates <paramref name="directory" /> when it does not exist and converts the usual
+    ///     filesystem failures into a message that names the real cause: a removed or unready
+    ///     drive, denied access, an overlong path, or the OS error text as a last resort.
+    /// </summary>
+    /// <param name="directory">Directory to create.</param>
+    /// <param name="error">User-facing failure description when creation fails.</param>
+    /// <returns><see langword="true" /> when the directory exists afterwards.</returns>
+    internal static bool TryCreateDirectory(string directory, out string error)
+    {
+        error = string.Empty;
+        try
+        {
+            if (Directory.Exists(directory)) return true;
+
+            Directory.CreateDirectory(directory);
+            return true;
+        }
+        catch (Exception ex)
+            when (ex
+                is IOException
+                    or UnauthorizedAccessException
+                    or NotSupportedException
+                    or ArgumentException
+            )
+        {
+            error = DescribeDirectoryFailure(directory, ex);
+            Logger.Verbose(ex, "Failed to create directory {Directory}", directory);
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Returns whether the volume holding <paramref name="directory" /> has at least
+    ///     <paramref name="requiredBytes" /> free. The check is skipped when the volume cannot be
+    ///     queried, so an unusual filesystem never blocks an operation that might succeed.
+    /// </summary>
+    /// <param name="directory">Directory whose volume is checked.</param>
+    /// <param name="requiredBytes">Free space required, in bytes.</param>
+    /// <returns>True when the volume appears to have enough free space.</returns>
+    internal static bool HasFreeSpaceForDirectory(string directory, long requiredBytes)
+    {
+        if (requiredBytes <= 0) return true;
+
+        string? root = null;
+        try
+        {
+            root = Path.GetPathRoot(Path.GetFullPath(directory));
+        }
+        catch (Exception ex)
+        {
+            Logger.Verbose(ex, "Failed to resolve the volume of {Directory}", directory);
+        }
+
+        var freeBytes = GetAvailableFreeSpace(root);
+        return freeBytes <= 0 || freeBytes >= requiredBytes;
+    }
+
+    /// <summary>
+    ///     Builds a user-facing explanation for a directory that could not be created. A failed
+    ///     operation on a removed, unready or read-only drive is the common case in reports
+    ///     ("Could not find a part of the path 'F:\'", "The device is not ready"), and naming the
+    ///     drive is far more actionable than the raw exception text.
+    /// </summary>
+    /// <param name="directory">Directory that could not be created.</param>
+    /// <param name="exception">The failure raised by the filesystem.</param>
+    /// <returns>A description suitable for an activity-log line.</returns>
+    private static string DescribeDirectoryFailure(string directory, Exception exception)
+    {
+        string? root = null;
+        try
+        {
+            root = Path.GetPathRoot(Path.GetFullPath(directory));
+        }
+        catch (Exception ex)
+        {
+            Logger.Verbose(ex, "Failed to resolve the volume of {Directory}", directory);
+        }
+
+        if (exception is UnauthorizedAccessException)
+            return root is null ? "access was denied" : $"access to {root} was denied";
+
+        if (
+            exception is DirectoryNotFoundException or DriveNotFoundException
+            || !IsDriveReady(root)
+        )
+        {
+            return root is null
+                ? "the folder does not exist"
+                : $"the drive {root} is not available or is not ready";
+        }
+
+        if (exception is PathTooLongException)
+            return "the path is too long for the file system";
+
+        return exception.Message;
+    }
+
+    /// <summary>
+    ///     Returns whether the volume rooted at <paramref name="root" /> is ready. An unknown
+    ///     state reports ready so callers never blame the drive for an unrelated failure.
+    /// </summary>
+    /// <param name="root">Drive/volume root to test.</param>
+    /// <returns>False only when the volume is known to be unavailable.</returns>
+    private static bool IsDriveReady(string? root)
+    {
+        if (string.IsNullOrEmpty(root)) return true;
+
+        try
+        {
+            return new DriveInfo(root).IsReady;
+        }
+        catch (Exception ex)
+        {
+            Logger.Verbose(ex, "Failed to query readiness of {Root}", root);
+            return true;
+        }
+    }
+
+    /// <summary>
     ///     Returns the free bytes on the volume containing <paramref name="root" />, or 0 when it
     ///     cannot be queried.
     /// </summary>

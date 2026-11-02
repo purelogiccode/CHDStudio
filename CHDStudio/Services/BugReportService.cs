@@ -150,9 +150,22 @@ internal class BugReportService
         "chdman terminated abnormally",
         // The output folder's drive is gone (USB unplugged, network drive dropped).
         "output folder is not available",
+        "temporary folder is not available",
+        // The same condition reaching the generic conversion path: a removed, unready or
+        // read-only drive while writing the output or a temporary file.
+        "could not be read or written",
+        "The device is not ready",
+        "Could not find a part of the path",
+        "The system cannot find the drive specified",
         // Writing into the output folder is denied (root of C:\, "Program Files", read-only
         // drive); the app already shows one actionable dialog per batch start.
         "output folder is not writable",
+        // The output volume could not be written while extracting a CHD (full, disconnected,
+        // read-only or access-denied). CHDSharp reports this as Chderrwriteerror; the app
+        // classifies it as an environment condition.
+        "Could not write the extracted files",
+        // Explicit permission guidance for a conversion whose output folder rejects writes.
+        "failed due to a permission error",
         // Direct-stream extraction over a network share can hit a transient SMB hiccup
         // ("An unexpected network error occurred." / French "Erreur réseau inattendue.");
         // the extractor retries via a local temp copy, so this intermediate notice is
