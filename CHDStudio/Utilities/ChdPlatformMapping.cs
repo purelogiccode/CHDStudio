@@ -21,7 +21,7 @@ internal static class ChdPlatformMapping
             var info = DiscDetector.DetectChd(chdPath, parentPath);
             return info.Platform == DiscPlatform.Unknown ? null : info;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return null;
         }

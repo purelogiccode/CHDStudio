@@ -108,7 +108,7 @@ internal static class ChdCompressionPresets
         {
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return null;
         }

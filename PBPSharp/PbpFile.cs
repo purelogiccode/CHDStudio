@@ -111,18 +111,23 @@ public sealed class PbpFile : IDisposable
         if (!File.Exists(path))
             return PbpError.FileNotFound;
 
+        FileStream? stream = null;
         try
         {
-            var stream = File.OpenRead(path);
+            stream = File.OpenRead(path);
             var error = Open(stream, true, out pbp);
-            if (error != PbpError.None)
-                stream.Dispose();
+            if (error == PbpError.None)
+                stream = null;
             return error;
         }
         catch (IOException ex)
         {
             PbpDiagnostics.SetDetail($"Failed to open '{path}': {ex.Message}");
             return PbpError.IoError;
+        }
+        finally
+        {
+            stream?.Dispose();
         }
     }
 
@@ -186,7 +191,7 @@ public sealed class PbpFile : IDisposable
             PbpDiagnostics.SetDetailIfEmpty($"the PBP structure is invalid: {ex.Message}");
             return PbpError.CorruptFile;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // An unexpected shape or a parser bug must not surface as a bare error code: the
             // report needs the exception type and message to be actionable.

@@ -73,18 +73,17 @@ internal static class PathUtils
             Logger.Verbose(ex, "Failed to create a temp directory under the system temp path");
         }
 
+        var tempName = $"{tempDirPrefix}{guid}";
         foreach (
-            var drive in DriveInfo
+            var candidate in DriveInfo
                 .GetDrives()
                 .Where(static d => d is { DriveType: DriveType.Fixed, IsReady: true })
                 .OrderByDescending(static d => d.AvailableFreeSpace)
+                .Select(d =>
+                    Path.Join(TrimRootSeparator(d.RootDirectory.FullName), "CHDStudio_Temp", tempName)
+                )
         )
         {
-            var candidate = Path.Combine(
-                TrimRootSeparator(drive.RootDirectory.FullName),
-                "CHDStudio_Temp",
-                $"{tempDirPrefix}{guid}"
-            );
             try
             {
                 Directory.CreateDirectory(candidate);
@@ -560,6 +559,9 @@ internal static class PathUtils
             root = Path.GetPathRoot(Path.GetFullPath(directory));
         }
         catch (Exception ex)
+            when (ex is ArgumentException or IOException or NotSupportedException
+                or UnauthorizedAccessException
+            )
         {
             Logger.Verbose(ex, "Failed to resolve the volume of {Directory}", directory);
         }
@@ -585,6 +587,9 @@ internal static class PathUtils
             root = Path.GetPathRoot(Path.GetFullPath(directory));
         }
         catch (Exception ex)
+            when (ex is ArgumentException or IOException or NotSupportedException
+                or UnauthorizedAccessException
+            )
         {
             Logger.Verbose(ex, "Failed to resolve the volume of {Directory}", directory);
         }
@@ -623,6 +628,7 @@ internal static class PathUtils
             return new DriveInfo(root).IsReady;
         }
         catch (Exception ex)
+            when (ex is ArgumentException or IOException or UnauthorizedAccessException)
         {
             Logger.Verbose(ex, "Failed to query readiness of {Root}", root);
             return true;
@@ -644,6 +650,7 @@ internal static class PathUtils
             return drive.IsReady ? drive.AvailableFreeSpace : 0;
         }
         catch (Exception ex)
+            when (ex is ArgumentException or IOException or UnauthorizedAccessException)
         {
             Logger.Verbose(ex, "Failed to query free space for {Root}", root);
             return 0;

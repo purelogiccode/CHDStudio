@@ -1816,8 +1816,8 @@ internal partial class MainWindow : Window, IDisposable
             var includeSubfolders = SearchSubfoldersVerificationCheckBox.IsChecked ?? false;
             var moveSuccess = MoveSuccessFilesCheckBox.IsChecked ?? false;
             var moveFailed = MoveFailedFilesCheckBox.IsChecked ?? false;
-            var successFolder = moveSuccess ? Path.Combine(inputFolder, "Success") : string.Empty;
-            var failedFolder = moveFailed ? Path.Combine(inputFolder, "Failed") : string.Empty;
+            var successFolder = moveSuccess ? Path.Join(inputFolder, "Success") : string.Empty;
+            var failedFolder = moveFailed ? Path.Join(inputFolder, "Failed") : string.Empty;
             var parentPath = VerificationParentChdTextBox.Text;
             var autoDetectParent = AutoDetectVerificationParentCheckBox.IsChecked ?? true;
             var repairHeaderHashes = RepairHeaderHashesCheckBox.IsChecked ?? false;
@@ -2020,7 +2020,7 @@ internal partial class MainWindow : Window, IDisposable
 
             return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return null;
         }
@@ -2051,7 +2051,7 @@ internal partial class MainWindow : Window, IDisposable
 
             return files.Count > 0 ? files[0].TryGetLocalPath() : null;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return null;
         }
@@ -3528,7 +3528,7 @@ internal partial class MainWindow : Window, IDisposable
         );
         var targetDir = string.Equals(relativePath, ".", StringComparison.Ordinal)
             ? outputFolder
-            : Path.Combine(outputFolder, relativePath);
+            : Path.Join(outputFolder, relativePath);
 
         return Path.Combine(targetDir, PathUtils.SanitizeFileName(chdBase) + FileExtensions.Chd);
     }
@@ -3615,12 +3615,12 @@ internal partial class MainWindow : Window, IDisposable
             (".", ".") => ".",
             (".", _) => innerRelative,
             (_, ".") => archiveRelative,
-            _ => Path.Combine(archiveRelative, innerRelative)
+            _ => Path.Join(archiveRelative, innerRelative)
         };
 
         var targetDir = string.Equals(relativePath, ".", StringComparison.Ordinal)
             ? outputFolder
-            : Path.Combine(outputFolder, relativePath);
+            : Path.Join(outputFolder, relativePath);
         var chdBase = Path.GetFileNameWithoutExtension(extractedFilePath);
         return Path.Combine(targetDir, PathUtils.SanitizeFileName(chdBase) + FileExtensions.Chd);
     }
@@ -5707,7 +5707,7 @@ internal partial class MainWindow : Window, IDisposable
         );
         var targetDir = string.Equals(relativePath, ".", StringComparison.Ordinal)
             ? outputFolder
-            : Path.Combine(outputFolder, relativePath);
+            : Path.Join(outputFolder, relativePath);
         if (!PathUtils.TryCreateDirectory(targetDir, out var targetDirError))
         {
             LogError($" Output folder is not available: {targetDir} ({targetDirError}).");
@@ -6087,7 +6087,7 @@ internal partial class MainWindow : Window, IDisposable
         CancellationToken token
     )
     {
-        var tempExtractDir = Path.Combine(
+        var tempExtractDir = Path.Join(
             targetDir,
             "_extract_temp_" + Guid.NewGuid().ToString("N")
         );
@@ -7231,7 +7231,7 @@ internal partial class MainWindow : Window, IDisposable
                 if (asciiInputFile != null && File.Exists(asciiInputFile))
                     await Task.Run(() => File.Delete(asciiInputFile), CancellationToken.None);
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // ignored
             }
@@ -7241,7 +7241,7 @@ internal partial class MainWindow : Window, IDisposable
                 if (asciiOutputFile != null && File.Exists(asciiOutputFile))
                     await Task.Run(() => File.Delete(asciiOutputFile), CancellationToken.None);
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // ignored
             }
@@ -8280,7 +8280,7 @@ internal partial class MainWindow : Window, IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Fall back to the compressed file size; the extraction itself reports the real error.
         }
@@ -9044,7 +9044,7 @@ internal partial class MainWindow : Window, IDisposable
                             {
                                 totalInputSize += new FileInfo(file).Length;
                             }
-                            catch
+                            catch (Exception ex) when (ex is not OutOfMemoryException)
                             {
                                 /* skip inaccessible files */
                             }
@@ -9118,7 +9118,7 @@ internal partial class MainWindow : Window, IDisposable
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception ex) when (ex is not OutOfMemoryException)
                     {
                         // Best effort - don't fail the operation if disk check itself fails
                     }

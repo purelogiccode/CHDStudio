@@ -79,24 +79,17 @@ internal static class ParentChdResolver
 
         try
         {
-            foreach (
-                var candidate in Directory.EnumerateFiles(
-                    directory,
-                    "*.chd",
-                    SearchOption.TopDirectoryOnly
-                )
-            )
-            {
-                if (string.Equals(candidate, childPath, StringComparison.OrdinalIgnoreCase))
-                    continue;
+            var candidate = Directory
+                .EnumerateFiles(directory, "*.chd", SearchOption.TopDirectoryOnly)
+                .Where(file => !string.Equals(file, childPath, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(file =>
+                    Chd.ReadHeader(file, out var candidateHeader) == ChdError.Chderrnone
+                    && candidateHeader is not null
+                    && MatchesParent(childHeader, candidateHeader)
+                );
 
-                if (Chd.ReadHeader(candidate, out var candidateHeader) != ChdError.Chderrnone)
-                    continue;
-                if (candidateHeader is null || !MatchesParent(childHeader, candidateHeader))
-                    continue;
-
+            if (candidate is not null)
                 return new Resolution(candidate, null, null, true);
-            }
         }
         catch (Exception ex)
             when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
@@ -160,17 +153,12 @@ internal static class ParentChdResolver
     /// <returns>True when the parent SHA-1 or MD5 matches.</returns>
     private static bool MatchesParent(ChdHeaderInfo childHeader, ChdHeaderInfo candidateHeader)
     {
-        if (
-            childHeader.ParentSha1 is { Length: 20 } parentSha1
-            && (
-                candidateHeader.Sha1 is { Length: 20 } sha1
-                && sha1.AsSpan().SequenceEqual(parentSha1)
-                || candidateHeader.RawSha1 is { Length: 20 } rawSha1
-                    && rawSha1.AsSpan().SequenceEqual(parentSha1)
-            )
-        )
+        if (childHeader.ParentSha1 is { Length: 20 } parentSha1)
         {
-            return true;
+            return candidateHeader.Sha1 is { Length: 20 } sha1
+                    && sha1.AsSpan().SequenceEqual(parentSha1)
+                || candidateHeader.RawSha1 is { Length: 20 } rawSha1
+                    && rawSha1.AsSpan().SequenceEqual(parentSha1);
         }
 
         return childHeader.ParentMd5 is { Length: 16 } parentMd5

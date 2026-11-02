@@ -213,7 +213,7 @@ internal partial class MainWindow
                 LogMessage("Recompression canceled.");
                 _wasCancelled = true;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 LogError(ex.Message, ex);
             }
@@ -222,7 +222,7 @@ internal partial class MainWindow
                 await FinishOperationAsync("Recompression");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             LogError("StartRecompressButton_Click error", ex);
         }
@@ -328,7 +328,7 @@ internal partial class MainWindow
         );
         var outputDirectory = string.Equals(relativeDirectory, ".", StringComparison.Ordinal)
             ? outputFolder
-            : Path.Combine(outputFolder, relativeDirectory);
+            : Path.Join(outputFolder, relativeDirectory);
         if (!PathUtils.TryCreateDirectory(outputDirectory, out var outputDirectoryError))
         {
             LogError(
@@ -337,7 +337,7 @@ internal partial class MainWindow
             return false;
         }
 
-        var destination = Path.Combine(outputDirectory, Path.GetFileName(sourcePath));
+        var destination = Path.Join(outputDirectory, Path.GetFileName(sourcePath));
         if (
             string.Equals(
                 Path.GetFullPath(destination),
@@ -346,13 +346,13 @@ internal partial class MainWindow
             )
         )
         {
-            destination = Path.Combine(
+            destination = Path.Join(
                 outputDirectory,
                 Path.GetFileNameWithoutExtension(sourcePath) + ".recompressed.chd"
             );
         }
 
-        var staging = Path.Combine(
+        var staging = Path.Join(
             outputDirectory,
             Path.GetFileNameWithoutExtension(destination)
                 + "."
@@ -474,7 +474,7 @@ internal partial class MainWindow
             TryBestEffortDelete(staging);
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             TryBestEffortDelete(staging);
             LogError($" Failed to recompress '{Path.GetFileName(sourcePath)}': {ex.Message}");
