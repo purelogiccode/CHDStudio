@@ -108,7 +108,7 @@ public class RetryingFileOperationsTests : IDisposable
         var path = Path.Combine(_tempDir, "released.bin");
         await File.WriteAllTextAsync(path, "data");
         var attempts = 0;
-        using var lockStream = new FileStream(
+        var lockStream = new FileStream(
             path,
             FileMode.Open,
             FileAccess.Read,
@@ -215,7 +215,7 @@ public class RetryingFileOperationsTests : IDisposable
         var dest = Path.Combine(_tempDir, "move-released-dst.bin");
         await File.WriteAllTextAsync(source, "data");
         var attempts = 0;
-        using var lockStream = new FileStream(
+        var lockStream = new FileStream(
             source,
             FileMode.Open,
             FileAccess.Read,

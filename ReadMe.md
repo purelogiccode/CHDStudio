@@ -50,7 +50,7 @@
 
 ### 🛠️ Intelligent Conversion & Extraction
 *   **Automated Batch Processing**: Convert entire directories of disk images with real-time progress monitoring and immediate cancellation response.
-*   **chdman Primary Encoding (Windows)**: On Windows conversions run on the bundled `chdman`, the reference MAME CHD encoder. If chdman is missing or fails, the conversion automatically falls back to the built-in [CHDSharp](https://www.nuget.org/packages/CHDSharp) encoder (CHDSharpLib v1.6.0) running in-process — the project's own managed CHD encoder, whose output is byte-identical to `chdman` (verified across a 56-disc battle corpus). On Linux and macOS the built-in CHDSharp encoder is always used. An encoder always exists, so a batch never refuses to start for a missing encoder.
+*   **chdman Primary Encoding (Windows)**: On Windows conversions run on the bundled `chdman`, the reference MAME CHD encoder. If chdman is missing or fails, the conversion automatically falls back to the built-in [CHDSharp](https://www.nuget.org/packages/CHDSharp) encoder (CHDSharpLib v1.6.1) running in-process — the project's own managed CHD encoder, whose output is byte-identical to `chdman` (verified across a 56-disc battle corpus). On Linux and macOS the built-in CHDSharp encoder is always used. An encoder always exists, so a batch never refuses to start for a missing encoder.
 *   **Recursive Structure Preservation**: Maintains your original directory hierarchy in the output folder when processing subfolders.
 *   **Robust Extraction**: Supports extracting CHD files back to **.cue (CD)**, **.iso (DVD)**, **.gdi (Dreamcast/Naomi)**, **.img (HDD)**, and **.avi (laserdisc A/V)** with intelligent flag-based auto-detection using the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library. CD/GDI extraction writes cooked sectors like `chdman extractcd` (subcode omitted, audio byte-swapped), so BINs stay Redump-identical. A/V (laserdisc) CHDs extract **in-process** with CHDSharp's MAME-parity AVI writer, so they no longer need `chdman`; if the built-in reader cannot decode a CHD (corrupt file or an unsupported variant), extraction automatically falls back to `chdman` — including `extractld` (AVI) / `extractraw` for laserdisc CHDs.
 *   **Laserdisc A/V Support**: `.avi` laserdisc captures (Daphne-style dumps) convert with `createld` — the A/V `avhu` codec (delta-RLE Huffman video + mono FLAC audio), one frame per hunk — through the built-in CHDSharp encoder on every platform, with output that is byte-identical to `chdman createld`.
@@ -89,9 +89,12 @@ A file's extension is the least reliable thing about it. Every input is identifi
 *   **chdman-Safe Path Handling**: Non-ASCII characters anywhere along a path (`C:\Users\Kauê Chacon\...`, `D:\Emulátory\...`) and paths at or beyond the 260-character MAX_PATH limit are routed through short ASCII staging directories — older chdman builds mangle or cannot open such paths and fail with a misleading "No such file or directory". Cue work directories avoid a non-ASCII system temp folder the same way.
 *   **Crash-Aware Error Reporting**: When Windows kills chdman outright (e.g. exit code `-1073741795` = `0xC000001D`, illegal instruction — typically an older CPU missing instructions the bundled build requires), the built-in CHDSharp encoder takes over automatically and the crash is decoded into plain language with actionable guidance. A startup check warns when the bundled chdman cannot run, and startup logs record the process/OS architectures plus which tool binary was selected.
 *   **Safe Deletion**: Source files (and their dependencies like `.bin`, `.sub`, etc.) are only deleted if the conversion/extraction is confirmed successful.
-*   **Batch Verification**: Validate the checksums and structural integrity of existing CHD files using the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library.
+*   **Batch Verification**: Validate the checksums and structural integrity of existing CHD files using the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library. Differential child CHDs can be verified against a selected or auto-detected parent, and standalone V3-V5 files can repair mismatched header hash fields (`chdman verify --fix` parity).
+*   **Parent/Child CHD Support**: Open, verify, extract, hash and inspect differential child CHDs by selecting the parent or letting the app find it by SHA-1/MD5 in the child's folder. The Recompress tab consolidates a child and its parent into a standalone CHD.
+*   **Recompress & Codec Selection**: Recompress existing CHDs with the chdman-compatible defaults, the smallest codec set (zstd/cdzs), the most compatible set (zlib/cdzl), a per-platform auto preset, or no compression. The same presets are available for new conversions, and legacy CD/GD metadata can be upgraded during recompression.
+*   **Platform Detection**: The Explorer detects the disc platform from sector content, preselects the matching file-system parser, and shows the detected title and serial in Image Info. Conversion logs the detected platform when the Auto codec preset is selected.
 *   **Optional Checksum Reports**: Write a `<name>.checksums.txt` next to each verified CHD with the whole-image SHA-1, CRC-32 and XXH3-64 plus per-track SHA-1, CRC-32 and XXH3-64 for CD/GD-ROM images. The whole-image hashes cover the decompressed image (not the CHD header's combined hash), the report follows the file into the `Success` folder, and a write failure is only a warning.
-*   **CHD Image Info**: The Explorer's **Image Info** expander shows a read-only report built from the CHD header and map — version, hunk/unit sizes, logical size, image type, codecs, metadata tags, the CD/GD-ROM track table and the per-codec hunk distribution (capped at the first 1,000,000 hunks).
+*   **CHD Image Info**: The Explorer's **Image Info** expander shows a read-only report built from the CHD header and map — version, hunk/unit sizes, logical size, unit count, header/map/metadata offsets, raw and combined SHA-1, image type, codecs, metadata tags, the CD/GD-ROM track table (including pregap/postgap/start/padding), the per-codec hunk distribution with stored bytes, and the detected platform/title/serial (capped at the first 1,000,000 hunks).
 *   **Automated Organization**: Optionally move verified or failed files into dedicated subfolders (`Success`/`Failed`) while ignoring these special folders during subsequent scans.
 *   **Cleanup**: Automatically removes empty subdirectories left behind after files are moved or deleted.
 *   **Dependency Protection**: Performs a dependency check on startup and notifies you on Windows when `chdman.exe` is missing; every conversion then runs on the built-in CHDSharp encoder, so conversion never fails for a missing encoder. If the release archive was not fully extracted, a startup guard names the missing native rendering libraries and writes `startup-error.log` instead of crashing.
@@ -106,6 +109,7 @@ A file's extension is the least reliable thing about it. Every input is identifi
 *   **Live Tool Output**: Every `chdman` output line reaches the activity log, progress included, with completion lines marked with a check; the built-in CHDSharp encoder/reader logs progress every 10% for conversion, verification, extraction and hashing.
 *   **Optimized Logging**: Log lines are batched, each line is capped at 2,000 characters, at most 200 lines are appended per UI flush, and the on-screen text is capped — so a very large log never freezes the window during long-running tasks. The rolling file sink rotates at 10 MB.
 *   **Read-ahead Extraction**: CHDSharp pre-decompresses the next 16 hunks in the background while extracting, overlapping decompression with the disk writes.
+*   **Responsive Archive Extraction**: Drive probing and ZIP central-directory sizing run off the UI thread, network drives are filtered before readiness checks, and ZIP extraction reports progress every 10% with cancellation checks inside each entry. A disconnected network drive can no longer freeze the window for the SMB timeout before an archive starts.
 *   **AppData Storage**: Logs are stored under `%LocalAppData%\CHDStudio\logs` and F8 screenshots under `%LocalAppData%\CHDStudio\screenshots` (a `screenshots` folder next to the app is the fallback when AppData is not writable). The title-bar **AppData** button opens the folder. Temporary work folders prefer the system temp directory and only fall back to a `CHDStudio_Temp` folder on a drive root when the system temp path is unusable for chdman; empty fallback folders are cleaned up automatically.
 *   **Donate Button**: The title bar links straight to the project's donation page, left of the About button.
 *   **Avalonia Theming**: Modern dark-themed UI powered by [Avalonia](https://avaloniaui.net/) 12.1 with its Fluent theme, a static dark background, rounded corners, and a custom title bar.
@@ -159,11 +163,11 @@ Generated cue sheets reference the disc image where it already lies rather than 
 *   **Bundled Dependencies**:
     *   `chdman.exe` / `chdman_arm64.exe` (MAME Project — primary encoder on Windows, extraction fallback)
     *   `7za.exe` / `7za_arm64.exe` (Windows) or `7zz` (official 7-Zip 26.03, Linux/macOS) — 7-Zip fallback extraction
-*   **Built-in Encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.6.0) runs in-process on every platform — the automatic fallback behind chdman on Windows and the primary encoder on Linux/macOS.
+*   **Built-in Encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.6.1) runs in-process on every platform — the automatic fallback behind chdman on Windows and the primary encoder on Linux/macOS.
 *   **No Other Dependencies**: every format above is handled inside the application. There is nothing else to download, and both x64 and ARM64 get the same feature set.
 *   **Library Dependencies**:
     * [Avalonia](https://avaloniaui.net/) (v12.1.4) — Cross-platform Fluent Design UI framework and controls
-    * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.6.0) - Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
+    * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.6.1) - Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
     * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.2) — Pure C# CSO/CISO decompression (deflate + LZ4)
     * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.7) - Pure C# PBP extraction and SFO parsing
     * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.2) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
@@ -205,9 +209,11 @@ CHDStudio.exe "C:\ROMs\MyGames"
 3.  Select your **Output Folder**.
 4.  *(Optional)* Check "Process smaller files first" to sort by file size.
 5.  *(Optional)* Check "Force CD" or "Force DVD" to override automatic command detection.
-6.  *(Optional)* Set a time limit per file to abort conversions that exceed the specified duration.
-7.  *(Optional)* Enable "Delete original files" to clean up source data after a successful conversion.
-8.  Click **Start Conversion**.
+6.  *(Optional)* Choose a **Compression** preset (Default, Smallest, Most compatible, Auto or Uncompressed).
+7.  *(Optional)* Enable **Create a delta (child) CHD against a parent** and select the parent CHD.
+8.  *(Optional)* Set a time limit per file to abort conversions that exceed the specified duration.
+9.  *(Optional)* Enable "Delete original files" to clean up source data after a successful conversion.
+10. Click **Start Conversion**.
 
 ### Extraction Workflow
 1.  Navigate to the **Extract CHD Files** tab.
@@ -216,14 +222,25 @@ CHDStudio.exe "C:\ROMs\MyGames"
 4.  Choose the desired output format (Auto-detect, CD `.cue`, DVD `.iso`, Dreamcast `.gdi`, HDD `.img`, Laserdisc `.avi`).
 5.  *(Optional)* Enable "Include subfolders" to process nested directories.
 6.  *(Optional)* Enable "Delete original CHD files" to clean up after successful extraction.
-7.  Click **Start Extraction**.
+7.  *(Optional)* For a differential child CHD, select its **Parent CHD** or leave auto-detection enabled.
+8.  Click **Start Extraction**.
 
 ### Verification Workflow
 1.  Navigate to the **Verify CHD Files** tab.
 2.  Select the folder containing your `.chd` files.
 3.  Configure folder organization options (Success/Failed folders).
 4.  *(Optional)* Enable "Write a checksum report (.checksums.txt) next to each verified CHD".
-5.  Click **Start Verification**.
+5.  *(Optional)* For a differential child CHD, select its **Parent CHD** or leave auto-detection enabled.
+6.  *(Optional)* Enable "Repair header hashes when verification finds a mismatch".
+7.  Click **Start Verification**.
+
+### Recompression Workflow
+1.  Navigate to the **Recompress CHD** tab.
+2.  Select the folder containing `.chd` files and an output folder.
+3.  Choose a **Compression** preset.
+4.  *(Optional)* For a child CHD, select its **Parent CHD** or leave auto-detection enabled; the output is written as a standalone CHD.
+5.  *(Optional)* Enable deep verification, legacy metadata upgrade, or deleting the original after success.
+6.  Click **Start Recompression**.
 
 ---
 

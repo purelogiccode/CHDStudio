@@ -13,7 +13,7 @@ This page covers the internals of the two CHD-consuming workflows. References ar
 
 ### Entry & batch loop
 
-`StartExtractionButton_ClickAsync` (`:693`) validates paths, reads options (subfolders, delete original), and calls `PerformBatchExtractionAsync` (`:1355`), which runs `CheckDiskSpace` (extraction mode: warns when output free space < total input size) and then loops per file with `ExtractChdAsync` (`:2123`).
+`StartExtractionButton_ClickAsync` (`:693`) validates paths, reads options (subfolders, delete original, optional parent CHD and auto-detection), and calls `PerformBatchExtractionAsync` (`:1355`), which runs `CheckDiskSpaceAsync` off the UI thread (extraction mode: warns when output free space < total input size) and then loops per file with `ExtractChdAsync` (`:2123`). Each file is resolved with `ParentChdResolver` first; a child without a parent fails with a clear message instead of a bare `Chderrrequiresparent`. The built-in reader opens the file with `ChdFile.Open(chd, parentPath, ...)`, laserdisc extraction uses the parent-aware `ExtractLaserDisc` overload, and the chdman fallback adds `-ip <parent>`.
 
 ### Format selection
 
@@ -69,6 +69,10 @@ When the detected command is `extractld` (or the user forced **Laserdisc (.avi)*
 
 Before extracting, the app calls `chd.ConfigureReadAhead(16)` (`ExtractionReadAheadHunks`): CHDSharp pre-decompresses the next 16 hunks in the background on its own workers, so sequential reads are not gated on one hunk at a time. This applies to the single-file (DVD/HDD) and multi-track (CD/GDI) paths; the laserdisc writer opens its own reader inside CHDSharp.
 
+### Archive extraction responsiveness
+
+Archive preflight no longer runs on the UI thread. `PathUtils.GetBestTempDirectory` only considers the input, output and system-temp drives, filters `DriveType.Network` before touching `IsReady`, and therefore cannot stall on a disconnected mapped drive. `ArchiveService.CheckTempDiskSpaceAsync` computes the ZIP uncompressed size in `Task.Run`, and `ExtractZipWithOpenRead` copies each entry with a cancellation check and reports `ArchiveProgress` bytes/entries. `ArchiveProgressLogger` logs every 10%, so a long ZIP extraction visibly updates the log instead of looking frozen until it finishes. This was the cause of the repeated ~21-second stalls in batches whose input folder sat beside a disconnected network drive.
+
 ### CHD open failures
 
 `ChdFile.Open` errors are logged with the CHDSharp message and the file is marked failed; the batch continues. Typical messages: "Not a valid CHD file" (bad magic), "Invalid or corrupt data" (structure broken), "Cannot open file" (locked/unreadable). These are user-data conditions — the app never crashes on them and they are excluded from bug reports (see [Bug Reporting System](09-bug-reporting.md)).
@@ -93,13 +97,13 @@ The CHDSharp failure is reported to the bug API **only when the chdman fallback 
 
 ### VerifyChdAsync
 
-`VerifyChdAsync` opens the file read-only and calls `Chd.CheckFile(stream, fileName, true, progress)` (CHDSharp, in-process — **no** chdman process), logging `CHDSHARP: Verifying, N% complete...` every 10%. On success it logs `V{version} — SHA1: {hex}` and returns the `ChdResult`; failures log `result.Error.GetMessage()` or the exception message. The per-file read speed is sampled via the read performance counter.
+`VerifyChdAsync` opens the file read-only and calls `Chd.CheckFile(stream, fileName, true, progress, token)` for a standalone CHD (CHDSharp, in-process - **no** chdman process), logging `CHDSHARP: Verifying, N% complete...` every 10%. A differential child is resolved with `ParentChdResolver` and verified with `Chd.CheckFileWithParent`; when header repair is enabled, standalone V3-V5 files use `Chd.CheckFileAndRepair` (`chdman verify --fix` parity), while child files skip repair because their data comes from the parent. On success it logs `V{version} - SHA1: {hex}` and returns the `ChdResult`; failures log `result.Error.GetMessage()` or the exception message. The per-file read speed is sampled via the read performance counter.
 
 Verify checks internal consistency (decompression plus header hashes), not Redump correctness: a CHD rebuilt from a bad extraction is self-consistent and still verifies (see 3.9.4 / issue #11). The logged SHA1 is the header's combined hash, not the file hash shown by 7-Zip.
 
 ### Checksum report
 
-When **Write a checksum report** is enabled, `ChdChecksumReport.Write` (`Utilities/ChdChecksumReport.cs`) runs `Chd.ComputeHashes` with `ChdHashType.Sha1 | Crc32 | Xxh3`, writing `<name>.checksums.txt` next to the verified CHD (after the move, so it follows the file). CD/GD-ROM images get one block per track plus the whole-image hashes; other types get the whole-image hashes. `perTrack: true` returns only the per-track entries for a CD, so the whole-image hashes are computed in a second `perTrack: false` pass — the report's top SHA-1/CRC-32/XXH3-64 then describe the decompressed image itself rather than the CHD header's combined SHA-1 (which would not match a hash of the extracted data). A report failure is logged as a warning and never fails the verification.
+When **Write a checksum report** is enabled, `ChdChecksumReport.Write` (`Utilities/ChdChecksumReport.cs`) runs `Chd.ComputeHashes` with `ChdHashType.Sha1 | Crc32 | Xxh3`, passing the resolved parent path for a child CHD, and writes `<name>.checksums.txt` next to the verified CHD (after the move, so it follows the file). CD/GD-ROM images get one block per track plus the whole-image hashes; other types get the whole-image hashes. `perTrack: true` returns only the per-track entries for a CD, so the whole-image hashes are computed in a second `perTrack: false` pass — the report's top SHA-1/CRC-32/XXH3-64 then describe the decompressed image itself rather than the CHD header's combined SHA-1 (which would not match a hash of the extracted data). A report failure is logged as a warning and never fails the verification.
 
 ### Moving verified files
 

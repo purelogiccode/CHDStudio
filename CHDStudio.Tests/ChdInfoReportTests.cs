@@ -94,4 +94,27 @@ public class ChdInfoReportTests : IDisposable
 
         Assert.Contains("could not be read", report, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Build_ReportsRicherHeaderAndHunkDetails()
+    {
+        File.WriteAllBytes(PathFor("details.iso"), new byte[2048 * 64]);
+        var chdPath = PathFor("details.chd");
+        ChdSharpEncoderService.Encode(
+            "createdvd",
+            PathFor("details.iso"),
+            chdPath,
+            false,
+            2,
+            CancellationToken.None
+        );
+
+        var report = ChdInfoReport.Build(chdPath);
+
+        Assert.Contains("Raw SHA-1:", report, StringComparison.Ordinal);
+        Assert.Contains("Unit count:", report, StringComparison.Ordinal);
+        Assert.Contains("Map offset:", report, StringComparison.Ordinal);
+        Assert.Contains("Hunks:", report, StringComparison.Ordinal);
+        Assert.Contains("Codecs:", report, StringComparison.Ordinal);
+    }
 }

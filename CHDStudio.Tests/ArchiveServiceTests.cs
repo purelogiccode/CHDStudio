@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using CHDStudio.Models;
 using CHDStudio.Services;
 using SharpCompress.Common;
 using SharpCompressZipArchive = SharpCompress.Archives.Zip.ZipArchive;
@@ -52,6 +53,45 @@ public class ArchiveServiceTests : IDisposable
                 && msg.Contains("missing", StringComparison.OrdinalIgnoreCase)
         );
         Assert.Contains("File not found", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExtractArchiveAsyncZipReportsProgress()
+    {
+        var service = new ArchiveService("7za.exe", false);
+        var zipPath = Path.Combine(_tempDir, "progress.zip");
+        var tempDir = Path.Combine(_tempDir, "progress-extract");
+        Directory.CreateDirectory(tempDir);
+
+        await using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("game.iso");
+            await using var stream = entry.Open();
+            stream.Write(new byte[4096]);
+        }
+
+        var reports = new List<ArchiveProgress>();
+        var progress = new InlineProgress<ArchiveProgress>(reports.Add);
+
+        var result = await service.ExtractArchiveAsync(
+            zipPath,
+            tempDir,
+            static _ => { },
+            CancellationToken.None,
+            progress: progress
+        );
+
+        Assert.True(result.Success);
+        Assert.NotEmpty(reports);
+        Assert.Contains(reports, static report => report.ProcessedBytes > 0);
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value)
+        {
+            report(value);
+        }
     }
 
     [Fact]

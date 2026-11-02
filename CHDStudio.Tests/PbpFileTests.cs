@@ -1290,7 +1290,6 @@ public class PbpFileTests : IDisposable
         Assert.True(stream.CanSeek);
         stream.Seek(0, SeekOrigin.Begin);
         Assert.Equal(0, stream.ReadByte());
-        stream.Dispose();
     }
 
     [Fact]

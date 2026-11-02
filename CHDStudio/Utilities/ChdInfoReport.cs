@@ -24,8 +24,9 @@ internal static class ChdInfoReport
     ///     failed opens are reported in the text.
     /// </summary>
     /// <param name="chdPath">Path of the CHD image.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <returns>The multi-line report text.</returns>
-    internal static string Build(string chdPath)
+    internal static string Build(string chdPath, string? parentPath = null)
     {
         var builder = new StringBuilder();
         builder.Append("File:        ").AppendLine(Path.GetFileName(chdPath));
@@ -47,14 +48,28 @@ internal static class ChdInfoReport
             .AppendLine(header.TotalHunks.ToString("N0", CultureInfo.InvariantCulture));
         builder.Append("Logical:     ").AppendLine(FormatBytes(header.TotalBytes));
         builder.Append("Unit size:   ").AppendLine(FormatBytes(header.UnitBytes));
+        builder
+            .Append("Unit count:  ")
+            .AppendLine(header.UnitCount.ToString("N0", CultureInfo.InvariantCulture));
+        builder.Append("Header:      ").AppendLine(FormatBytes(header.Length));
+        builder.Append("Flags:       ").AppendLine($"0x{header.Flags:X8}");
         builder.Append("SHA-1:       ").AppendLine(HexOrUnavailable(header.Sha1));
+        builder.Append("Raw SHA-1:   ").AppendLine(HexOrUnavailable(header.RawSha1));
         builder.Append("MD5:         ").AppendLine(HexOrUnavailable(header.Md5));
         if (header.HasParent)
         {
             builder.Append("Parent SHA-1:").Append(' ').AppendLine(HexOrUnavailable(header.ParentSha1));
+            builder.Append("Parent MD5:  ").AppendLine(HexOrUnavailable(header.ParentMd5));
         }
 
-        var err = ChdFile.Open(chdPath, out var chd);
+        builder
+            .Append("Map offset:  ")
+            .AppendLine(header.MapOffset.ToString("N0", CultureInfo.InvariantCulture));
+        builder
+            .Append("Meta offset: ")
+            .AppendLine(header.MetaOffset.ToString("N0", CultureInfo.InvariantCulture));
+
+        var err = ChdFile.Open(chdPath, parentPath, out var chd);
         if (err != ChdError.Chderrnone || chd is null)
         {
             builder.AppendLine();
@@ -66,6 +81,15 @@ internal static class ChdInfoReport
         {
             builder.Append("Type:        ").AppendLine(DescribeType(chd));
             builder.Append("Codecs:      ").AppendLine(DescribeCodecs(chd));
+
+            var detection = ChdPlatformMapping.TryDetect(chdPath, parentPath);
+            if (detection is not null && detection.Platform != DiscPlatform.Unknown)
+            {
+                builder.AppendLine();
+                builder.Append("Detected platform:").AppendLine();
+                builder.Append(ChdPlatformMapping.Describe(detection));
+            }
+
             AppendMetadata(builder, chd);
             AppendTracks(builder, chd);
             AppendHunkDistribution(builder, chd);
@@ -145,13 +169,27 @@ internal static class ChdInfoReport
                 .Append("  ")
                 .Append(track.TrackNumber.ToString("D2", CultureInfo.InvariantCulture))
                 .Append(": ")
-                .Append(track.TrackType)
+                .Append(track.GetTypeString())
                 .Append(", ")
                 .Append(track.Frames.ToString("N0", CultureInfo.InvariantCulture))
                 .Append(" frames, ")
-                .Append(FormatBytes((ulong)((long)track.Frames * track.DataSize)));
+                .Append(FormatBytes((ulong)((long)track.Frames * track.DataSize)))
+                .Append(", start ")
+                .Append(track.StartFrame.ToString("N0", CultureInfo.InvariantCulture));
 
-            if (track.SubType != ChdSubType.None) builder.Append(", subcode ").Append(track.SubType);
+            if (track.SubType != ChdSubType.None)
+                builder.Append(", subcode ").Append(track.GetSubTypeString());
+            if (track.PreGap > 0)
+                builder.Append(", pregap ").Append(track.PreGap.ToString("N0", CultureInfo.InvariantCulture));
+            if (track.PostGap > 0)
+                builder.Append(", postgap ").Append(track.PostGap.ToString("N0", CultureInfo.InvariantCulture));
+            if (track.ExtraFrames > 0)
+                builder
+                    .Append(", padding ")
+                    .Append(track.ExtraFrames.ToString("N0", CultureInfo.InvariantCulture));
+            if (track.PadFrames > 0)
+                builder.Append(", pad ").Append(track.PadFrames.ToString("N0", CultureInfo.InvariantCulture));
+
             builder.AppendLine();
         }
     }
@@ -164,11 +202,15 @@ internal static class ChdInfoReport
         if (chd.HunkCount == 0) return;
 
         var scanCount = Math.Min(chd.HunkCount, MaxHunksToScan);
-        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var stats = new Dictionary<string, (long Hunks, long StoredBytes)>(StringComparer.Ordinal);
         for (uint i = 0; i < scanCount; i++)
         {
-            var name = chd.GetHunkCodecName(i);
-            counts[name] = counts.GetValueOrDefault(name) + 1;
+            var error = chd.GetHunkInfo(i, out var codec, out var compressedBytes);
+            if (error != ChdError.Chderrnone) continue;
+
+            var name = ChdFile.GetHunkCodecNameForCodec(codec);
+            var current = stats.GetValueOrDefault(name);
+            stats[name] = (current.Hunks + 1, current.StoredBytes + compressedBytes);
         }
 
         builder.AppendLine();
@@ -185,16 +227,19 @@ internal static class ChdInfoReport
 
         builder.AppendLine();
         foreach (
-            var count in counts
-                .OrderByDescending(static kv => kv.Value)
+            var entry in stats
+                .OrderByDescending(static kv => kv.Value.Hunks)
                 .ThenBy(static kv => kv.Key, StringComparer.Ordinal)
         )
         {
             builder
                 .Append("  ")
-                .Append(count.Key)
+                .Append(entry.Key)
                 .Append(": ")
-                .AppendLine(count.Value.ToString("N0", CultureInfo.InvariantCulture));
+                .Append(entry.Value.Hunks.ToString("N0", CultureInfo.InvariantCulture))
+                .Append(" hunks, ")
+                .Append(FormatBytes((ulong)entry.Value.StoredBytes))
+                .AppendLine();
         }
     }
 

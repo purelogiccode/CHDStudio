@@ -76,7 +76,7 @@ internal static class PathUtils
         foreach (
             var drive in DriveInfo
                 .GetDrives()
-                .Where(static d => d is { IsReady: true, DriveType: DriveType.Fixed })
+                .Where(static d => d is { DriveType: DriveType.Fixed, IsReady: true })
                 .OrderByDescending(static d => d.AvailableFreeSpace)
         )
         {
@@ -182,11 +182,13 @@ internal static class PathUtils
 
     /// <summary>
     ///     Returns the full path to a new unique temporary directory, selecting the drive
-    ///     with the most available free space from among the input file's drive,
-    ///     the output folder's drive, the system temp drive, and any other fixed drives.
-    ///     When <paramref name="requiredBytes" /> is specified, prefers a drive that has
-    ///     enough free space for the operation, even if it is not the drive with the most
-    ///     total free space. Falls back to the system temp path if no suitable alternative is found.
+    ///     with the most available free space from among the input file's drive, the output
+    ///     folder's drive and the system temp drive. Other drives are deliberately not probed:
+    ///     enumerating every volume can block for many seconds on a disconnected network drive
+    ///     or a sleeping external disk, and the UI thread calls this method before extraction.
+    ///     When <paramref name="requiredBytes" /> is specified, prefers a drive that has enough
+    ///     free space for the operation, even if it is not the drive with the most total free
+    ///     space. Falls back to the system temp path if no suitable alternative is found.
     /// </summary>
     internal static string GetBestTempDirectory(
         string? inputFilePath,
@@ -206,19 +208,6 @@ internal static class PathUtils
         if (!string.IsNullOrEmpty(systemTempRoot))
             candidates.Add(systemTempRoot);
 
-        foreach (var drive in DriveInfo.GetDrives())
-        {
-            try
-            {
-                if (drive is { IsReady: true, DriveType: DriveType.Fixed })
-                    candidates.Add(drive.RootDirectory.FullName);
-            }
-            catch
-            {
-                // ignored
-            }
-        }
-
         string? bestRoot = null;
         long bestFree = 0;
         string? bestRootMeetingRequirement = null;
@@ -229,23 +218,27 @@ internal static class PathUtils
             try
             {
                 var drive = new DriveInfo(root);
-                if (drive.IsReady && drive.DriveType != DriveType.Network)
-                {
-                    if (drive.AvailableFreeSpace > bestFree)
-                    {
-                        bestFree = drive.AvailableFreeSpace;
-                        bestRoot = root;
-                    }
 
-                    if (
-                        requiredBytes > 0
-                        && drive.AvailableFreeSpace >= requiredBytes
-                        && drive.AvailableFreeSpace > bestFreeMeetingRequirement
-                    )
-                    {
-                        bestFreeMeetingRequirement = drive.AvailableFreeSpace;
-                        bestRootMeetingRequirement = root;
-                    }
+                // Check DriveType before IsReady: a disconnected network mapping can make
+                // IsReady block until the SMB timeout, which is exactly the multi-second stall
+                // this method must never introduce on the UI thread.
+                if (drive.DriveType == DriveType.Network || !drive.IsReady)
+                    continue;
+
+                if (drive.AvailableFreeSpace > bestFree)
+                {
+                    bestFree = drive.AvailableFreeSpace;
+                    bestRoot = root;
+                }
+
+                if (
+                    requiredBytes > 0
+                    && drive.AvailableFreeSpace >= requiredBytes
+                    && drive.AvailableFreeSpace > bestFreeMeetingRequirement
+                )
+                {
+                    bestFreeMeetingRequirement = drive.AvailableFreeSpace;
+                    bestRootMeetingRequirement = root;
                 }
             }
             catch (Exception ex)
@@ -702,7 +695,7 @@ internal static class PathUtils
         {
             try
             {
-                if (drive is { IsReady: true, DriveType: DriveType.Fixed })
+                if (drive is { DriveType: DriveType.Fixed, IsReady: true })
                 {
                     var altPath = Path.Combine(
                         TrimRootSeparator(drive.RootDirectory.FullName),

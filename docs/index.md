@@ -16,7 +16,7 @@ This documentation covers the project from both a user and a developer perspecti
 | 1 | [Project Overview](01-overview.md) | Everyone | What the app does, key features, supported formats, content-based routing, technical logic |
 | 2 | [Getting Started](02-getting-started.md) | Users & devs | Requirements, installation, building from source, command line usage |
 | 3 | [Architecture](03-architecture.md) | Developers | Solution layout, projects, dependency graph, startup sequence, data flow |
-| 4 | [User Guide](04-user-guide.md) | Users | The four tabs: conversion, verification, extraction, Explorer; options and hotkeys |
+| 4 | [User Guide](04-user-guide.md) | Users | The five tabs: conversion, verification, extraction, recompression, Explorer; options and hotkeys |
 | 5 | [Conversion Pipeline (Technical)](05-conversion-pipeline.md) | Developers | Content resolution, per-format routing, chdman wrapper, cue normalization, ISZ/ECM/Alcohol/split sets, error handling |
 | 6 | [Extraction & Verification (Technical)](06-extraction-and-verification.md) | Developers | CHD extraction internals, verification, file moves, partial-extraction handling |
 | 7 | [Services Reference](07-services-reference.md) | Developers | ArchiveService, UpdateService, StatsService, FileWatcherService, AppHttpClient, more |
@@ -40,7 +40,7 @@ This documentation covers the project from both a user and a developer perspecti
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
 | **Primary encoder** | `chdman` (MAME Project, 0.289), bundled as `chdman.exe` / `chdman_arm64.exe` on Windows; built-in CHDSharp on Linux/macOS |
-| **Fallback encoder** | Built-in `CHDSharp` encoder (CHDSharpLib NuGet 1.6.0, in-process) - always available, chdman byte-identical output |
+| **Fallback encoder** | Built-in `CHDSharp` encoder (CHDSharpLib NuGet 1.6.1, in-process) - always available, chdman byte-identical output |
 | **External tools needed** | None beyond the bundled `chdman` (Windows) and 7-Zip (`7za` on Windows, `7zz` on Linux/macOS) — every input format is handled in-process |
 | **Output format** | `.chd` (Compressed Hunks of Data) |
 | **Logs** | `%LocalAppData%\CHDStudio\logs` |
@@ -61,7 +61,7 @@ CHDStudio/
 │   ├── Services/                   # Archive, BugReport, FileWatcher, Stats, Update, ...
 │   └── Utilities/                  # PathUtils, CueNormalizer, GameFileParser, ...
 │       └── Ecm/                    # in-process ECM decoding
-├── CHDStudio.Tests/        # xUnit test suite (1182 tests)
+├── CHDStudio.Tests/        # xUnit test suite (1228 tests)
 ├── CCDSharp/                       # CloneCD (.ccd/.img/.sub) parsing library
 ├── CSOSharp/                       # CSO/CISO decompression library (deflate + LZ4)
 ├── PBPSharp/                       # PlayStation PBP extraction + SFO parsing library

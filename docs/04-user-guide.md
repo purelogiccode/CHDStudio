@@ -5,7 +5,7 @@ nav_order: 5
 
 # 4. User Guide
 
-The main window has four tabs: **Convert to CHD**, **Verify CHD Files**, **Extract CHD Files**, and **Explorer**. A terminal-style log view sits on the right, stat cards and the progress bar at the bottom, and a status bar with the CHDSharp and CHDMAN encoder indicators at the very bottom.
+The main window has five tabs: **Convert to CHD**, **Verify CHD Files**, **Extract CHD Files**, **Recompress CHD**, and **Explorer**. A terminal-style log view sits on the right, stat cards and the progress bar at the bottom, and a status bar with the CHDSharp and CHDMAN encoder indicators at the very bottom.
 
 Title-bar buttons: **Donate** (opens the project's donation page), **About** (info dialog, scrollable), **AppData** (opens `%LocalAppData%\CHDStudio`), **Exit**.
 
@@ -29,6 +29,8 @@ Title-bar buttons: **Donate** (opens the project's donation page), **About** (in
 | **Process smaller files first** | Sorts the batch by ascending file size so quick conversions finish first. |
 | **Time limit per file** (minutes, default 15) | Aborts a single conversion that exceeds the limit; the file is marked failed and the batch continues. The app enforces a hard cap of 4 hours (`AppConfig.MaxConversionTimeoutHours`). |
 | **Force CD** / **Force DVD** | Overrides automatic command detection (`createcd` / `createdvd`). The two checkboxes are mutually exclusive. |
+| **Compression** | Codec preset for new CHDs: **Default** (chdman-compatible), **Smallest** (zstd/cdzs, requires a recent MAME/libchdr reader), **Most compatible** (zlib/cdzl), **Auto** (per-platform preset), or **Uncompressed** (raw/DVD/HDD only). |
+| **Create a delta (child) CHD against a parent** | Stores only the hunks that differ from the selected parent. The parent's hunk and unit sizes must match the selected command. |
 
 ### File list
 
@@ -66,11 +68,14 @@ Each file's encoder mode is chosen automatically (see [Technical Logic](01-overv
 1. **CHD Files** — select the folder containing `.chd` files.
 2. Enable **Search subfolders** if needed.
 3. Optionally enable **Move successful to 'Success' folder**, **Move failed to 'Failed' folder**, and/or **Write a checksum report (.checksums.txt) next to each verified CHD**.
-4. Click **Start Verification**.
+4. For a differential child CHD, select its **Parent CHD** or leave **Find the parent automatically in the child's folder** enabled. Child CHDs cannot be verified without their parent.
+5. Optionally enable **Repair header hashes when verification finds a mismatch** to rewrite only the V3-V5 header hash fields (`chdman verify --fix` parity). Child CHDs are verified against their parent and are not rewritten.
+6. Click **Start Verification**.
 
 ### Details
 
-- Verification is fully local: it uses the **CHDSharp** library (`Chd.CheckFile`) to check structural integrity and checksums — no `chdman` process is launched.
+- Verification is fully local: it uses the **CHDSharp** library (`Chd.CheckFile`, `Chd.CheckFileWithParent` or `Chd.CheckFileAndRepair`) to check structural integrity and checksums - no `chdman` process is launched.
+- A differential child is verified against its parent; if auto-detection cannot find the parent, select it explicitly. Header repair is standalone-only because a child's data is resolved through its parent.
 - Success lines show the CHD version and SHA-1, e.g. `V5 — SHA1: 1f2e3d...`.
 - **Checksum report**: when enabled, each verified CHD gets a `<name>.checksums.txt` next to it (following the file into the Success folder) with the whole-image SHA-1, CRC-32 and XXH3-64 plus SHA-1, CRC-32 and XXH3-64 for every track of a CD/GD-ROM image. The whole-image hashes cover the decompressed image (the CHD header's combined SHA-1 is not a content hash, so it is not reused). The hashing pass logs `CHDSHARP: Hashing, N% complete...` and a failure to write the report is a warning, never a verification failure.
 - Moved files land in `inputFolder\Success` and `inputFolder\Failed` (created automatically). These folders are excluded from subsequent recursive scans.
@@ -86,7 +91,8 @@ Each file's encoder mode is chosen automatically (see [Technical Logic](01-overv
 1. **CHD Files** — select the folder containing `.chd` files.
 2. **Output Folder** — where the extracted files go (structure is preserved when searching subfolders).
 3. Choose the output format.
-4. Click **Start Extraction**.
+4. For a differential child CHD, select its **Parent CHD** or leave **Find the parent automatically in the child's folder** enabled.
+5. Click **Start Extraction**.
 
 ### Output format
 
@@ -112,23 +118,36 @@ Auto-detection reads the CHD flags (via CHDSharp): DVD → `.iso`, hard disk →
 
 ---
 
-## 4.4 Explorer
+## 4.4 Recompress CHD Files
 
-1. **CHD File** — pick a `.chd` image.
-2. Choose the **File System** parser matching the console/system (PlayStation (Auto) is the default and parses ISO 9660 on both CD and DVD images).
+1. **CHD Files** - select the folder containing `.chd` files.
+2. **Output Folder** - where the recompressed CHDs go. If it is the same as the input folder, the output is named `<name>.recompressed.chd` so the source is never overwritten.
+3. Choose a **Compression** preset (Default, Smallest, Most compatible, Auto, or Uncompressed).
+4. For a differential child CHD, select its **Parent CHD** or leave auto-detection enabled. The output is written as a standalone CHD, which also makes it usable in the Explorer.
+5. Optionally enable deep verification, legacy metadata upgrade, or deleting the original after success.
+6. Click **Start Recompression**.
+
+Recompression uses CHDSharp's `ChdEncoder.Copy`, so metadata is preserved (and legacy CD/GD tags can be upgraded). A child source is resolved through its parent and consolidated into a standalone output. Uncompressed output is available only for raw/DVD/HDD CHDs; CD and laserdisc sources fall back to the compatible codec set with a warning.
+
+## 4.5 Explorer
+
+1. **CHD File** - pick a `.chd` image.
+2. The app detects the disc platform from sector content and preselects the matching **File System** parser; you can still override it manually. PlayStation (Auto) remains the fallback and parses ISO 9660 on both CD and DVD images.
 3. Browse folders in the grid; double-click a folder to enter it, a file to extract and open it, or use **Extract...** to save the selected file/folder.
 
-**Image Info** (expander under the parser drop-down) shows a read-only report built from the CHD header and map: version, hunk/unit sizes, logical size, image type, codecs, metadata tags, the CD/GD-ROM track table, and the per-codec hunk distribution (the scan is capped at the first 1,000,000 hunks for very large images).
+**Image Info** (expander under the parser drop-down) shows a read-only report built from the CHD header and map: version, hunk/unit sizes, logical size, unit count, header/map/metadata offsets, raw and combined SHA-1, image type, codecs, metadata tags, the CD/GD-ROM track table (including pregap/postgap/start/padding), the per-codec hunk distribution with stored bytes, and the detected platform/title/serial (the scan is capped at the first 1,000,000 hunks for very large images).
+
+A differential child CHD cannot be parsed directly by the Explorer; use the **Recompress CHD** tab to consolidate it with its parent into a standalone CHD first.
 
 ---
 
-## 4.5 Screenshot Hotkey (F8)
+## 4.6 Screenshot Hotkey (F8)
 
 While the application window is focused, pressing **F8** captures that window and saves it as `screenshot_yyyy-MM-dd_HH-mm-ss-fff.png` in `%LocalAppData%\CHDStudio\screenshots`. When AppData is not writable, the capture falls back to a `screenshots` folder next to the executable.
 
 The path is shown in the log ("Screenshot saved: ..."). Capture uses Avalonia's `RenderTargetBitmap`; if the capture fails, a message is logged instead.
 
-## 4.6 Status Bar & Stats
+## 4.7 Status Bar & Stats
 
 - **Status bar**: current operation message + the CHDSharp and CHDMAN encoder indicators. CHDSharp is always green (built-in, always available). CHDMAN is green when found, red when missing on Windows (conversions then use the built-in encoder) and gray on Linux/macOS, where it is optional and never used for encoding.
 - **Stat cards**: TOTAL FILES, SUCCESS, FAILED, ELAPSED, SPEED (disk write/read MB/s, sampled while an operation runs; for a chdman conversion the speed is read from the `chdman` child process, and for the in-process CHDSharp encoder from the app itself).

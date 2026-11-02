@@ -66,6 +66,7 @@ Common messages, their meaning, and what to do.
 | `... archive file may be corrupted or incomplete ...` | The archive failed CRC/structure checks. | Re-download the archive. |
 | `No supported primary files found in archive.` | The archive contains no convertible image/descriptor (and no bare `.bin`). | Check the archive contents. |
 | `... archive file appears to be incomplete ...` / `... could not validate referenced files ...` | Archive entries reference data files that aren't in the archive (split-bin sets, CRC-skipped entries). | Get the complete archive set; the app skips the entry with a warning instead of failing hard. |
+| The window seems frozen for ~20 seconds before an archive starts | Older builds probed every drive, including a disconnected network mapping, and opened the ZIP on the UI thread. Current builds only probe the input/output/system-temp drives, filter network drives before readiness checks, and size the ZIP off the UI thread. | Update to the current build. If a network drive is mapped but disconnected, disconnect or remove it; the app no longer waits on it. |
 
 ## 13.3 CHD Extraction & Verification
 
@@ -74,6 +75,9 @@ Common messages, their meaning, and what to do.
 | `Failed to open '<file>.chd': Not a valid CHD file` | The file isn't a CHD (bad magic). | The file is corrupt or misnamed; re-acquire it. |
 | `Failed to open '<file>.chd': Invalid or corrupt data` | CHD structure is broken. | Re-acquire the file; verify it with `chdman verify`. |
 | `Failed to open '<file>.chd': Cannot open file` | The file is locked/unreadable. | Close any program holding the file (emulator, antivirus scan) and retry. |
+| `This is a child CHD. Select its parent CHD...` | The CHD is a differential child and its parent was not found. | Select the parent in the Verify/Extract/Recompress tab, place the parent in the same folder, or consolidate the child with its parent in the Recompress tab. |
+| `The selected parent CHD does not match the parent hash stored in the child header` | The chosen parent is not the one the child was made against. | Select the correct parent; the warning is non-fatal but verification will fail if the data does not match. |
+| `Header repair is skipped for child CHDs` | Header repair was requested for a child. | Expected: child CHDs are verified against their parent and are never rewritten. |
 | `The CHD's CD track metadata is missing or damaged (no tracks could be read).` | The CHD header says it is a CD image, but its `CHT2`/`CHTR` metadata chain contains no readable track entries. This is the signature of a damaged CHD, not a normal no-metadata image. | Re-create the CHD from the original cue/bin. A valid CHD from the same source extracts normally; if re-creating also fails, the source image is the problem. |
 | `Built-in reader could not extract '<file>': ... Trying chdman...` | Informational: CHDSharp could not decode a hunk (corrupt/A/V CHD or reader limitation), so the app is retrying with chdman. Only a failure of that fallback is reported as a bug. | Nothing to do if a `Extracted ... using chdman fallback` line follows; otherwise re-acquire the file or verify it with `chdman verify`. |
 | `Partial extraction: N file(s) remain in temp directory: <dir>` | A multi-track extraction failed partway; the temp dir is kept for inspection. | Check the listed `_extract_temp_*` folder, delete leftovers, and retry with a valid CHD. |

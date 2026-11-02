@@ -175,6 +175,10 @@ public class App : Application
         // its hunk-level diagnostics (failing hunk, codec, offset, codec message) into the same
         // log file and bug reports as the rest of the app, instead of losing them.
         Chd.LoggerFactory = new ChdSharpLoggerFactory();
+
+        // Verification and hashing use this global worker count. Match the encoder's core
+        // setting so a long deep verification uses the machine instead of the library default.
+        Chd.TaskCount = Math.Clamp(Environment.ProcessorCount, 1, 64);
     }
 
     private static void DeleteOldDllFiles()

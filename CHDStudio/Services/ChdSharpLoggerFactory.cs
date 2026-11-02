@@ -115,7 +115,7 @@ internal sealed class ChdSharpLoggerFactory : ILoggerFactory
             Func<TState, Exception?, string> formatter
         )
         {
-            if (logLevel == LogLevel.None || formatter is null)
+            if (logLevel == LogLevel.None)
                 return;
 
             var message = formatter(state, exception);

@@ -135,6 +135,7 @@ internal class ArchiveService
     ///     Total size in bytes of every volume of the set, for the disk-space check. Pass -1 for a
     ///     single file; the size of the volumes the input names is then measured.
     /// </param>
+    /// <param name="progress">Optional extraction progress receiver.</param>
     /// <returns>
     ///     A tuple containing success status, the list of extracted primary file paths,
     ///     the temp directory root, and an error message string (empty on success).
@@ -149,7 +150,8 @@ internal class ArchiveService
         string tempDirectoryRoot,
         Action<string> onLog,
         CancellationToken token,
-        long totalSetSize = -1
+        long totalSetSize = -1,
+        IProgress<ArchiveProgress>? progress = null
     )
     {
         var extension = Path.GetExtension(originalArchivePath);
@@ -174,20 +176,24 @@ internal class ArchiveService
                 totalSetSize = RarVolumeSet.GetTotalBytes(originalArchivePath);
             }
 
-            var spaceError = CheckTempDiskSpace(
-                originalArchivePath,
-                tempDirectoryRoot,
-                archiveFileName,
-                totalSetSize
-            );
+            var spaceError = await CheckTempDiskSpaceAsync(
+                    originalArchivePath,
+                    tempDirectoryRoot,
+                    archiveFileName,
+                    totalSetSize,
+                    token
+                )
+                .ConfigureAwait(false);
             if (spaceError != null)
             {
                 onLog($"ERROR: {spaceError}");
                 return (false, [], tempDirectoryRoot, spaceError);
             }
 
-            Directory.CreateDirectory(tempDirectoryRoot);
+            await Task.Run(() => Directory.CreateDirectory(tempDirectoryRoot), token)
+                .ConfigureAwait(false);
             onLog($"Extracting {archiveFileName} to: {tempDirectoryRoot}");
+            progress?.Report(new ArchiveProgress(0, 0, 0, 0));
 
             if (extension.Equals(FileExtensions.Zip, StringComparison.OrdinalIgnoreCase))
             {
@@ -195,7 +201,8 @@ internal class ArchiveService
                         originalArchivePath,
                         tempDirectoryRoot,
                         onLog,
-                        token
+                        token,
+                        progress
                     )
                     .ConfigureAwait(false);
             }
@@ -264,6 +271,7 @@ internal class ArchiveService
                 return (false, [], tempDirectoryRoot, $"Unsupported archive type: {extension}");
             }
 
+            progress?.Report(new ArchiveProgress(1, 1, 1, 1));
             token.ThrowIfCancellationRequested();
 
             var collection = await CollectExtractedPrimaryFilesAsync(
@@ -581,18 +589,21 @@ internal class ArchiveService
         {
             token.ThrowIfCancellationRequested();
 
-            var spaceError = CheckTempDiskSpace(
-                firstVolumePath,
-                outputDirectory,
-                archiveFileName,
-                totalSetSize
-            );
+            var spaceError = await CheckTempDiskSpaceAsync(
+                    firstVolumePath,
+                    outputDirectory,
+                    archiveFileName,
+                    totalSetSize,
+                    token
+                )
+                .ConfigureAwait(false);
             if (spaceError != null)
             {
                 return (false, spaceError);
             }
 
-            Directory.CreateDirectory(outputDirectory);
+            await Task.Run(() => Directory.CreateDirectory(outputDirectory), token)
+                .ConfigureAwait(false);
             onLog($"Extracting split archive {archiveFileName} to: {outputDirectory}");
 
             await ExtractWith7ZaAsync(firstVolumePath, outputDirectory, onLog, token)
@@ -624,17 +635,22 @@ internal class ArchiveService
     /// <param name="outputDirectory">Directory that receives the extracted files.</param>
     /// <param name="onLog">Log callback.</param>
     /// <param name="token">Cancellation token.</param>
+    /// <param name="progress">Optional extraction progress receiver.</param>
     private async Task ExtractZipWith7ZaFallbackAsync(
         string archivePath,
         string outputDirectory,
         Action<string> onLog,
-        CancellationToken token
+        CancellationToken token,
+        IProgress<ArchiveProgress>? progress = null
     )
     {
         var archiveFileName = Path.GetFileName(archivePath);
         try
         {
-            await Task.Run(() => ExtractZipArchive(archivePath, outputDirectory, token), token)
+            await Task.Run(
+                    () => ExtractZipArchive(archivePath, outputDirectory, token, progress),
+                    token
+                )
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (_isSevenZipAvailable && ex is not OperationCanceledException)
@@ -642,6 +658,7 @@ internal class ArchiveService
             onLog(
                 $"Built-in zip extractor failed for {archiveFileName} ({ex.Message}). Falling back to 7za.exe..."
             );
+            progress?.Report(new ArchiveProgress(0, 0, 0, 0));
             await ExtractWith7ZaAsync(archivePath, outputDirectory, onLog, token)
                 .ConfigureAwait(false);
         }
@@ -654,10 +671,12 @@ internal class ArchiveService
     /// <param name="archivePath">Path of the zip file.</param>
     /// <param name="outputDirectory">Directory that receives the extracted files.</param>
     /// <param name="token">Cancellation token.</param>
+    /// <param name="progress">Optional extraction progress receiver.</param>
     private static void ExtractZipArchive(
         string archivePath,
         string outputDirectory,
-        CancellationToken token
+        CancellationToken token,
+        IProgress<ArchiveProgress>? progress = null
     )
     {
         var fullOutputDirectory =
@@ -667,7 +686,13 @@ internal class ArchiveService
         var directExtractionSuccess = false;
         try
         {
-            ExtractZipWithOpenRead(archivePath, outputDirectory, fullOutputDirectory, token);
+            ExtractZipWithOpenRead(
+                archivePath,
+                outputDirectory,
+                fullOutputDirectory,
+                token,
+                progress
+            );
             directExtractionSuccess = true;
         }
         catch (IOException ex) when (!IsDiskFullException(ex))
@@ -688,7 +713,13 @@ internal class ArchiveService
         try
         {
             CopyFileWithRetry(archivePath, tempCopyPath);
-            ExtractZipWithOpenRead(tempCopyPath, outputDirectory, fullOutputDirectory, token);
+            ExtractZipWithOpenRead(
+                tempCopyPath,
+                outputDirectory,
+                fullOutputDirectory,
+                token,
+                progress
+            );
         }
         finally
         {
@@ -704,24 +735,35 @@ internal class ArchiveService
     /// <param name="outputDirectory">Directory that receives the extracted files.</param>
     /// <param name="fullOutputDirectory">Normalized output directory with a trailing separator.</param>
     /// <param name="token">Cancellation token.</param>
+    /// <param name="progress">Optional extraction progress receiver.</param>
     private static void ExtractZipWithOpenRead(
         string archivePath,
         string outputDirectory,
         string fullOutputDirectory,
-        CancellationToken token
+        CancellationToken token,
+        IProgress<ArchiveProgress>? progress = null
     )
     {
         const int maxRetries = 3;
+        const int bufferSize = 1024 * 1024;
+
         for (var attempt = 1; attempt <= maxRetries; attempt++)
         {
             try
             {
                 using var archive = ZipFile.OpenRead(archivePath);
-                foreach (var entry in archive.Entries)
+                var entries = archive
+                    .Entries.Where(static entry => !string.IsNullOrEmpty(entry.Name))
+                    .ToList();
+                var totalBytes = entries.Sum(static entry => entry.Length);
+                var totalEntries = entries.Count;
+                var processedBytes = 0L;
+                var completedEntries = 0;
+                var buffer = new byte[bufferSize];
+
+                foreach (var entry in entries)
                 {
                     token.ThrowIfCancellationRequested();
-                    if (string.IsNullOrEmpty(entry.Name))
-                        continue;
 
                     var destinationPath = Path.GetFullPath(
                         Path.Combine(outputDirectory, entry.FullName)
@@ -740,7 +782,35 @@ internal class ArchiveService
                     if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                         Directory.CreateDirectory(directory);
 
-                    entry.ExtractToFile(destinationPath, true);
+                    using (var input = entry.Open())
+                    using (var output = File.Create(destinationPath))
+                    {
+                        int read;
+                        while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            output.Write(buffer, 0, read);
+                            processedBytes += read;
+                            progress?.Report(
+                                new ArchiveProgress(
+                                    processedBytes,
+                                    totalBytes,
+                                    completedEntries,
+                                    totalEntries
+                                )
+                            );
+                        }
+                    }
+
+                    completedEntries++;
+                    progress?.Report(
+                        new ArchiveProgress(
+                            processedBytes,
+                            totalBytes,
+                            completedEntries,
+                            totalEntries
+                        )
+                    );
                 }
 
                 return;
@@ -1333,12 +1403,14 @@ internal class ArchiveService
     /// <param name="tempDirectoryRoot">Directory whose drive is checked.</param>
     /// <param name="archiveFileName">Archive name used in the message.</param>
     /// <param name="totalSetSize">Pre-measured set size, or -1 to estimate per file.</param>
+    /// <param name="token">Cancellation token.</param>
     /// <returns>The warning message, or null when there is enough space.</returns>
-    private static string? CheckTempDiskSpace(
+    private static async Task<string?> CheckTempDiskSpaceAsync(
         string originalArchivePath,
         string tempDirectoryRoot,
         string archiveFileName,
-        long totalSetSize = -1
+        long totalSetSize = -1,
+        CancellationToken token = default
     )
     {
         try
@@ -1348,7 +1420,7 @@ internal class ArchiveService
                 return null;
 
             var drive = new DriveInfo(driveRoot);
-            if (!drive.IsReady)
+            if (drive.DriveType == DriveType.Network || !drive.IsReady)
                 return null;
 
             var availableSpace = drive.AvailableFreeSpace;
@@ -1364,7 +1436,13 @@ internal class ArchiveService
             {
                 try
                 {
-                    estimatedUncompressedSize = EstimateArchiveUncompressedSize(originalArchivePath);
+                    // Opening a ZIP reads its central directory; do that off the UI thread so a
+                    // slow or sleeping drive cannot stall the window before extraction starts.
+                    estimatedUncompressedSize = await Task.Run(
+                            () => EstimateArchiveUncompressedSize(originalArchivePath),
+                            token
+                        )
+                        .ConfigureAwait(false);
                 }
                 catch
                 {

@@ -31,7 +31,33 @@ internal static class ChdChecksumReport
         CancellationToken token
     )
     {
-        var hashes = Chd.ComputeHashes(chdPath, ReportHashTypes, null, true, progress, token);
+        return Write(chdPath, null, progress, token);
+    }
+
+    /// <summary>
+    ///     Computes the report hashes and writes them next to <paramref name="chdPath" />, optionally
+    ///     resolving a differential child against its parent.
+    /// </summary>
+    /// <param name="chdPath">Path of the verified CHD file.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
+    /// <param name="progress">Optional progress receiver for the hashing passes.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>Path of the written report.</returns>
+    internal static string Write(
+        string chdPath,
+        string? parentPath,
+        IProgress<ChdProgress>? progress,
+        CancellationToken token
+    )
+    {
+        var hashes = Chd.ComputeHashes(
+            chdPath,
+            ReportHashTypes,
+            parentPath,
+            true,
+            progress,
+            token
+        );
         var tracks = hashes.Where(static h => h.TrackNumber is not null).ToList();
         var wholeImage = hashes.FirstOrDefault(static h => h.TrackNumber is null);
 
@@ -41,7 +67,14 @@ internal static class ChdChecksumReport
         // would not match a hash of the extracted data).
         if (wholeImage is null)
         {
-            var whole = Chd.ComputeHashes(chdPath, ReportHashTypes, null, false, progress, token);
+            var whole = Chd.ComputeHashes(
+                chdPath,
+                ReportHashTypes,
+                parentPath,
+                false,
+                progress,
+                token
+            );
             wholeImage = whole.FirstOrDefault();
         }
 

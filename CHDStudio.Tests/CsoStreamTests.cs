@@ -50,7 +50,6 @@ public class CsoStreamTests : IDisposable
         var buffer = new byte[10];
         var read = stream.Read(buffer, 0, 0);
         Assert.Equal(0, read);
-        cso.Dispose();
     }
 
     [Fact]
@@ -63,7 +62,6 @@ public class CsoStreamTests : IDisposable
         var buffer = new byte[10];
         var read = stream.Read(buffer, 0, 10);
         Assert.Equal(0, read);
-        cso.Dispose();
     }
 
     [Fact]
@@ -88,7 +86,6 @@ public class CsoStreamTests : IDisposable
 
         Assert.Equal(2048, totalRead);
         Assert.Equal(expectedData, buffer);
-        cso.Dispose();
     }
 
     [Fact]
@@ -100,7 +97,6 @@ public class CsoStreamTests : IDisposable
         var pos = stream.Seek(1000, SeekOrigin.Begin);
         Assert.Equal(1000L, pos);
         Assert.Equal(1000L, stream.Position);
-        cso.Dispose();
     }
 
     [Fact]
@@ -113,7 +109,6 @@ public class CsoStreamTests : IDisposable
         var pos = stream.Seek(200, SeekOrigin.Current);
         Assert.Equal(700L, pos);
         Assert.Equal(700L, stream.Position);
-        cso.Dispose();
     }
 
     [Fact]
@@ -125,7 +120,6 @@ public class CsoStreamTests : IDisposable
         var pos = stream.Seek(-100, SeekOrigin.End);
         Assert.Equal(stream.Length - 100, pos);
         Assert.Equal(stream.Length - 100, stream.Position);
-        cso.Dispose();
     }
 
     [Fact]
@@ -135,7 +129,6 @@ public class CsoStreamTests : IDisposable
         using var stream = cso.OpenStream();
 
         Assert.Throws<IOException>(() => stream.Seek(-9999, SeekOrigin.Begin));
-        cso.Dispose();
     }
 
     [Fact]
@@ -145,7 +138,6 @@ public class CsoStreamTests : IDisposable
         using var stream = cso.OpenStream();
 
         Assert.Throws<NotSupportedException>(() => stream.SetLength(100));
-        cso.Dispose();
     }
 
     [Fact]
@@ -155,7 +147,6 @@ public class CsoStreamTests : IDisposable
         using var stream = cso.OpenStream();
 
         Assert.Throws<NotSupportedException>(() => stream.Write([1, 2, 3], 0, 3));
-        cso.Dispose();
     }
 
     [Fact]
@@ -166,7 +157,6 @@ public class CsoStreamTests : IDisposable
 
         var exception = Record.Exception(stream.Flush);
         Assert.Null(exception);
-        cso.Dispose();
     }
 
     [Fact]
@@ -177,7 +167,6 @@ public class CsoStreamTests : IDisposable
         stream.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => stream.Read(new byte[10], 0, 10));
-        cso.Dispose();
     }
 
     [Fact]
@@ -188,7 +177,6 @@ public class CsoStreamTests : IDisposable
         stream.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => stream.Seek(0, SeekOrigin.Begin));
-        cso.Dispose();
     }
 
     [Fact]
@@ -199,7 +187,6 @@ public class CsoStreamTests : IDisposable
         stream.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => stream.Position = 0);
-        cso.Dispose();
     }
 
     [Fact]
@@ -224,7 +211,6 @@ public class CsoStreamTests : IDisposable
         // Next 12 bytes should be from block 1 (offset 0-11)
         for (var i = 0; i < 12; i++)
             Assert.Equal((byte)(i % 256), buffer[8 + i]);
-        cso.Dispose();
     }
 
     [Fact]
@@ -241,7 +227,6 @@ public class CsoStreamTests : IDisposable
 
         Assert.Equal(2048, read);
         Assert.Equal(data, buffer);
-        cso.Dispose();
     }
 
     [Fact]
@@ -261,7 +246,6 @@ public class CsoStreamTests : IDisposable
         Assert.Equal(2048, read);
         for (var i = 0; i < 2048; i++)
             Assert.Equal((byte)((4096 + i) % 256), buffer[i]);
-        cso.Dispose();
     }
 
     private CsoFile CreateCsoWithBlocks(uint blockCount, uint blockSize, byte version)

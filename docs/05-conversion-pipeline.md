@@ -121,6 +121,8 @@ command = isAvi                                                      ? "createld
 - **`.raw` inputs get `-us 2352` only when the command is `createraw`** — chdman's `createraw` requires an explicit unit size when no parent CHD is supplied ("Unit size must be specified if no output parent CHD is supplied"). A `.raw` input combined with Force CD or Force DVD runs `createcd`/`createdvd`, which reject the option, so it is not appended there.
 - **`.cue`/`.toc` descriptors referencing `.raw` tracks do not get `-us`** — `createcd` does not accept the option ("Option '-us' not valid for this command"); it derives the 2352-byte unit size from the cue's own `MODE1/2352`/`MODE2/2352` track types, so the cue is handed over unchanged.
 - `-np` (processors) comes from a UI/core setting.
+- **Compression presets** add `-c <codecs>` unless the Default preset is selected: Most compatible uses `cdzl`/`zlib`, Smallest adds `cdzs`/`zstd` (and the other available codecs), Auto uses `PlatformDetector.AutoCodecs` for CD/DVD, and Uncompressed uses `none` for raw/DVD/HDD. Uncompressed CD/laserdisc input falls back to the compatible set with a warning.
+- **Delta output** adds `-op "<parent>"` when the Convert tab's delta option is enabled; the built-in encoder receives the same path through `ChdEncodeOptions.ParentPath`.
 
 ### Pre-flight validations
 

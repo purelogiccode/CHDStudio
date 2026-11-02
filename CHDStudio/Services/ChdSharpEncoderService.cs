@@ -71,6 +71,14 @@ internal static class ChdSharpEncoderService
     ///     True to use the smallest, most widely compatible codec set (zlib only) instead of the
     ///     chdman defaults. Used for the automatic retry when the first output fails verification.
     /// </param>
+    /// <param name="codecTags">
+    ///     Optional codec tags for the output; when <c>null</c> the command's chdman-default list is
+    ///     used. Ignored by the conservative retry and by <c>createld</c> (which always uses avhu).
+    /// </param>
+    /// <param name="parentPath">
+    ///     Optional parent CHD for delta (child) output. The parent's hunk and unit sizes must
+    ///     match the command's; the library throws when they do not.
+    /// </param>
     /// <exception cref="ArgumentException">The command is not a supported creation command.</exception>
     internal static void Encode(
         string command,
@@ -80,17 +88,20 @@ internal static class ChdSharpEncoderService
         int taskCount,
         CancellationToken token,
         Action<HunkProgress>? onHunkCompleted = null,
-        bool conservativeCodecs = false
+        bool conservativeCodecs = false,
+        IReadOnlyList<uint>? codecTags = null,
+        string? parentPath = null
     )
     {
         var options = new ChdEncodeOptions
         {
             TaskCount = Math.Clamp(taskCount, 1, 64),
-            HunkCompleted = onHunkCompleted
+            HunkCompleted = onHunkCompleted,
+            ParentPath = parentPath
         };
 
-        var cdCodecs = conservativeCodecs ? CdCodecsCompatible : CdCodecs;
-        var rawCodecs = conservativeCodecs ? RawCodecsCompatible : RawCodecs;
+        var cdCodecs = conservativeCodecs ? CdCodecsCompatible : codecTags ?? CdCodecs;
+        var rawCodecs = conservativeCodecs ? RawCodecsCompatible : codecTags ?? RawCodecs;
 
         // chdman refuses inputs whose size is not a whole number of units for the raw commands.
         // The built-in encoder has to reject them too: encoding a partial trailing unit would drop

@@ -5,6 +5,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using CHDSharp;
+using CHDSharp.Models;
 using CHDStudio.Models;
 using CHDStudio.Services;
 using CHDStudio.Utilities;
@@ -44,6 +46,9 @@ internal partial class MainWindow
 
     /// <summary>Set once the tab controls exist and the parser list is bound.</summary>
     private bool _explorerInitialized;
+
+    /// <summary>Prevents an auto-selected parser from triggering a second open of the same image.</summary>
+    private bool _explorerAutoSelectingParser;
 
     /// <summary>Whether the log column is currently collapsed for the Explorer tab.</summary>
     private bool _explorerLayoutActive;
@@ -162,7 +167,7 @@ internal partial class MainWindow
             }
 
             ExplorerChdPathTextBox.Text = chdPath;
-            await OpenExplorerChdAsync(chdPath);
+            await OpenExplorerChdAsync(chdPath, autoDetectPlatform: true);
         }
         catch (Exception ex)
         {
@@ -179,12 +184,12 @@ internal partial class MainWindow
     {
         try
         {
-            if (!_explorerInitialized) return;
+            if (!_explorerInitialized || _explorerAutoSelectingParser) return;
 
             var chdPath = ExplorerChdPathTextBox.Text;
             if (string.IsNullOrEmpty(chdPath)) return;
 
-            await OpenExplorerChdAsync(chdPath);
+            await OpenExplorerChdAsync(chdPath, autoDetectPlatform: false);
         }
         catch (Exception ex)
         {
@@ -303,12 +308,13 @@ internal partial class MainWindow
     ///     the race.
     /// </summary>
     /// <param name="chdPath">Path of the CHD image to open.</param>
-    private async Task OpenExplorerChdAsync(string chdPath)
+    /// <param name="autoDetectPlatform">True to detect the platform and preselect its parser.</param>
+    private async Task OpenExplorerChdAsync(string chdPath, bool autoDetectPlatform = true)
     {
         await _explorerOpenLock.WaitAsync();
         try
         {
-            await OpenExplorerChdCoreAsync(chdPath);
+            await OpenExplorerChdCoreAsync(chdPath, autoDetectPlatform);
         }
         finally
         {
@@ -320,8 +326,52 @@ internal partial class MainWindow
     ///     Opens a CHD image and installs the resulting explorer, retiring any previous one.
     /// </summary>
     /// <param name="chdPath">Path of the CHD image to open.</param>
-    private async Task OpenExplorerChdCoreAsync(string chdPath)
+    /// <param name="autoDetectPlatform">True to detect the platform and preselect its parser.</param>
+    private async Task OpenExplorerChdCoreAsync(string chdPath, bool autoDetectPlatform)
     {
+        var headerCheck = await Task.Run(
+            () =>
+            {
+                var error = Chd.ReadHeader(chdPath, out var header);
+                return (Error: error, Header: header);
+            },
+            _explorerCts.Token
+        );
+        if (headerCheck.Error == ChdError.Chderrnone && headerCheck.Header?.HasParent == true)
+        {
+            var childMessage =
+                "This is a child (differential) CHD. The Explorer needs its parent data; use the Recompress tab to consolidate it into a standalone CHD first.";
+            ExplorerStatusTextBlock.Text = childMessage;
+            LogWarning($"Explorer: {childMessage}");
+            ShowError(childMessage);
+            return;
+        }
+
+        if (autoDetectPlatform)
+        {
+            var detection = await Task.Run(
+                () => ChdPlatformMapping.TryDetect(chdPath),
+                _explorerCts.Token
+            );
+            if (detection is not null)
+            {
+                LogMessage($"Explorer: detected {detection}");
+                var detectedType = ChdPlatformMapping.ToConsoleType(detection.Platform);
+                var detectedParser = detectedType is { } type
+                    ? ConsoleTypeRegistry.All.FirstOrDefault(entry => entry.Type == type)
+                    : null;
+                if (
+                    detectedParser is not null
+                    && !ReferenceEquals(ExplorerParserComboBox.SelectedItem, detectedParser)
+                )
+                {
+                    _explorerAutoSelectingParser = true;
+                    ExplorerParserComboBox.SelectedItem = detectedParser;
+                    _explorerAutoSelectingParser = false;
+                }
+            }
+        }
+
         var parser = ExplorerParserComboBox.SelectedItem as ConsoleTypeInfo;
         var consoleType = parser?.Type ?? ConsoleType.GenericIso9660;
         var parserName = parser?.DisplayName ?? consoleType.ToString();

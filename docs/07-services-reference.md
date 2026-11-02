@@ -167,13 +167,13 @@ Checks GitHub for new releases at startup.
 
 `internal static class ChdSharpEncoderService` (`ChdSharpEncoderService.cs:11`)
 
-In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.0). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
+In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.1). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
 
 ### API
 
 | Member | Purpose |
 |--------|---------|
-| `Encode(command, inputPath, outputPath, rawUnits2352, taskCount, token, onHunkCompleted = null)` (static) | Encodes `inputPath` to `outputPath` using chdman's commands and defaults. Writes to the caller's staging path; throws `ArgumentException` for an unsupported command, `OperationCanceledException` on cancellation, and encoding exceptions on failure. Output is byte-identical to `chdman` 0.289. `onHunkCompleted` is forwarded to `ChdEncodeOptions.HunkCompleted` for progress logging. |
+| `Encode(command, inputPath, outputPath, rawUnits2352, taskCount, token, onHunkCompleted = null, conservativeCodecs = false, codecTags = null, parentPath = null)` (static) | Encodes `inputPath` to `outputPath` using chdman's commands and defaults. `codecTags` overrides the command's default codec list; `parentPath` writes a delta child. Writes to the caller's staging path; throws `ArgumentException` for an unsupported command, `OperationCanceledException` on cancellation, and encoding exceptions on failure. Output is byte-identical to `chdman` 0.289 when using the default codec list. `onHunkCompleted` is forwarded to `ChdEncodeOptions.HunkCompleted` for progress logging. |
 
 `taskCount` (chdman's `-np`) is clamped to `1–64` before it reaches `ChdEncodeOptions.TaskCount`.
 
@@ -187,9 +187,52 @@ In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/C
 | `createraw` | `ChdEncoder.EncodeRaw` | largest multiple of the unit ≤ 4096 | 2352 when `rawUnits2352`, else 512 | `lzma,zlib,huff,flac` | `-us 2352` equivalent for raw CD tracks. |
 | `createld` | `ChdEncoder.EncodeLaserDisc` | one raw A/V frame (auto) | A/V frame | `avhu` | AVI (YUY2/VYUY/UYVY) input; one frame per hunk, matching chdman's `createld` default. |
 
+The codec column is the **Default** preset. The Convert tab's Compression selector overrides it through `codecTags`; `parentPath` adds `-op`/`ChdEncodeOptions.ParentPath` for delta output. The conservative retry always uses the compatible set.
+
 ### Integration
 
 - Called from `ConvertToChdAsync`'s local `TryChdSharpInProcessAsync` on a background thread (`Task.Run`), after the input has been prepared (ASCII copy or cue work directory). The staged output is moved into place only after `Encode` returns.
 - The log line is `CHDSHARP: <command> <file>` and mirrors the chdman invocation it replaces; progress is logged through `ChdSharpProgressLogger` (`CHDSHARP: Compressing, N% complete... (ratio=...)`).
 - Because the encoder is always present, `CheckDependenciesAndNotifyUser` never refuses conversion; a missing `chdman` on Windows is only a notice.
-- Tests: `ChdSharpEncoderServiceTests` round-trips `createcd`/`createdvd`/`createhd`/`createraw`/`createld` and verifies each output with `Chd.CheckFile` — see [Testing §11.6](11-testing.md#116-chdbattletest-battleground-historical).
+- Tests: `ChdSharpEncoderServiceTests` round-trips `createcd`/`createdvd`/`createhd`/`createraw`/`createld` and verifies each output with `Chd.CheckFile`
+- Codec presets and delta output: `codecTags` and `parentPath` parameters, used by the Convert tab's compression selector and delta-CHD option.
+
+---
+
+## 7.11 ChdRecompressService
+
+`internal static class ChdRecompressService` (`ChdRecompressService.cs`)
+
+Recompresses an existing CHD with CHDSharp's `ChdEncoder.Copy`. It preserves metadata, optionally upgrades legacy CD/GD tags, and can resolve a differential child source against its parent and write a standalone output.
+
+| Member | Purpose |
+|--------|---------|
+| `Recompress(sourcePath, outputPath, preset, parentPath, upgradeMetadata, taskCount, token, onHunkCompleted = null)` (static) | Opens the source (with `parentPath` when it is a child), chooses codec tags for the selected `ChdCompressionPreset`, and calls `ChdEncoder.Copy`. Throws `InvalidDataException` when the source cannot be opened and `InvalidOperationException` for unsupported uncompressed CD/laserdisc output. |
+
+The command used for preset selection is derived from the source flags (`createcd`, `createdvd`, `createhd`, `createraw`, or `createld` when the source carries `AVAV` metadata). `Auto` only detects a platform for CD/DVD sources, and auto-preset codecs whose media type does not match the command are rejected in favour of the defaults.
+
+---
+
+## 7.12 ParentChdResolver
+
+`internal static class ParentChdResolver` (`ParentChdResolver.cs`)
+
+Resolves the parent of a differential child CHD for verification, extraction, checksumming, Image Info and recompression.
+
+| Member | Purpose |
+|--------|---------|
+| `Resolve(childPath, explicitParentPath = null, autoDetect = true)` (static) | Reads the child header. If no parent is required it returns `IsRequired = false`. An explicit parent is validated and returned (with a warning when its hash differs). Otherwise sibling `.chd` files are matched against the child's `ParentSha1`/`ParentMd5`. Returns a user-facing `Error` when a required parent cannot be found. |
+
+---
+
+## 7.13 ChdCompressionPresets
+
+`internal static class ChdCompressionPresets` (`Utilities/ChdCompressionPresets.cs`)
+
+Maps a `ChdCompressionPreset` to codec tags and chdman `-c` arguments. Defaults preserve the existing chdman-compatible behaviour; Smallest uses zstd/cdzs, Compatible uses zlib/cdzl, Auto uses `PlatformDetector.AutoCodecs`, and Uncompressed is limited to raw/DVD/HDD media.
+
+---
+
+## 7.14 Archive extraction progress
+
+`ArchiveProgressLogger` (`Utilities/ArchiveProgressLogger.cs`) implements `IProgress<ArchiveProgress>` and logs archive extraction at ten-percent steps. `ArchiveService.ExtractArchiveAsync` reports bytes and entry counts from `ExtractZipWithOpenRead`; ZIP entry copies check the cancellation token and report progress while writing, so a long archive no longer looks frozen between the start and end log lines. — see [Testing §11.6](11-testing.md#116-chdbattletest-battleground-historical).

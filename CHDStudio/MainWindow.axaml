@@ -153,7 +153,7 @@
                         x:Name="MainTabControl"
                         MinWidth="400"
                         SelectionChanged="MainTabControl_SelectionChanged"
-                        ToolTip.Tip="Switch between Convert, Verify, and Extract operations">
+                        ToolTip.Tip="Switch between Convert, Verify, Extract, Recompress and Explorer operations">
                         <TabItem
                             Header="Convert to CHD"
                             x:Name="ConvertTab"
@@ -282,6 +282,37 @@
                                                         IsCheckedChanged="ForceCreateDvdCheckBox_IsCheckedChanged"
                                                         ToolTip.Tip="Force CHDMAN to use the 'createdvd' command" />
                                                 </StackPanel>
+                                                <TextBlock
+                                                    Text="Compression:"
+                                                    Margin="0,6,0,0"
+                                                    Foreground="#e6edf3"
+                                                    ToolTip.Tip="Codec preset for newly created CHDs. The default matches chdman and is the most widely compatible." />
+                                                <ComboBox
+                                                    x:Name="ConversionCompressionComboBox"
+                                                    MinWidth="280"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Default = chdman defaults; Smallest = zstd/cdzs (requires a recent MAME/libchdr reader); Compatible = zlib/cdzl; Auto = per-platform preset; Uncompressed = no compression (raw/DVD/HDD only)" />
+                                                <CheckBox
+                                                    x:Name="CreateDeltaChdCheckBox"
+                                                    Content="Create a delta (child) CHD against a parent"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Store only the hunks that differ from the selected parent CHD" />
+                                                <Grid ColumnDefinitions="*,Auto" ToolTip.Tip="Parent CHD used when creating a delta child">
+                                                    <TextBox
+                                                        x:Name="ConversionParentChdTextBox"
+                                                        Grid.Column="0"
+                                                        Margin="0,0,5,0"
+                                                        IsReadOnly="True"
+                                                        VerticalContentAlignment="Center"
+                                                        ToolTip.Tip="Parent CHD for delta creation" />
+                                                    <Button
+                                                        x:Name="BrowseConversionParentButton"
+                                                        Grid.Column="1"
+                                                        Classes="primary"
+                                                        Content="_Browse"
+                                                        Click="BrowseConversionParentButton_ClickAsync"
+                                                        ToolTip.Tip="Select the parent CHD for delta creation" />
+                                                </Grid>
                                             </StackPanel>
                                         </Border>
                                     </Expander>
@@ -425,6 +456,38 @@
                                                     Content="Write a checksum report (.checksums.txt) next to each verified CHD"
                                                     HorizontalAlignment="Left"
                                                     ToolTip.Tip="After a successful verification, compute per-track SHA-1, CRC-32 and XXH3 hashes (whole-image hashes for non-CD images) and write them next to the CHD" />
+                                                <CheckBox
+                                                    x:Name="RepairHeaderHashesCheckBox"
+                                                    Content="Repair header hashes when verification finds a mismatch (chdman verify --fix)"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Rewrite only the V3-V5 header hash fields when they no longer match the data. Child CHDs are verified against their parent and are not rewritten." />
+                                                <TextBlock
+                                                    Text="Parent CHD (for child/differential images):"
+                                                    Margin="0,6,0,0"
+                                                    Foreground="#e6edf3"
+                                                    ToolTip.Tip="A child CHD stores only the data that differs from its parent. Select the parent CHD here, or let the app find it by hash in the same folder." />
+                                                <Grid ColumnDefinitions="*,Auto" ToolTip.Tip="Optional parent CHD selection">
+                                                    <TextBox
+                                                        x:Name="VerificationParentChdTextBox"
+                                                        Grid.Column="0"
+                                                        Margin="0,0,5,0"
+                                                        IsReadOnly="True"
+                                                        VerticalContentAlignment="Center"
+                                                        ToolTip.Tip="Parent CHD path used when verifying a differential child image" />
+                                                    <Button
+                                                        x:Name="BrowseVerificationParentButton"
+                                                        Grid.Column="1"
+                                                        Classes="primary"
+                                                        Content="_Browse"
+                                                        Click="BrowseVerificationParentButton_ClickAsync"
+                                                        ToolTip.Tip="Select the parent CHD for a child image" />
+                                                </Grid>
+                                                <CheckBox
+                                                    x:Name="AutoDetectVerificationParentCheckBox"
+                                                    Content="Find the parent automatically in the child's folder"
+                                                    IsChecked="True"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Search sibling .chd files for the parent SHA-1/MD5 stored in a child CHD" />
                                             </StackPanel>
                                         </Border>
                                     </Expander>
@@ -617,6 +680,33 @@
                                                         Content="Delete original CHD after a successful extraction"
                                                         HorizontalAlignment="Left"
                                                         ToolTip.Tip="Delete the original CHD file once it is successfully extracted to the selected format" />
+                                                    <TextBlock
+                                                        Text="Parent CHD (for child/differential images):"
+                                                        Margin="0,6,0,0"
+                                                        Foreground="#e6edf3"
+                                                        ToolTip.Tip="A child CHD stores only the data that differs from its parent. Select the parent CHD here, or let the app find it by hash in the same folder." />
+                                                    <Grid ColumnDefinitions="*,Auto" ToolTip.Tip="Optional parent CHD selection">
+                                                        <TextBox
+                                                            x:Name="ExtractionParentChdTextBox"
+                                                            Grid.Column="0"
+                                                            Margin="0,0,5,0"
+                                                            IsReadOnly="True"
+                                                            VerticalContentAlignment="Center"
+                                                            ToolTip.Tip="Parent CHD path used when extracting a differential child image" />
+                                                        <Button
+                                                            x:Name="BrowseExtractionParentButton"
+                                                            Grid.Column="1"
+                                                            Classes="primary"
+                                                            Content="_Browse"
+                                                            Click="BrowseExtractionParentButton_ClickAsync"
+                                                            ToolTip.Tip="Select the parent CHD for a child image" />
+                                                    </Grid>
+                                                    <CheckBox
+                                                        x:Name="AutoDetectExtractionParentCheckBox"
+                                                        Content="Find the parent automatically in the child's folder"
+                                                        IsChecked="True"
+                                                        HorizontalAlignment="Left"
+                                                        ToolTip.Tip="Search sibling .chd files for the parent SHA-1/MD5 stored in a child CHD" />
                                                 </StackPanel>
                                             </Border>
                                         </Grid>
@@ -682,6 +772,193 @@
                                         Click="StartExtractionButton_ClickAsync"
                                         HorizontalAlignment="Stretch"
                                         ToolTip.Tip="Begin the batch extraction process" />
+                                </Grid>
+                            </Border>
+                        </TabItem>
+
+                        <TabItem
+                            Header="Recompress CHD"
+                            x:Name="RecompressTab"
+                            ToolTip.Tip="Recompress existing CHD files, consolidate child images, or change codecs">
+                            <Border
+                                Background="#2B2B2B"
+                                BorderBrush="#3A3A3A"
+                                BorderThickness="1"
+                                CornerRadius="0,0,6,6"
+                                Padding="15"
+                                ToolTip.Tip="Recompress tab content">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" ToolTip.Tip="Batch recompression controls">
+                                    <Grid Grid.Row="0" Margin="0,0,0,10" ColumnDefinitions="120,*,Auto" ToolTip.Tip="CHD folder selection">
+                                        <TextBlock
+                                            Text="CHD Files:"
+                                            FontWeight="Bold"
+                                            Foreground="#e6edf3"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Select the folder containing CHD files to recompress" />
+                                        <TextBox
+                                            x:Name="RecompressInputFolderTextBox"
+                                            Grid.Column="1"
+                                            Margin="5,0"
+                                            IsReadOnly="True"
+                                            VerticalContentAlignment="Center"
+                                            ToolTip.Tip="The selected folder path for recompression input" />
+                                        <Button
+                                            x:Name="BrowseRecompressInputButton"
+                                            Grid.Column="2"
+                                            Classes="primary"
+                                            Content="_Browse"
+                                            Click="BrowseRecompressInputButton_ClickAsync"
+                                            ToolTip.Tip="Open a folder browser to select CHD files to recompress" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="0,0,0,10" ColumnDefinitions="120,*,Auto" ToolTip.Tip="Recompression output folder selection">
+                                        <TextBlock
+                                            Text="Output Folder:"
+                                            FontWeight="Bold"
+                                            Foreground="#e6edf3"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Select the folder where recompressed CHDs will be saved" />
+                                        <TextBox
+                                            x:Name="RecompressOutputFolderTextBox"
+                                            Grid.Column="1"
+                                            Margin="5,0"
+                                            IsReadOnly="True"
+                                            VerticalContentAlignment="Center"
+                                            ToolTip.Tip="The selected folder path for recompression output" />
+                                        <Button
+                                            x:Name="BrowseRecompressOutputButton"
+                                            Grid.Column="2"
+                                            Classes="primary"
+                                            Content="_Browse"
+                                            Click="BrowseRecompressOutputButton_ClickAsync"
+                                            ToolTip.Tip="Open a folder browser to select where recompressed CHDs will be saved" />
+                                    </Grid>
+
+                                    <Expander
+                                        Grid.Row="2"
+                                        Header="Options"
+                                        Margin="0,5,0,5"
+                                        IsExpanded="False"
+                                        ToolTip.Tip="Configure recompression settings">
+                                        <Border Classes="groupBox" Margin="0,5,0,0" ToolTip.Tip="Recompression options">
+                                            <StackPanel Spacing="5">
+                                                <TextBlock
+                                                    Text="Compression:"
+                                                    Foreground="#e6edf3"
+                                                    ToolTip.Tip="Codec preset for the output CHD" />
+                                                <ComboBox
+                                                    x:Name="RecompressCompressionComboBox"
+                                                    MinWidth="280"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Default = chdman defaults; Smallest = zstd/cdzs; Compatible = zlib/cdzl; Auto = per-platform preset; Uncompressed = no compression" />
+                                                <CheckBox
+                                                    x:Name="RecompressVerifyCheckBox"
+                                                    Content="Deep-verify each recompressed CHD before replacing the destination"
+                                                    IsChecked="True"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Decompress every hunk and check the hashes after recompression" />
+                                                <CheckBox
+                                                    x:Name="RecompressDeleteOriginalCheckBox"
+                                                    Content="Delete the original CHD after a successful recompression"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Only delete the source after the output has been verified" />
+                                                <CheckBox
+                                                    x:Name="RecompressUpgradeMetadataCheckBox"
+                                                    Content="Upgrade legacy CD/GD metadata tags"
+                                                    IsChecked="True"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Convert CHCD/CHTR/CHGT tags to their modern CHT2/CHGD equivalents" />
+                                                <TextBlock
+                                                    Text="Parent CHD (for child/differential source images):"
+                                                    Margin="0,6,0,0"
+                                                    Foreground="#e6edf3"
+                                                    ToolTip.Tip="A child CHD stores only the data that differs from its parent. Selecting the parent also lets the output be a standalone CHD." />
+                                                <Grid ColumnDefinitions="*,Auto" ToolTip.Tip="Optional parent CHD selection">
+                                                    <TextBox
+                                                        x:Name="RecompressParentChdTextBox"
+                                                        Grid.Column="0"
+                                                        Margin="0,0,5,0"
+                                                        IsReadOnly="True"
+                                                        VerticalContentAlignment="Center"
+                                                        ToolTip.Tip="Parent CHD of a differential child source" />
+                                                    <Button
+                                                        x:Name="BrowseRecompressParentButton"
+                                                        Grid.Column="1"
+                                                        Classes="primary"
+                                                        Content="_Browse"
+                                                        Click="BrowseRecompressParentButton_ClickAsync"
+                                                        ToolTip.Tip="Select the parent CHD for a child source" />
+                                                </Grid>
+                                                <CheckBox
+                                                    x:Name="AutoDetectRecompressParentCheckBox"
+                                                    Content="Find the parent automatically in the child's folder"
+                                                    IsChecked="True"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Search sibling .chd files for the parent SHA-1/MD5 stored in a child CHD" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Expander>
+
+                                    <TextBlock
+                                        Grid.Row="3"
+                                        Text="Select Files to Recompress:"
+                                        Margin="0,5,0,0"
+                                        Classes="sectionLabel"
+                                        ToolTip.Tip="Mark or unmark files to include in the batch recompression" />
+                                    <DataGrid
+                                        Grid.Row="4"
+                                        x:Name="RecompressFilesDataGrid"
+                                        Margin="0,5"
+                                        AutoGenerateColumns="False"
+                                        CanUserSortColumns="True"
+                                        ToolTip.Tip="List of CHD files available for recompression">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Width="95">
+                                                <DataGridTemplateColumn.Header>
+                                                    <TextBlock Text="Select" ToolTip.Tip="Check or uncheck to select files for processing" />
+                                                </DataGridTemplateColumn.Header>
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="models:FileItem">
+                                                        <CheckBox
+                                                            IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            ToolTip.Tip="Include this file in the batch operation" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Binding="{Binding FileName}" SortMemberPath="FileName" Width="*" IsReadOnly="True">
+                                                <DataGridTextColumn.Header>
+                                                    <TextBlock Text="File Name" ToolTip.Tip="Name of the file" />
+                                                </DataGridTextColumn.Header>
+                                            </DataGridTextColumn>
+                                            <DataGridTextColumn Binding="{Binding DisplaySize}" SortMemberPath="DisplaySize" Width="130" IsReadOnly="True">
+                                                <DataGridTextColumn.Header>
+                                                    <TextBlock Text="Size" ToolTip.Tip="File size" />
+                                                </DataGridTextColumn.Header>
+                                            </DataGridTextColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <StackPanel
+                                        Grid.Row="5"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        Spacing="10"
+                                        Margin="0,0,0,10"
+                                        ToolTip.Tip="Select or deselect all files in the recompression list">
+                                        <Button Classes="primary" Content="_Select All" Click="SelectAllRecompress_Click" ToolTip.Tip="Select all files in the list" />
+                                        <Button Classes="primary" Content="_Deselect All" Click="DeselectAllRecompress_Click" ToolTip.Tip="Deselect all files in the list" />
+                                    </StackPanel>
+
+                                    <Button
+                                        Grid.Row="6"
+                                        x:Name="StartRecompressButton"
+                                        AutomationProperties.Name="Start batch recompression"
+                                        Classes="success"
+                                        Content="_Start Recompression"
+                                        Click="StartRecompressButton_ClickAsync"
+                                        HorizontalAlignment="Stretch"
+                                        ToolTip.Tip="Begin the batch recompression process" />
                                 </Grid>
                             </Border>
                         </TabItem>

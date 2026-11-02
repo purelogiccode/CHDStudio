@@ -77,6 +77,26 @@ public class ChdSharpEncoderServiceTests : IDisposable
     }
 
     [Fact]
+    public void CreateDvd_CustomCodecTags_EncodesVerifiableChd()
+    {
+        File.WriteAllBytes(PathFor("custom.iso"), new byte[2048 * 64]);
+        var chdPath = PathFor("custom.chd");
+
+        ChdSharpEncoderService.Encode(
+            "createdvd",
+            PathFor("custom.iso"),
+            chdPath,
+            false,
+            2,
+            CancellationToken.None,
+            codecTags: [CHDSharp.Encoder.CodecTags.Zlib]
+        );
+
+        AssertVerifies(chdPath);
+        Assert.Contains(ChdCodec.Zlib, ReadHeader(chdPath).Compression);
+    }
+
+    [Fact]
     public void CreateCd_ConservativeCodecs_EncodesVerifiableCdChd()
     {
         // The verification-failure retry uses the zlib-only codec set; it must still produce a

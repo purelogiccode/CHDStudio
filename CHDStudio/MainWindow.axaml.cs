@@ -95,6 +95,7 @@ internal partial class MainWindow : Window, IDisposable
     private readonly ObservableCollection<FileItem> _conversionFiles = new();
     private readonly Lock _ctsLock = new();
     private readonly ObservableCollection<FileItem> _extractionFiles = new();
+    private readonly ObservableCollection<FileItem> _recompressFiles = new();
     private readonly FileWatcherService _fileWatcher = new();
     private readonly bool _isChdmanAvailable;
     private readonly Stopwatch _operationTimer = new();
@@ -126,6 +127,12 @@ internal partial class MainWindow : Window, IDisposable
     // incompatibility the startup probe catches, or antivirus damage). The built-in CHDSharp
     // encoder takes over for the rest of the batch instead of crashing once per file.
     private volatile bool _chdmanUnusableThisBatch;
+
+    // Compression settings selected for the running conversion batch. Keeping them in fields
+    // avoids threading two more values through every per-format conversion path.
+    private ChdCompressionPreset _conversionCompressionPreset = ChdCompressionPreset.Default;
+    private string? _conversionParentPath;
+    private bool _createDeltaChd;
 
     // Tracks whether a close was requested while an operation was running
     private bool _pendingClose;
@@ -168,6 +175,12 @@ internal partial class MainWindow : Window, IDisposable
         ConversionFilesDataGrid.ItemsSource = _conversionFiles;
         VerificationFilesDataGrid.ItemsSource = _verificationFiles;
         ExtractionFilesDataGrid.ItemsSource = _extractionFiles;
+        RecompressFilesDataGrid.ItemsSource = _recompressFiles;
+
+        ConversionCompressionComboBox.ItemsSource = ChdCompressionPresetInfo.All;
+        ConversionCompressionComboBox.SelectedIndex = 0;
+        RecompressCompressionComboBox.ItemsSource = ChdCompressionPresetInfo.All;
+        RecompressCompressionComboBox.SelectedIndex = 0;
 
         var appDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
@@ -889,6 +902,7 @@ internal partial class MainWindow : Window, IDisposable
             );
         }
 
+        LogMessage(" Compression and optional delta-CHD settings are under Options.");
         LogMessage("--- Ready for Conversion ---");
     }
 
@@ -896,7 +910,9 @@ internal partial class MainWindow : Window, IDisposable
     private void DisplayVerificationInstructionsInLog()
     {
         LogMessage($"Welcome to {AppConfig.ApplicationName}. (Verification Mode)");
-
+        LogMessage(
+            " For a differential child CHD, select its Parent CHD (or leave auto-detection on) under Options."
+        );
         LogMessage("--- Ready for Verification ---");
     }
 
@@ -907,6 +923,9 @@ internal partial class MainWindow : Window, IDisposable
 
         LogMessage(
             "This feature extracts CHD files back to their original format (ISO/BIN/CUE etc.)"
+        );
+        LogMessage(
+            " For a differential child CHD, select its Parent CHD (or leave auto-detection on) under Options."
         );
         LogMessage("--- Ready for Extraction ---");
     }
@@ -943,6 +962,10 @@ internal partial class MainWindow : Window, IDisposable
                 case "ExtractTab":
                     DisplayExtractionInstructionsInLog();
                     UpdateStatusBarMessage("Ready for extraction");
+                    break;
+                case "RecompressTab":
+                    DisplayRecompressInstructionsInLog();
+                    UpdateStatusBarMessage("Ready to recompress");
                     break;
                 case "ExplorerTab":
                     DisplayExplorerInstructionsInLog();
@@ -1226,6 +1249,10 @@ internal partial class MainWindow : Window, IDisposable
             // output would replace existing files of the same name is diverted into a subfolder
             // instead (see ExtractChdAsync), so nothing is overwritten and nothing is asked.
 
+            var extractionParentPath = ExtractionParentChdTextBox.Text;
+            var autoDetectExtractionParent =
+                AutoDetectExtractionParentCheckBox.IsChecked ?? true;
+
             RenewCancellationTokenSource();
 
             ResetOperationStats();
@@ -1253,6 +1280,8 @@ internal partial class MainWindow : Window, IDisposable
                     outputFolder,
                     deleteOriginal,
                     selectedFiles,
+                    extractionParentPath,
+                    autoDetectExtractionParent,
                     token
                 );
             }
@@ -1329,6 +1358,9 @@ internal partial class MainWindow : Window, IDisposable
                     break;
                 case "ExtractTab":
                     SafeFireAndForget(LoadFilesForExtractionAsync());
+                    break;
+                case "RecompressTab":
+                    SafeFireAndForget(LoadFilesForRecompressionAsync());
                     break;
             }
         }
@@ -1655,6 +1687,27 @@ internal partial class MainWindow : Window, IDisposable
                 return;
             }
 
+            var compressionPreset =
+                (ConversionCompressionComboBox.SelectedItem as ChdCompressionPresetInfo)?.Preset
+                ?? ChdCompressionPreset.Default;
+            var createDelta = CreateDeltaChdCheckBox.IsChecked == true;
+            var parentPath = ConversionParentChdTextBox.Text;
+            if (createDelta && string.IsNullOrWhiteSpace(parentPath))
+            {
+                ShowError("Select a parent CHD before creating a delta CHD.");
+                return;
+            }
+
+            if (createDelta && !File.Exists(parentPath))
+            {
+                ShowError($"The selected parent CHD does not exist:\n\n{parentPath}");
+                return;
+            }
+
+            _conversionCompressionPreset = compressionPreset;
+            _createDeltaChd = createDelta;
+            _conversionParentPath = createDelta ? parentPath : null;
+
             RenewCancellationTokenSource();
 
             ResetOperationStats();
@@ -1765,6 +1818,9 @@ internal partial class MainWindow : Window, IDisposable
             var moveFailed = MoveFailedFilesCheckBox.IsChecked ?? false;
             var successFolder = moveSuccess ? Path.Combine(inputFolder, "Success") : string.Empty;
             var failedFolder = moveFailed ? Path.Combine(inputFolder, "Failed") : string.Empty;
+            var parentPath = VerificationParentChdTextBox.Text;
+            var autoDetectParent = AutoDetectVerificationParentCheckBox.IsChecked ?? true;
+            var repairHeaderHashes = RepairHeaderHashesCheckBox.IsChecked ?? false;
 
             LogMessage("--- Starting batch verification process... ---");
             _wasCancelled = false;
@@ -1785,6 +1841,9 @@ internal partial class MainWindow : Window, IDisposable
                     moveFailed,
                     failedFolder,
                     selectedFiles,
+                    parentPath,
+                    autoDetectParent,
+                    repairHeaderHashes,
                     token
                 );
             }
@@ -1874,12 +1933,20 @@ internal partial class MainWindow : Window, IDisposable
         StartConversionButton.IsEnabled = enabled;
         ForceCreateCdCheckBox.IsEnabled = enabled;
         ForceCreateDvdCheckBox.IsEnabled = enabled;
+        ConversionCompressionComboBox.IsEnabled = enabled;
+        CreateDeltaChdCheckBox.IsEnabled = enabled;
+        ConversionParentChdTextBox.IsEnabled = enabled;
+        BrowseConversionParentButton.IsEnabled = enabled;
         VerificationInputFolderTextBox.IsEnabled = enabled;
         BrowseVerificationInputButton.IsEnabled = enabled;
         SearchSubfoldersVerificationCheckBox.IsEnabled = enabled;
         StartVerificationButton.IsEnabled = enabled;
         MoveSuccessFilesCheckBox.IsEnabled = enabled;
         MoveFailedFilesCheckBox.IsEnabled = enabled;
+        RepairHeaderHashesCheckBox.IsEnabled = enabled;
+        VerificationParentChdTextBox.IsEnabled = enabled;
+        BrowseVerificationParentButton.IsEnabled = enabled;
+        AutoDetectVerificationParentCheckBox.IsEnabled = enabled;
         ExtractionInputFolderTextBox.IsEnabled = enabled;
         BrowseExtractionInputButton.IsEnabled = enabled;
         ExtractionOutputFolderTextBox.IsEnabled = enabled;
@@ -1892,6 +1959,21 @@ internal partial class MainWindow : Window, IDisposable
         ExtractGdiRadioButton.IsEnabled = enabled;
         ExtractHdRadioButton.IsEnabled = enabled;
         StartExtractionButton.IsEnabled = enabled;
+        ExtractionParentChdTextBox.IsEnabled = enabled;
+        BrowseExtractionParentButton.IsEnabled = enabled;
+        AutoDetectExtractionParentCheckBox.IsEnabled = enabled;
+        RecompressInputFolderTextBox.IsEnabled = enabled;
+        BrowseRecompressInputButton.IsEnabled = enabled;
+        RecompressOutputFolderTextBox.IsEnabled = enabled;
+        BrowseRecompressOutputButton.IsEnabled = enabled;
+        RecompressCompressionComboBox.IsEnabled = enabled;
+        RecompressVerifyCheckBox.IsEnabled = enabled;
+        RecompressDeleteOriginalCheckBox.IsEnabled = enabled;
+        RecompressUpgradeMetadataCheckBox.IsEnabled = enabled;
+        RecompressParentChdTextBox.IsEnabled = enabled;
+        BrowseRecompressParentButton.IsEnabled = enabled;
+        AutoDetectRecompressParentCheckBox.IsEnabled = enabled;
+        StartRecompressButton.IsEnabled = enabled;
         MainTabControl.IsEnabled = enabled;
 
         // Toggle progress area visibility
@@ -1909,6 +1991,7 @@ internal partial class MainWindow : Window, IDisposable
                 "ConvertTab" => "Converting files...",
                 "VerifyTab" => "Verifying files...",
                 "ExtractTab" => "Extracting files...",
+                "RecompressTab" => "Recompressing files...",
                 _ => "Processing..."
             };
             UpdateStatusBarMessage(message);
@@ -1941,6 +2024,70 @@ internal partial class MainWindow : Window, IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>Shows a CHD file picker and returns the chosen local path.</summary>
+    /// <param name="description">Title shown in the picker.</param>
+    /// <returns>The chosen CHD path, or null when no file was chosen.</returns>
+    private async Task<string?> SelectChdFileAsync(string description)
+    {
+        try
+        {
+            var storageProvider = GetTopLevel(this)?.StorageProvider;
+            if (storageProvider is null) return null;
+
+            var files = await storageProvider.OpenFilePickerAsync(
+                new FilePickerOpenOptions
+                {
+                    Title = description,
+                    AllowMultiple = false,
+                    FileTypeFilter =
+                    [
+                        new FilePickerFileType("CHD image") { Patterns = new[] { "*.chd" } },
+                        FilePickerFileTypes.All
+                    ]
+                }
+            );
+
+            return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Selects the parent CHD used by the verification tab.</summary>
+    private async void BrowseVerificationParentButton_ClickAsync(
+        object? sender,
+        RoutedEventArgs e
+    )
+    {
+        var path = await SelectChdFileAsync("Select the parent CHD for verification");
+        if (!string.IsNullOrEmpty(path))
+            VerificationParentChdTextBox.Text = path;
+    }
+
+    /// <summary>Selects the parent CHD used by the extraction tab.</summary>
+    private async void BrowseExtractionParentButton_ClickAsync(
+        object? sender,
+        RoutedEventArgs e
+    )
+    {
+        var path = await SelectChdFileAsync("Select the parent CHD for extraction");
+        if (!string.IsNullOrEmpty(path))
+            ExtractionParentChdTextBox.Text = path;
+    }
+
+    /// <summary>Selects the parent CHD used when creating a delta CHD.</summary>
+    private async void BrowseConversionParentButton_ClickAsync(
+        object? sender,
+        RoutedEventArgs e
+    )
+    {
+        var path = await SelectChdFileAsync("Select the parent CHD for delta creation");
+        if (!string.IsNullOrEmpty(path))
+            ConversionParentChdTextBox.Text = path;
     }
 
     /// <summary>
@@ -2047,7 +2194,7 @@ internal partial class MainWindow : Window, IDisposable
         LogMessage($"Found {_totalFilesProcessed} files to process.");
         if (_totalFilesProcessed == 0) return;
 
-        CheckDiskSpace(outputFolder, filesToConvert, true);
+        await CheckDiskSpaceAsync(outputFolder, filesToConvert, true, token);
 
         // A disconnected or unmounted output drive (USB stick unplugged, mapped drive gone) is a
         // common cause of mid-batch failures: every file then dies with a confusing "Could not
@@ -2152,6 +2299,8 @@ internal partial class MainWindow : Window, IDisposable
     /// <param name="outputFolder">Root of the extraction output folder.</param>
     /// <param name="deleteOriginal">Whether to delete each CHD after a successful extraction.</param>
     /// <param name="selectedFiles">Full paths of the CHD files to extract.</param>
+    /// <param name="parentPath">Optional parent CHD used for differential child images.</param>
+    /// <param name="autoDetectParent">True to search sibling CHD files for a matching parent.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task that completes when the batch has finished.</returns>
     private async Task PerformBatchExtractionAsync(
@@ -2159,6 +2308,8 @@ internal partial class MainWindow : Window, IDisposable
         string outputFolder,
         bool deleteOriginal,
         string[] selectedFiles,
+        string? parentPath,
+        bool autoDetectParent,
         CancellationToken token
     )
     {
@@ -2167,7 +2318,7 @@ internal partial class MainWindow : Window, IDisposable
         LogMessage($"Found {_totalFilesProcessed} CHD files to extract.");
         if (_totalFilesProcessed == 0) return;
 
-        CheckDiskSpace(outputFolder, selectedFiles, false);
+        await CheckDiskSpaceAsync(outputFolder, selectedFiles, false, token);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
             ProgressBar.Maximum = _totalFilesProcessed
@@ -2186,12 +2337,36 @@ internal partial class MainWindow : Window, IDisposable
                 "Extracting"
             );
 
+            var resolution = ParentChdResolver.Resolve(file, parentPath, autoDetectParent);
+            if (!string.IsNullOrWhiteSpace(resolution.Warning))
+                LogWarning($" {resolution.Warning}");
+
+            if (resolution.Error is not null)
+            {
+                LogError($" Failed to extract '{Path.GetFileName(file)}': {resolution.Error}");
+                Interlocked.Increment(ref _failedCount);
+                processedCount++;
+                UpdateProgressDisplay(
+                    processedCount,
+                    _totalFilesProcessed,
+                    Path.GetFileName(file),
+                    "Finishing"
+                );
+                UpdateStatsDisplay();
+                UpdateProcessingTimeDisplay();
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolution.ParentPath))
+                LogMessage($" Parent: {Path.GetFileName(resolution.ParentPath)}");
+
             var success = await ExtractChdAsync(
                 _chdmanExePath,
                 file,
                 inputFolder,
                 outputFolder,
                 deleteOriginal,
+                resolution.ParentPath,
                 token
             );
             if (success)
@@ -2573,7 +2748,7 @@ internal partial class MainWindow : Window, IDisposable
             if (string.IsNullOrEmpty(root)) return true;
 
             var drive = new DriveInfo(root);
-            if (!drive.IsReady) return true;
+            if (drive.DriveType == DriveType.Network || !drive.IsReady) return true;
 
             freeBytes = drive.AvailableFreeSpace;
             driveName = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -3596,11 +3771,13 @@ internal partial class MainWindow : Window, IDisposable
             archiveSize
         );
         tempDirs.Add(tempDir);
+        var archiveProgress = new ArchiveProgressLogger(LogMessage, "Extracting");
         var result = await _archiveService.ExtractArchiveAsync(
             inputFile,
             tempDir,
             LogMessage,
-            token
+            token,
+            progress: archiveProgress
         );
         if (!result.Success)
         {
@@ -5132,7 +5309,11 @@ internal partial class MainWindow : Window, IDisposable
                 if (!string.IsNullOrEmpty(tempDriveRoot))
                 {
                     var tempDrive = new DriveInfo(tempDriveRoot);
-                    if (tempDrive.IsReady && tempDrive.AvailableFreeSpace < totalBytesNeeded)
+                    if (
+                        tempDrive.DriveType != DriveType.Network
+                        && tempDrive.IsReady
+                        && tempDrive.AvailableFreeSpace < totalBytesNeeded
+                    )
                     {
                         var availableGb = tempDrive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
                         var neededGb = totalBytesNeeded / (1024.0 * 1024.0 * 1024.0);
@@ -5293,6 +5474,9 @@ internal partial class MainWindow : Window, IDisposable
     /// <param name="moveFailed">Whether failed files are moved into a failed folder.</param>
     /// <param name="failedFolder">Folder that receives failed files.</param>
     /// <param name="selectedFiles">Full paths of the CHD files to verify.</param>
+    /// <param name="parentPath">Optional parent CHD used for differential child images.</param>
+    /// <param name="autoDetectParent">True to search sibling CHD files for a matching parent.</param>
+    /// <param name="repairHeaderHashes">True to repair V3-V5 header hash fields on standalone CHDs.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>A task that completes when the batch has finished.</returns>
     private async Task PerformBatchVerificationAsync(
@@ -5303,6 +5487,9 @@ internal partial class MainWindow : Window, IDisposable
         bool moveFailed,
         string failedFolder,
         string[] selectedFiles,
+        string? parentPath,
+        bool autoDetectParent,
+        bool repairHeaderHashes,
         CancellationToken token
     )
     {
@@ -5336,7 +5523,40 @@ internal partial class MainWindow : Window, IDisposable
                 "Verifying"
             );
 
-            var result = await VerifyChdAsync(file, token);
+            var resolution = ParentChdResolver.Resolve(file, parentPath, autoDetectParent);
+            if (!string.IsNullOrWhiteSpace(resolution.Warning))
+                LogWarning($" {resolution.Warning}");
+
+            if (resolution.Error is not null)
+            {
+                LogMessage($"? Failed: {Path.GetFileName(file)}");
+                LogMessage($"  Error: {resolution.Error}");
+                Interlocked.Increment(ref _failedCount);
+
+                if (moveFailed && !string.IsNullOrEmpty(failedFolder))
+                    await MoveVerifiedFileAsync(file, failedFolder, inputFolder, includeSub, token);
+
+                processed++;
+                UpdateProgressDisplay(
+                    processed,
+                    _totalFilesProcessed,
+                    Path.GetFileName(file),
+                    "Finishing"
+                );
+                UpdateStatsDisplay();
+                UpdateProcessingTimeDisplay();
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolution.ParentPath))
+                LogMessage($"  Parent: {Path.GetFileName(resolution.ParentPath)}");
+
+            var result = await VerifyChdAsync(
+                file,
+                resolution.ParentPath,
+                repairHeaderHashes,
+                token
+            );
             var success = result is { IsSuccess: true };
 
             if (success)
@@ -5361,7 +5581,7 @@ internal partial class MainWindow : Window, IDisposable
                 }
 
                 if (ExportChecksumsCheckBox.IsChecked == true)
-                    await WriteChecksumReportAsync(finalPath, token);
+                    await WriteChecksumReportAsync(finalPath, resolution.ParentPath, token);
             }
             else
             {
@@ -5465,6 +5685,7 @@ internal partial class MainWindow : Window, IDisposable
     /// <param name="inputFolder">Root of the extraction input folder.</param>
     /// <param name="outputFolder">Root of the extraction output folder.</param>
     /// <param name="deleteOriginal">Whether to delete the CHD after a successful extraction.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>True when the CHD was extracted successfully.</returns>
     private async Task<bool> ExtractChdAsync(
@@ -5473,6 +5694,7 @@ internal partial class MainWindow : Window, IDisposable
         string inputFolder,
         string outputFolder,
         bool deleteOriginal,
+        string? parentPath,
         CancellationToken token
     )
     {
@@ -5493,7 +5715,7 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         // Get extraction type based on user-selected output format
-        var extractCommand = await GetSelectedExtractCommandAsync(chdFile, token);
+        var extractCommand = await GetSelectedExtractCommandAsync(chdFile, parentPath, token);
 
         // Determine output extension based on selection or detected command
         var outputExt = FileExtensions.Cue; // Default for extractcd
@@ -5525,7 +5747,7 @@ internal partial class MainWindow : Window, IDisposable
 
             if (
                 string.Equals(extractCommand, "extractcd", StringComparison.Ordinal)
-                && await IsGdiChdAsync(chdFile, token)
+                && await IsGdiChdAsync(chdFile, parentPath, token)
             )
             {
                 outputExt = FileExtensions.Gdi;
@@ -5569,7 +5791,7 @@ internal partial class MainWindow : Window, IDisposable
                     // warning can be attached to its failure message.
                     ChdSharpLoggerFactory.TakeLastWarning();
 
-                    var err = ChdFile.Open(chdFile, out var chd);
+                    var err = ChdFile.Open(chdFile, parentPath, out var chd, token);
                     if (err != ChdError.Chderrnone || chd == null)
                     {
                         // CHDSharp logs the header/map reason at Warning level; without it the
@@ -5592,10 +5814,7 @@ internal partial class MainWindow : Window, IDisposable
                             // gigabytes. Check the target volume up front so a full disk is
                             // reported as such instead of surfacing as an opaque
                             // "Chderrwriteerror" from the middle of the extraction.
-                            var extractionBytes = (long)Math.Min(
-                                chd.TotalBytes,
-                                (ulong)long.MaxValue
-                            );
+                            var extractionBytes = (long)Math.Min(chd.TotalBytes, long.MaxValue);
                             if (
                                 !PathUtils.HasFreeSpaceForDirectory(
                                     targetDir,
@@ -5635,6 +5854,7 @@ internal partial class MainWindow : Window, IDisposable
                                 CHDSharp.Encoder.ChdEncoder.ExtractLaserDisc(
                                     chdFile,
                                     outputFile,
+                                    parentPath,
                                     0,
                                     null,
                                     token
@@ -5737,6 +5957,7 @@ internal partial class MainWindow : Window, IDisposable
                             fileName,
                             extractCommand,
                             outputExt,
+                            parentPath,
                             token
                         )
                         .ConfigureAwait(false);
@@ -6056,15 +6277,17 @@ internal partial class MainWindow : Window, IDisposable
     ///     needed.
     /// </summary>
     /// <param name="chdFile">Full path of the CHD file.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The chdman extraction command name.</returns>
     private async Task<string> GetSelectedExtractCommandAsync(
         string chdFile,
+        string? parentPath,
         CancellationToken token
     )
     {
         if (ExtractAutoRadioButton.IsChecked == true)
-            return await DetectChdExtractCommandAsync(chdFile, token);
+            return await DetectChdExtractCommandAsync(chdFile, token, parentPath);
         if (ExtractDvdRadioButton.IsChecked == true)
             return "extractdvd";
         if (ExtractHdRadioButton.IsChecked == true)
@@ -6078,16 +6301,21 @@ internal partial class MainWindow : Window, IDisposable
 
     /// <summary>Returns whether the CHD's metadata identifies a GD-ROM image.</summary>
     /// <param name="chdFile">Full path of the CHD file.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>True when the CHD is a GD-ROM image.</returns>
-    private static Task<bool> IsGdiChdAsync(string chdFile, CancellationToken token)
+    private static Task<bool> IsGdiChdAsync(
+        string chdFile,
+        string? parentPath,
+        CancellationToken token
+    )
     {
         return Task.Run(
             () =>
             {
                 try
                 {
-                    var err = ChdFile.Open(chdFile, out var chd);
+                    var err = ChdFile.Open(chdFile, parentPath, out var chd, token);
                     if (err != ChdError.Chderrnone || chd == null)
                         return false;
 
@@ -6126,10 +6354,12 @@ internal partial class MainWindow : Window, IDisposable
     /// </summary>
     /// <param name="chdFile">Full path of the CHD file.</param>
     /// <param name="token">Cancellation token.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <returns>The detected extraction command, defaulting to extractcd.</returns>
     internal static Task<string> DetectChdExtractCommandAsync(
         string chdFile,
-        CancellationToken token
+        CancellationToken token,
+        string? parentPath = null
     )
     {
         return Task.Run(
@@ -6137,7 +6367,7 @@ internal partial class MainWindow : Window, IDisposable
             {
                 try
                 {
-                    var err = ChdFile.Open(chdFile, out var chd);
+                    var err = ChdFile.Open(chdFile, parentPath, out var chd, token);
                     if (err != ChdError.Chderrnone || chd == null)
                         return "extractcd";
 
@@ -6289,6 +6519,45 @@ internal partial class MainWindow : Window, IDisposable
             : isImg ? "createhd"
             : "createraw";
 
+        if (isAvi && _createDeltaChd)
+        {
+            LogError(
+                $" Failed to convert '{Path.GetFileName(inputFile)}': delta CHDs are not supported for laserdisc AVI input."
+            );
+            return false;
+        }
+
+        var effectivePreset = _conversionCompressionPreset;
+        if (!ChdCompressionPresets.IsSupported(effectivePreset, command))
+        {
+            LogWarning(
+                " Uncompressed output is not supported for CD or laserdisc images; using the compatible codec set instead."
+            );
+            effectivePreset = ChdCompressionPreset.Compatible;
+        }
+
+        DiscPlatform? detectedPlatform = null;
+        if (
+            effectivePreset == ChdCompressionPreset.Auto
+            && command is "createcd" or "createdvd"
+        )
+        {
+            detectedPlatform = await ChdCompressionPresets.DetectPlatformAsync(inputFile, token);
+            if (detectedPlatform is { } platform)
+                LogMessage($"  Detected platform: {platform}");
+        }
+
+        var codecTags = ChdCompressionPresets.GetCodecTags(
+            effectivePreset,
+            command,
+            detectedPlatform
+        );
+        var codecArgument = ChdCompressionPresets.GetChdmanCodecArgument(
+            effectivePreset,
+            command,
+            detectedPlatform
+        );
+
         var args = $"{command} -i \"{inputFile}\" -o \"{outputFile}\" -f -np {cores}";
         if (string.Equals(command, "createraw", StringComparison.Ordinal))
         {
@@ -6296,6 +6565,12 @@ internal partial class MainWindow : Window, IDisposable
             // and createdvd/createhd reject "-us" ("Option '-us' not valid for this command").
             args += " -us 2352";
         }
+
+        if (codecArgument is not null)
+            args += $" -c {codecArgument}";
+
+        if (_createDeltaChd && !string.IsNullOrWhiteSpace(_conversionParentPath))
+            args += $" -op \"{_conversionParentPath}\"";
 
         string? asciiTempDir = null;
         string? asciiInputFile = null;
@@ -6385,7 +6660,7 @@ internal partial class MainWindow : Window, IDisposable
                     asciiTempDir,
                     Guid.NewGuid().ToString("N") + Path.GetExtension(inputFile)
                 );
-                File.Copy(inputFile, asciiInputFile);
+                await CopyFileWithRetryAsync(inputFile, asciiInputFile, token);
                 inputFile = asciiInputFile;
             }
 
@@ -6439,7 +6714,7 @@ internal partial class MainWindow : Window, IDisposable
 
         if (!await HasRoomForOutputAsync(inputFile, originalInputFile, originalOutputFile, token))
         {
-            TryCleanupAsciiTemp();
+            await TryCleanupAsciiTempAsync();
             return false;
         }
 
@@ -6456,13 +6731,13 @@ internal partial class MainWindow : Window, IDisposable
         {
             if (await TryChdSharpInProcessAsync())
             {
-                TryCleanupAsciiTemp();
+                await TryCleanupAsciiTempAsync();
                 return true;
             }
 
             if (token.IsCancellationRequested)
             {
-                TryCleanupAsciiTemp();
+                await TryCleanupAsciiTempAsync();
                 return false;
             }
 
@@ -6477,7 +6752,7 @@ internal partial class MainWindow : Window, IDisposable
                 );
             }
 
-            TryCleanupAsciiTemp();
+            await TryCleanupAsciiTempAsync();
             return false;
         }
 
@@ -6521,7 +6796,7 @@ internal partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex) when (!IsCancellationException(ex))
         {
-            TryCleanupAsciiTemp();
+            await TryCleanupAsciiTempAsync();
             LogError($" Failed to start chdman: {ex.Message}");
             return false;
         }
@@ -6531,7 +6806,7 @@ internal partial class MainWindow : Window, IDisposable
         // chdman runs out of process, so its disk writes do not show up in this app's own
         // counters; sample the child process instead, or the speed card would sit at 0 MB/s
         // for every chdman conversion.
-        using var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
+        var chdmanSpeedCounter = IoThroughputCounter.CreateForProcess(process, writes: true);
 
         var speedMonitoringTask = Task.Run(
             async () =>
@@ -6547,6 +6822,10 @@ internal partial class MainWindow : Window, IDisposable
                 catch (OperationCanceledException)
                 {
                     // Expected when the conversion stops or the process exits.
+                }
+                finally
+                {
+                    chdmanSpeedCounter?.Dispose();
                 }
             },
             CancellationToken.None
@@ -6610,7 +6889,7 @@ internal partial class MainWindow : Window, IDisposable
             if (cleanupAfterProcessKill)
             {
                 await Task.Delay(300, CancellationToken.None);
-                TryCleanupAsciiTemp();
+                await TryCleanupAsciiTempAsync();
             }
         }
 
@@ -6682,8 +6961,19 @@ internal partial class MainWindow : Window, IDisposable
                         // fills mid-compression leaves a truncated CHD behind. The output is only
                         // accepted when it actually validates, otherwise it is deleted with the
                         // rest of the failed staging output and the source is kept.
-                        using var outputStream = File.OpenRead(outputFile);
-                        var check = Chd.CheckFile(outputStream, Path.GetFileName(outputFile), true);
+                        var check = await Task.Run(
+                            () =>
+                            {
+                                using var outputStream = File.OpenRead(outputFile);
+                                return Chd.CheckFile(
+                                    outputStream,
+                                    Path.GetFileName(outputFile),
+                                    true,
+                                    cancellationToken: token
+                                );
+                            },
+                            token
+                        );
                         if (check.IsSuccess)
                         {
                             LogMessage(
@@ -6931,15 +7221,15 @@ internal partial class MainWindow : Window, IDisposable
         }
         finally
         {
-            TryCleanupAsciiTemp();
+            await TryCleanupAsciiTempAsync();
         }
 
-        void TryCleanupAsciiTemp()
+        async Task TryCleanupAsciiTempAsync()
         {
             try
             {
                 if (asciiInputFile != null && File.Exists(asciiInputFile))
-                    File.Delete(asciiInputFile);
+                    await Task.Run(() => File.Delete(asciiInputFile), CancellationToken.None);
             }
             catch
             {
@@ -6949,22 +7239,19 @@ internal partial class MainWindow : Window, IDisposable
             try
             {
                 if (asciiOutputFile != null && File.Exists(asciiOutputFile))
-                    File.Delete(asciiOutputFile);
+                    await Task.Run(() => File.Delete(asciiOutputFile), CancellationToken.None);
             }
             catch
             {
                 // ignored
             }
 
-            try
-            {
-                if (Directory.Exists(asciiTempDir))
-                    Directory.Delete(asciiTempDir, true);
-            }
-            catch
-            {
-                // ignored
-            }
+            if (asciiTempDir != null && Directory.Exists(asciiTempDir))
+                await TryDeleteDirectoryAsync(
+                    asciiTempDir,
+                    "ASCII temp directory",
+                    CancellationToken.None
+                );
         }
 
         // Runs the built-in CHDSharp encoder for the same command the chdman attempt used, on a
@@ -7075,7 +7362,9 @@ internal partial class MainWindow : Window, IDisposable
                             isRaw,
                             cores,
                             fallbackTimeoutCts.Token,
-                            progress.ReportHunk
+                            progress.ReportHunk,
+                            codecTags: codecTags,
+                            parentPath: _createDeltaChd ? _conversionParentPath : null
                         ),
                     fallbackTimeoutCts.Token
                 );
@@ -7169,7 +7458,12 @@ internal partial class MainWindow : Window, IDisposable
                 // reason is the one attached to the message below.
                 ChdSharpLoggerFactory.TakeLastWarning();
                 using var stagedStream = File.OpenRead(outputFile);
-                stagedCheck = Chd.CheckFile(stagedStream, Path.GetFileName(outputFile), false);
+                stagedCheck = Chd.CheckFile(
+                    stagedStream,
+                    Path.GetFileName(outputFile),
+                    false,
+                    cancellationToken: token
+                );
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -7211,7 +7505,8 @@ internal partial class MainWindow : Window, IDisposable
                                 cores,
                                 fallbackTimeoutCts.Token,
                                 progress.ReportHunk,
-                                conservativeCodecs: true
+                                conservativeCodecs: true,
+                                parentPath: _createDeltaChd ? _conversionParentPath : null
                             ),
                         fallbackTimeoutCts.Token
                     );
@@ -7221,7 +7516,8 @@ internal partial class MainWindow : Window, IDisposable
                     var retryCheck = Chd.CheckFile(
                         retryStream,
                         Path.GetFileName(outputFile),
-                        false
+                        false,
+                        cancellationToken: fallbackTimeoutCts.Token
                     );
                     if (!retryCheck.IsSuccess)
                     {
@@ -7559,12 +7855,17 @@ internal partial class MainWindow : Window, IDisposable
     internal static string BuildChdmanExtractArgs(
         string command,
         string inputFile,
-        string outputPath
+        string outputPath,
+        string? parentPath = null
     )
     {
+        var parentArgument = string.IsNullOrWhiteSpace(parentPath)
+            ? string.Empty
+            : $" -ip \"{parentPath}\"";
+
         return string.Equals(command, "extractcd", StringComparison.Ordinal)
-            ? $"extractcd -i \"{inputFile}\" -o \"{outputPath}\" -ob \"{Path.ChangeExtension(outputPath, FileExtensions.Bin)}\" -f"
-            : $"{command} -i \"{inputFile}\" -o \"{outputPath}\" -f";
+            ? $"extractcd -i \"{inputFile}\" -o \"{outputPath}\" -ob \"{Path.ChangeExtension(outputPath, FileExtensions.Bin)}\" -f{parentArgument}"
+            : $"{command} -i \"{inputFile}\" -o \"{outputPath}\" -f{parentArgument}";
     }
 
     /// <summary>
@@ -7580,6 +7881,7 @@ internal partial class MainWindow : Window, IDisposable
         string fileName,
         string extractCommand,
         string outputExt,
+        string? parentPath,
         CancellationToken token
     )
     {
@@ -7592,7 +7894,7 @@ internal partial class MainWindow : Window, IDisposable
         // Laserdisc CHDs have no CD/DVD/HDD metadata, so the selected extract command
         // (extractcd/dvd/hd) cannot handle them. Try the user's format first, then — when
         // the CHD is A/V — extractld (AVI, MAME 0.285+) and extractraw (raw dump).
-        var isAvChd = await IsAvChdAsync(chdFile, token).ConfigureAwait(false);
+        var isAvChd = await IsAvChdAsync(chdFile, parentPath, token).ConfigureAwait(false);
 
         var attempts = new List<(string Command, string OutputPath)>
         {
@@ -7634,7 +7936,7 @@ internal partial class MainWindow : Window, IDisposable
                 if (
                     await RunChdmanExtractAsync(
                             chdmanPath,
-                            BuildChdmanExtractArgs(command, chdFile, outputPath),
+                            BuildChdmanExtractArgs(command, chdFile, outputPath, parentPath),
                             token
                         )
                         .ConfigureAwait(false)
@@ -7738,14 +8040,18 @@ internal partial class MainWindow : Window, IDisposable
     ///     CD/DVD/HDD metadata. Header parsing never decodes hunks, so this works even for
     ///     CHDs whose data CHDSharp cannot decompress. Any failure classifies as not-A/V.
     /// </summary>
-    private static Task<bool> IsAvChdAsync(string chdFile, CancellationToken token)
+    private static Task<bool> IsAvChdAsync(
+        string chdFile,
+        string? parentPath,
+        CancellationToken token
+    )
     {
         return Task.Run(
             () =>
             {
                 try
                 {
-                    var err = ChdFile.Open(chdFile, out var chd);
+                    var err = ChdFile.Open(chdFile, parentPath, out var chd, token);
                     if (err != ChdError.Chderrnone || chd == null)
                         return false;
 
@@ -8162,26 +8468,82 @@ internal partial class MainWindow : Window, IDisposable
 
     /// <summary>Verifies a CHD file and logs its version and SHA1.</summary>
     /// <param name="chdFile">Full path of the CHD file.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
+    /// <param name="repairHeaderHashes">
+    ///     True to repair V3-V5 header hash fields when they no longer match the data (standalone
+    ///     CHDs only; child CHDs are verified against their parent and never rewritten here).
+    /// </param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The verification result, or <see langword="null" /> when verification threw.</returns>
-    private Task<ChdResult?> VerifyChdAsync(string chdFile, CancellationToken token)
+    private Task<ChdResult?> VerifyChdAsync(
+        string chdFile,
+        string? parentPath,
+        bool repairHeaderHashes,
+        CancellationToken token
+    )
     {
         return Task.Run<ChdResult?>(
             () =>
             {
                 try
                 {
-                    using var stream = File.OpenRead(chdFile);
                     var progress = new ChdSharpProgressLogger(LogMessage, "Verifying");
-                    var result = Chd.CheckFile(stream, Path.GetFileName(chdFile), true, progress);
+                    ChdResult result;
+
+                    if (!string.IsNullOrWhiteSpace(parentPath))
+                    {
+                        result = Chd.CheckFileWithParent(
+                            chdFile,
+                            parentPath,
+                            progress,
+                            token
+                        );
+
+                        if (repairHeaderHashes)
+                            LogMessage(
+                                "  Header repair is skipped for child CHDs; they are verified against their parent."
+                            );
+                    }
+                    else if (repairHeaderHashes)
+                    {
+                        result = Chd.CheckFileAndRepair(
+                            chdFile,
+                            out var repaired,
+                            progress,
+                            token
+                        );
+                        if (repaired)
+                            LogMessage("  Repaired CHD header hash fields.");
+                    }
+                    else
+                    {
+                        using var stream = File.OpenRead(chdFile);
+                        result = Chd.CheckFile(
+                            stream,
+                            Path.GetFileName(chdFile),
+                            true,
+                            progress,
+                            token
+                        );
+                    }
 
                     if (result.IsSuccess)
                     {
-                        LogMessage($"  V{result.Version} — SHA1: {result.Sha1Hex}");
+                        LogMessage($"  V{result.Version} - SHA1: {result.Sha1Hex}");
                         return result;
                     }
 
-                    LogMessage($"  Error: {result.Error.GetMessage()}");
+                    if (result.Error == ChdError.Chderrrequiresparent)
+                    {
+                        LogMessage(
+                            "  Error: this is a child CHD. Select its parent CHD (or place the parent in the same folder) and verify again."
+                        );
+                    }
+                    else
+                    {
+                        LogMessage($"  Error: {result.Error.GetMessage()}");
+                    }
+
                     return result;
                 }
                 catch (OperationCanceledException)
@@ -8203,14 +8565,19 @@ internal partial class MainWindow : Window, IDisposable
     ///     as a warning and never fails the verification.
     /// </summary>
     /// <param name="chdFile">Full path of the verified CHD.</param>
+    /// <param name="parentPath">Optional parent CHD for a differential child image.</param>
     /// <param name="token">Cancellation token.</param>
-    private async Task WriteChecksumReportAsync(string chdFile, CancellationToken token)
+    private async Task WriteChecksumReportAsync(
+        string chdFile,
+        string? parentPath,
+        CancellationToken token
+    )
     {
         try
         {
             var progress = new ChdSharpProgressLogger(LogMessage, "Hashing");
             var reportPath = await Task.Run(
-                () => ChdChecksumReport.Write(chdFile, progress, token),
+                () => ChdChecksumReport.Write(chdFile, parentPath, progress, token),
                 token
             );
             LogMessage($"  Checksums written: {Path.GetFileName(reportPath)}");
@@ -8640,95 +9007,125 @@ internal partial class MainWindow : Window, IDisposable
 
     /// <summary>
     ///     Logs a warning when the output or temp drive has less free space than the batch may need.
+    ///     The file-size scan and drive queries run off the UI thread because a slow or disconnected
+    ///     volume can block for several seconds.
     /// </summary>
     /// <param name="outputFolder">Root of the output folder.</param>
     /// <param name="filesToProcess">Files that will be processed.</param>
     /// <param name="isConversion">True for conversion, false for extraction.</param>
-    private void CheckDiskSpace(string outputFolder, string[] filesToProcess, bool isConversion)
+    /// <param name="token">Cancellation token.</param>
+    private async Task CheckDiskSpaceAsync(
+        string outputFolder,
+        string[] filesToProcess,
+        bool isConversion,
+        CancellationToken token
+    )
     {
-        try
-        {
-            var outputRoot = Path.GetPathRoot(Path.GetFullPath(outputFolder));
-            if (string.IsNullOrEmpty(outputRoot))
-                return;
-
-            var driveInfo = new DriveInfo(outputRoot);
-            if (!driveInfo.IsReady)
-                return;
-
-            var availableGb = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
-            var totalInputSize = 0L;
-            foreach (var file in filesToProcess)
-            {
-                try
+        await Task.Run(
+                () =>
                 {
-                    totalInputSize += new FileInfo(file).Length;
-                }
-                catch
-                {
-                    /* skip inaccessible files */
-                }
-            }
-
-            var totalInputGb = totalInputSize / (1024.0 * 1024.0 * 1024.0);
-
-            if (isConversion)
-            {
-                // CHD compression typically reduces size, but warn if available space < 50% of input
-                if (availableGb < totalInputGb * 0.5)
-                {
-                    LogMessage(
-                        $" Output drive ({outputRoot.TrimEnd('\\')}) has {availableGb:F1} GB free, input files total {totalInputGb:F1} GB."
-                    );
-                    LogMessage(
-                        "         CHD compression usually reduces file size, but you may run out of disk space."
-                    );
-                }
-            }
-            else
-            {
-                // Extraction: output can be larger than CHD input
-                if (availableGb < totalInputGb)
-                {
-                    LogMessage(
-                        $" Output drive ({outputRoot.TrimEnd('\\')}) has {availableGb:F1} GB free, CHD files total {totalInputGb:F1} GB."
-                    );
-                    LogMessage(
-                        "         Extracted files are typically larger than CHD files. You may run out of disk space."
-                    );
-                }
-            }
-
-            // Also check temp drive if conversion (temp files are created)
-            if (isConversion)
-            {
-                var tempRoot = Path.GetPathRoot(Path.GetTempPath());
-                if (
-                    !string.IsNullOrEmpty(tempRoot)
-                    && !string.Equals(tempRoot, outputRoot, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    var tempDrive = new DriveInfo(tempRoot);
-                    if (tempDrive.IsReady)
+                    try
                     {
-                        var tempFreeGb = tempDrive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
-                        if (tempFreeGb < totalInputGb)
+                        var outputRoot = Path.GetPathRoot(Path.GetFullPath(outputFolder));
+                        if (string.IsNullOrEmpty(outputRoot))
+                            return;
+
+                        var driveInfo = new DriveInfo(outputRoot);
+                        if (driveInfo.DriveType == DriveType.Network || !driveInfo.IsReady)
+                            return;
+
+                        var availableGb =
+                            driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
+                        var totalInputSize = 0L;
+                        foreach (var file in filesToProcess)
                         {
-                            LogMessage(
-                                $" Temp drive ({tempRoot.TrimEnd('\\')}) has {tempFreeGb:F1} GB free, input files total {totalInputGb:F1} GB."
-                            );
-                            LogMessage(
-                                "         Temporary files are created during conversion. You may run out of disk space."
-                            );
+                            token.ThrowIfCancellationRequested();
+                            try
+                            {
+                                totalInputSize += new FileInfo(file).Length;
+                            }
+                            catch
+                            {
+                                /* skip inaccessible files */
+                            }
+                        }
+
+                        var totalInputGb = totalInputSize / (1024.0 * 1024.0 * 1024.0);
+
+                        if (isConversion)
+                        {
+                            // CHD compression typically reduces size, but warn if available space < 50% of input
+                            if (availableGb < totalInputGb * 0.5)
+                            {
+                                LogMessage(
+                                    $" Output drive ({outputRoot.TrimEnd('\\')}) has {availableGb:F1} GB free, input files total {totalInputGb:F1} GB."
+                                );
+                                LogMessage(
+                                    "         CHD compression usually reduces file size, but you may run out of disk space."
+                                );
+                            }
+                        }
+                        else
+                        {
+                            // Extraction: output can be larger than CHD input
+                            if (availableGb < totalInputGb)
+                            {
+                                LogMessage(
+                                    $" Output drive ({outputRoot.TrimEnd('\\')}) has {availableGb:F1} GB free, CHD files total {totalInputGb:F1} GB."
+                                );
+                                LogMessage(
+                                    "         Extracted files are typically larger than CHD files. You may run out of disk space."
+                                );
+                            }
+                        }
+
+                        // Also check temp drive if conversion (temp files are created)
+                        if (isConversion)
+                        {
+                            var tempRoot = Path.GetPathRoot(Path.GetTempPath());
+                            if (
+                                !string.IsNullOrEmpty(tempRoot)
+                                && !string.Equals(
+                                    tempRoot,
+                                    outputRoot,
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            {
+                                var tempDrive = new DriveInfo(tempRoot);
+                                if (
+                                    tempDrive.DriveType != DriveType.Network
+                                    && tempDrive.IsReady
+                                )
+                                {
+                                    var tempFreeGb =
+                                        tempDrive.AvailableFreeSpace
+                                        / (1024.0 * 1024.0 * 1024.0);
+                                    if (tempFreeGb < totalInputGb)
+                                    {
+                                        LogMessage(
+                                            $" Temp drive ({tempRoot.TrimEnd('\\')}) has {tempFreeGb:F1} GB free, input files total {totalInputGb:F1} GB."
+                                        );
+                                        LogMessage(
+                                            "         Temporary files are created during conversion. You may run out of disk space."
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            }
-        }
-        catch
-        {
-            // Best effort - don't fail the operation if disk check itself fails
-        }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        // Best effort - don't fail the operation if disk check itself fails
+                    }
+                },
+                token
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>Deletes a file with retries and logs the result.</summary>
