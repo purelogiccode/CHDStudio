@@ -558,6 +558,12 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 
 ## Version history
 
+### 1.1.8
+
+- `PbpFile.Open(string path, out PbpFile?)` now disposes the file stream when the container is rejected, so a failed open no longer leaves the PBP locked until process exit.
+- `OutOfMemoryException` is no longer converted into a `CorruptFile` result; genuine memory exhaustion propagates instead of being reported as damaged user data.
+- No public API changes.
+
 ### 1.1.7
 
 - `PbpFile.Open` no longer decompresses ISO block 1. `PbpDiscInfo.IsoSize` is resolved on first use and returns `0` when it cannot be derived (fewer than two indexed blocks, or block 1 cannot be decoded), so a PBP whose container is readable but whose first block is unusual opens and extracts instead of failing with `PbpError.CorruptFile`. Callers must treat `0` as "unknown size" and extract every index entry, which `ExtractTo` already does.

@@ -5,6 +5,38 @@ nav_order: 16
 
 # What's New
 
+## 3.12.0 (2026-11-03)
+
+### Parent/child CHD support
+
+*   **Differential child CHDs are first-class inputs.** Verify, Extract, Recompress and the checksum export accept a child plus its parent. Select the parent explicitly or leave auto-detection enabled to match the child header's parent SHA-1/MD5 against sibling `.chd` files. A missing or mismatched parent is reported before work starts, and the chdman fallback receives the same parent (`-ip` for extraction, `-op` for delta creation) as the built-in reader.
+*   **A child can be consolidated into a standalone CHD.** The new Recompress tab resolves the source through its parent and writes a complete independent image with the selected codec set, so the result works in tools that do not understand parent/child chains.
+*   **Delta output is verified against its parent.** The built-in encoder's staged delta is checked with `Chd.CheckFileWithParent` instead of the standalone header check, so a valid child is not mistaken for a parentless/corrupt file and the compatible-codec retry has a real verification failure to act on.
+*   **Header repair and hashing are parent-aware.** Standalone V3-V5 images can have mismatched header hash fields repaired (`chdman verify --fix` parity), while child images are verified against their parent and never rewritten. Checksum reports use the parent for their whole-image and per-track hashes.
+*   **Explorer guidance and platform detection.** The Explorer detects the disc platform and preselects the matching file-system parser, shows raw and combined hashes, unit counts, header/map/metadata offsets, flags, track pregaps/padding and stored bytes per codec, and rejects child images with guidance to consolidate them first.
+
+### Recompression and codec presets
+
+*   **New Recompress CHD tab.** Batch-recompress existing CHDs, change the codec set, deep-verify the output before replacing the destination, optionally delete the original, and optionally upgrade legacy CD/GD metadata tags. Deep verification is forced when "delete original" is enabled, and children are processed before their parents so a batch containing both cannot lose a parent first.
+*   **Compression presets for new conversions and recompression.** Choose Default (chdman-compatible), Smallest (zstd/cdzs), Most compatible (zlib/cdzl), Auto (per-platform detection) or Uncompressed (raw/DVD/HDD only). Unsupported uncompressed CD/laserdisc output falls back to the compatible set instead of failing opaquely (the Convert tab also logs a warning). The Smallest preset now names four codecs so chdman (four-slot limit) and the built-in encoder produce the same output.
+*   **Delta CHD creation.** New conversions can be written as a child against a selected parent, using the same `ParentPath`/`-op` option in both the built-in encoder and chdman.
+
+### Conversion and extraction reliability
+
+*   **Failed opens no longer leak the PBP file handle.** PBPSharp 1.1.8 disposes the file stream when a PBP is rejected, so the file can be moved, deleted or retried immediately; `OutOfMemoryException` also propagates instead of being reported as damaged user data.
+*   **Damaged PSAR blocks and PSP EBOOTs are user data, not bug reports.** A block that ends before its 16 sectors or an unreadable PBP header is skipped with re-download guidance.
+*   **Output and temp folder failures are classified.** Removed, unready, full, read-only and access-denied drives now produce actionable messages instead of raw I/O exceptions or bug reports, and CHD write errors are treated as output-volume conditions.
+*   **CHD extraction checks free space first.** The target volume is checked against the decompressed size before writing, so a full disk is reported before a partial extraction starts.
+*   **CHDSharp output is retried once with zlib.** If an encoder codec set produces a CHD that fails its own verification, the same source is retried with the most compatible codec set; a valid retry is accepted and the failure is not filed as an app defect.
+*   **Archive extraction stays responsive.** Drive probing and ZIP central-directory sizing run off the UI thread, network drives are filtered before readiness checks, and ZIP extraction reports progress at 10% steps with cancellation checks inside each entry.
+
+### Verification
+
+*   **Test suite:** 1,231 tests pass (1,202 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors (suggestions/notes only).
+*   **PBPSharp 1.1.8** is published to NuGet with the stream-disposal fix.
+*   **Dependencies:** CHDSharp 1.6.3, Avalonia 12.1.5, SharpCompress 0.50.8 and Meziantou.Analyzer 3.0.320 are the current package versions.
+
 ## 3.11.1 (2026-10-31)
 
 ### PBP extraction - PBPSharp 1.1.7

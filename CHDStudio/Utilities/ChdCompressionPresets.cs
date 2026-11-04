@@ -50,7 +50,9 @@ internal static class ChdCompressionPresets
                 : [CodecTags.Zlib],
             ChdCompressionPreset.Smallest => string.Equals(command, "createcd", StringComparison.Ordinal)
                 ? [CodecTags.Cdlz, CodecTags.Cdzl, CodecTags.Cdzs, CodecTags.Cdfl]
-                : [CodecTags.Zstd, CodecTags.Lzma, CodecTags.Zlib, CodecTags.Huff, CodecTags.Flac],
+                // CHD v5 has four codec slots and chdman accepts at most four tags. Keeping the
+                // same four for the built-in encoder makes both encoders produce the same preset.
+                : [CodecTags.Zstd, CodecTags.Lzma, CodecTags.Zlib, CodecTags.Huff],
             ChdCompressionPreset.Uncompressed => [CodecTags.None],
             ChdCompressionPreset.Auto => GetAutoCodecTags(command, platform),
             _ => null

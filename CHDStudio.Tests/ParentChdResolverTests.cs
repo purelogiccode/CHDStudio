@@ -75,6 +75,20 @@ public class ParentChdResolverTests : IDisposable
     }
 
     [Fact]
+    public void OrderChildrenFirst_PutsChildBeforeItsParent()
+    {
+        var (parentChd, childChd) = CreatePair();
+
+        var ordered = ParentChdResolver.OrderChildrenFirst(
+            [parentChd, childChd],
+            explicitParentPath: null,
+            autoDetect: true
+        );
+
+        Assert.Equal([childChd, parentChd], ordered);
+    }
+
+    [Fact]
     public void Resolve_ExplicitParent_ReturnsIt()
     {
         var (parentChd, childChd) = CreatePair();

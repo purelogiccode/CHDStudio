@@ -88,7 +88,7 @@ plain image before converting it to CHD with `chdman` or [CHDSharp](https://www.
 | Target frameworks | `net8.0`, `net9.0`, `net10.0` |
 | Runtime | .NET 8, .NET 9 or .NET 10 |
 | Platforms | Windows, Linux, macOS (pure managed code) |
-| Dependencies | [SharpCompress](https://www.nuget.org/packages/SharpCompress) 0.50.7 (bzip2) |
+| Dependencies | [SharpCompress](https://www.nuget.org/packages/SharpCompress) 0.50.8 (bzip2) |
 
 The package contains a separate assembly for each target framework, so the correct build is selected
 automatically by NuGet.

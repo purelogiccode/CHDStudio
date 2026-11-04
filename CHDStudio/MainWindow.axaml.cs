@@ -2326,7 +2326,12 @@ internal partial class MainWindow : Window, IDisposable
         var processedCount = 0;
         ResetSpeedCounters();
 
-        foreach (var file in selectedFiles)
+        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
+            selectedFiles,
+            parentPath,
+            autoDetectParent
+        );
+        foreach (var file in orderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -5511,7 +5516,12 @@ internal partial class MainWindow : Window, IDisposable
         var processed = 0;
         ResetSpeedCounters();
 
-        foreach (var file in selectedFiles)
+        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
+            selectedFiles,
+            parentPath,
+            autoDetectParent
+        );
+        foreach (var file in orderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -7440,8 +7450,8 @@ internal partial class MainWindow : Window, IDisposable
             // The encoder returns only after it has written the whole file, but a failure in its
             // own output stage can still leave nothing usable behind. Validate the staging output
             // before moving it into place so a zero-length or truncated file is never reported as
-            // a successful conversion (CHDSharp validates the hunks it writes; the header check
-            // here catches a missing/short file without a second full pass over the image).
+            // a successful conversion. A delta output needs its parent to be verifiable, and the
+            // deep pass is what makes the compatible-codec retry below meaningful.
             if (!File.Exists(outputFile) || new FileInfo(outputFile).Length == 0)
             {
                 chdSharpFailure = "the encoder did not produce an output file";
@@ -7457,12 +7467,10 @@ internal partial class MainWindow : Window, IDisposable
                 // Discard any diagnostic left by an earlier encode so this check's own failure
                 // reason is the one attached to the message below.
                 ChdSharpLoggerFactory.TakeLastWarning();
-                using var stagedStream = File.OpenRead(outputFile);
-                stagedCheck = Chd.CheckFile(
-                    stagedStream,
-                    Path.GetFileName(outputFile),
-                    false,
-                    cancellationToken: token
+                stagedCheck = ValidateStagedChd(
+                    outputFile,
+                    _createDeltaChd ? _conversionParentPath : null,
+                    token
                 );
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -7512,12 +7520,10 @@ internal partial class MainWindow : Window, IDisposable
                     );
 
                     ChdSharpLoggerFactory.TakeLastWarning();
-                    using var retryStream = File.OpenRead(outputFile);
-                    var retryCheck = Chd.CheckFile(
-                        retryStream,
-                        Path.GetFileName(outputFile),
-                        false,
-                        cancellationToken: fallbackTimeoutCts.Token
+                    var retryCheck = ValidateStagedChd(
+                        outputFile,
+                        _createDeltaChd ? _conversionParentPath : null,
+                        fallbackTimeoutCts.Token
                     );
                     if (!retryCheck.IsSuccess)
                     {
@@ -7845,6 +7851,32 @@ internal partial class MainWindow : Window, IDisposable
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    ///     Validates a staged CHD before it replaces the destination. A delta child is verified
+    ///     against its parent; a standalone image gets the same full check used by the chdman path.
+    /// </summary>
+    /// <param name="outputFile">Path of the staged CHD.</param>
+    /// <param name="parentPath">Parent path for delta output, or <c>null</c> for standalone.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>The verification result.</returns>
+    internal static ChdResult ValidateStagedChd(
+        string outputFile,
+        string? parentPath,
+        CancellationToken token
+    )
+    {
+        if (!string.IsNullOrWhiteSpace(parentPath))
+            return Chd.CheckFileWithParent(outputFile, parentPath, cancellationToken: token);
+
+        using var stream = File.OpenRead(outputFile);
+        return Chd.CheckFile(
+            stream,
+            Path.GetFileName(outputFile),
+            true,
+            cancellationToken: token
+        );
     }
 
     /// <summary>

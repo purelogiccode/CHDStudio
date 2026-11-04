@@ -167,7 +167,7 @@ Checks GitHub for new releases at startup.
 
 `internal static class ChdSharpEncoderService` (`ChdSharpEncoderService.cs:11`)
 
-In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.1). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
+In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.3). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
 
 ### API
 
@@ -207,7 +207,7 @@ Recompresses an existing CHD with CHDSharp's `ChdEncoder.Copy`. It preserves met
 
 | Member | Purpose |
 |--------|---------|
-| `Recompress(sourcePath, outputPath, preset, parentPath, upgradeMetadata, taskCount, token, onHunkCompleted = null)` (static) | Opens the source (with `parentPath` when it is a child), chooses codec tags for the selected `ChdCompressionPreset`, and calls `ChdEncoder.Copy`. Throws `InvalidDataException` when the source cannot be opened and `InvalidOperationException` for unsupported uncompressed CD/laserdisc output. |
+| `Recompress(sourcePath, outputPath, preset, parentPath, upgradeMetadata, taskCount, token, onHunkCompleted = null)` (static) | Opens the source (with `parentPath` when it is a child), chooses codec tags for the selected `ChdCompressionPreset`, and calls `ChdEncoder.Copy`. Throws `InvalidDataException` when the source cannot be opened. Uncompressed CD/laserdisc output falls back to the compatible codec set. |
 
 The command used for preset selection is derived from the source flags (`createcd`, `createdvd`, `createhd`, `createraw`, or `createld` when the source carries `AVAV` metadata). `Auto` only detects a platform for CD/DVD sources, and auto-preset codecs whose media type does not match the command are rejected in favour of the defaults.
 

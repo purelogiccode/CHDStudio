@@ -238,7 +238,8 @@ internal class ArchiveService
                                 originalArchivePath,
                                 tempDirectoryRoot,
                                 onLog,
-                                token
+                                token,
+                                progress
                             )
                             .ConfigureAwait(false);
                         break;
@@ -271,7 +272,9 @@ internal class ArchiveService
                 return (false, [], tempDirectoryRoot, $"Unsupported archive type: {extension}");
             }
 
-            progress?.Report(new ArchiveProgress(1, 1, 1, 1));
+            // Archive extractors without byte-level progress (RAR/7z) report completion through
+            // the entry count; using a fake 1/1 byte total printed "1 / 1 bytes".
+            progress?.Report(new ArchiveProgress(0, 0, 1, 1));
             token.ThrowIfCancellationRequested();
 
             var collection = await CollectExtractedPrimaryFilesAsync(

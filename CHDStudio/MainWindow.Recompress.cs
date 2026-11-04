@@ -52,7 +52,11 @@ internal partial class MainWindow
                     })
                     .ToList();
 
-                Dispatcher.UIThread.Invoke(() => _recompressFiles.Clear());
+                Dispatcher.UIThread.Invoke(() =>
+                {
+                    _recompressFiles.Clear();
+                    TotalFilesValue.Text = "0";
+                });
 
                 const int chunkSize = 100;
                 try
@@ -166,6 +170,24 @@ internal partial class MainWindow
                 return;
             }
 
+            // The list is filled asynchronously when the input folder changes. If Start is
+            // clicked before that scan finishes, the old folder's entries must not be processed
+            // against the new input folder (which could write outside the output root).
+            if (
+                selectedFiles.Any(file =>
+                    !PathUtils.IsSameOrInsideDirectory(
+                        inputFolder,
+                        Path.GetDirectoryName(file)
+                    )
+                )
+            )
+            {
+                ShowError(
+                    "The file list is still updating for the selected folder. Wait for the scan to finish and try again."
+                );
+                return;
+            }
+
             var preset =
                 (RecompressCompressionComboBox.SelectedItem as ChdCompressionPresetInfo)?.Preset
                 ?? ChdCompressionPreset.Default;
@@ -253,7 +275,12 @@ internal partial class MainWindow
         var processed = 0;
         ResetSpeedCounters();
 
-        foreach (var file in selectedFiles)
+        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
+            selectedFiles,
+            parentPath,
+            autoDetectParent
+        );
+        foreach (var file in orderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -421,7 +448,14 @@ internal partial class MainWindow
                 return false;
             }
 
-            if (verify)
+            if (!verify && deleteOriginal)
+            {
+                LogMessage(
+                    " Deep verification is required before deleting the original; verifying the recompressed CHD."
+                );
+            }
+
+            if (verify || deleteOriginal)
             {
                 var check = await Task.Run(
                     () =>

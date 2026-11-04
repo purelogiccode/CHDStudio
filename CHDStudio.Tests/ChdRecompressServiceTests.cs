@@ -82,6 +82,39 @@ public class ChdRecompressServiceTests : IDisposable
     }
 
     [Fact]
+    public void Recompress_CdWithUncompressedPreset_FallsBackToCompatible()
+    {
+        File.WriteAllBytes(PathFor("cd.bin"), new byte[2352 * 5]);
+        var cuePath = PathFor("cd.cue");
+        File.WriteAllText(
+            cuePath,
+            "FILE \"cd.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+        var sourcePath = PathFor("cd-source.chd");
+        ChdSharpEncoderService.Encode(
+            "createcd",
+            cuePath,
+            sourcePath,
+            false,
+            2,
+            CancellationToken.None
+        );
+
+        var outputPath = PathFor("cd-fallback.chd");
+        ChdRecompressService.Recompress(
+            sourcePath,
+            outputPath,
+            ChdCompressionPreset.Uncompressed,
+            null,
+            true,
+            2,
+            CancellationToken.None
+        );
+
+        AssertVerifies(outputPath);
+    }
+
+    [Fact]
     public void Recompress_ChildSource_ProducesStandaloneChd()
     {
         var parentSource = PathFor("parent.bin");

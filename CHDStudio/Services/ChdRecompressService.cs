@@ -64,9 +64,9 @@ internal static class ChdRecompressService
             && command is "createcd" or "createld"
         )
         {
-            throw new InvalidOperationException(
-                "Uncompressed output is not supported for CD or laserdisc CHDs."
-            );
+            // Match the Convert tab: uncompressed output is only meaningful for raw media, so
+            // CD/laserdisc sources fall back to the compatible codec set instead of failing.
+            preset = ChdCompressionPreset.Compatible;
         }
 
         var codecTags = ChdCompressionPresets.GetCodecTags(preset, command, platform);

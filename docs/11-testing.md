@@ -5,9 +5,9 @@ nav_order: 12
 
 # 11. Testing
 
-The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net10.0-windows`), with **1228 tests across 63 test classes**: 1199 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
+The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net10.0-windows`), with **1,231 tests across 63 test classes**: 1,202 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
 
-> **Expected result on a machine without the local sample folders:** the 1199 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
+> **Expected result on a machine without the local sample folders:** the 1,202 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
 
 ## 11.1 Running the Tests
 
@@ -44,8 +44,8 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 | `CancellationHandlingTests.cs` | `IsCancellationException`, `IsDiskSpaceException`, `IsCorruptionException`, `IsCrcErrorException` and their mutual exclusivity |
 | `CcdParserTests.cs` / `CcdModelTests.cs` | CloneCD `.ccd` parsing (disc/session/track fields, MSF formatting), track-count bounds and overflow-safe parsing, and `IsoWriter` output: whole-sector extraction and rejection of a partial trailing sector |
 | `ChdSharpEncoderServiceTests.cs` | In-process `createcd`/`createdvd`/`createhd`/`createraw`/`createld` round-trips verified with `Chd.CheckFile`, header unit sizes, per-hunk progress callbacks, custom codec-tag output, extraction-command detection for CD/DVD/laserdisc CHDs, unsupported-command rejection, rejection of inputs whose size is not a whole number of units, and non-AVI `createld` rejection |
-| `ChdRecompressServiceTests.cs` | Recompression with the Compatible preset (zlib output), child-source consolidation into a standalone CHD, deep verification of the output |
-| `ParentChdResolverTests.cs` | Sibling parent lookup by hash, explicit parent, disabled auto-detection, standalone CHDs |
+| `ChdRecompressServiceTests.cs` | Recompression with the Compatible preset (zlib output), uncompressed CD fallback to the compatible set, child-source consolidation into a standalone CHD, deep verification of the output |
+| `ParentChdResolverTests.cs` | Sibling parent lookup by hash, explicit parent, disabled auto-detection, standalone CHDs, child-before-parent batch ordering |
 | `ChdCompressionPresetsTests.cs` | Default/null mapping, Compatible zlib/cdzl tags, Smallest zstd/cdzs tags, uncompressed support limited to raw media |
 | `ChdPlatformMappingTests.cs` | Platform-to-parser mapping for PS1/PS2/PSP/Saturn/Dreamcast/3DO/Mega CD/Neo Geo CD/PC Engine, unknown returns null |
 | `ChdSharpLoggerFactoryTests.cs` | CHDSharp `ILoggerFactory` bridge: Warning+ messages are captured and cleared after one use, Information is not captured, and the newest warning wins |
@@ -60,7 +60,7 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 | `GameFileParserTests.cs` | cue/gdi/toc referenced-file extraction (quoted/unquoted/spaces/multi-file), cdrdao `DATAFILE`/`AUDIOFILE` scanning, backslash-escaped quotes, encoding detection |
 | `GitHubReleaseTests.cs` | Model defaults, JSON (de)serialization |
 | `IsoSectorValidatorTests.cs` | Sector-size alignment warnings; descriptors/empty/missing not validated |
-| `MainWindowHelperTests.cs` | `StripUtf8BomIfPresentAsync`, `SelectChdmanErrorLine` (skips progress lines, picks last real error) |
+| `MainWindowHelperTests.cs` | `StripUtf8BomIfPresentAsync`, `SelectChdmanErrorLine` (skips progress lines, picks last real error), staged delta validation against its parent, CHD write/PBP damage classification |
 | `PathUtilsTests.cs` | `SanitizeFileName`, `GetSafeTempFileName`, path validation, relative paths, best-temp-directory selection, and `CreateTempDirectoryOnSameVolume` — including the property that actually matters: a cue written in the returned directory can reach the image by a **non-rooted** relative path, checked for every ready fixed volume |
 | `PbpExtractionResultTests.cs` | Result-model defaults/setters |
 | `RetryingFileOperationsTests.cs` | `TryDeleteAsync`/`TryMoveAsync` with real file locks (`FileShare.None`), read-only attribute clearing, retry-then-give-up, success-after-lock-release, missing-source/missing-destination semantics |
@@ -118,7 +118,7 @@ Requirements: the tests are run on Windows (the app project is `net10.0-windows`
 4. For chdman-dependent tests, early-return when `chdman.exe` is absent from `AppContext.BaseDirectory`.
 5. Prefer building binary fixtures in code (see `IszImageBuilder`) over committing them. Commit one only when the format cannot be generated trustworthily in-repo, as with `ecm-sample.ecm` (the reference encoder's own output) or the WinRAR-produced RAR volume set (there is no RAR writer in the repository).
 6. When a fixture asserts agreement with an outside implementation, add a **guard test** that the fixture still covers the cases it is meant to. A fixture can be regenerated more simply and silently stop testing anything.
-7. Run the full suite before pushing. On the maintainer's machine a full run is **1228 passed / 0 failed**; CI runs the unit tests only, via `--filter "Category!=Integration"` (1199 tests). The integration classes' behaviour without samples is described in §11.5.
+7. Run the full suite before pushing. On the maintainer's machine a full run is **1,231 passed / 0 failed** (1,202 unit + 29 integration); CI runs the unit tests only, via `--filter "Category!=Integration"` (1,202 tests). The integration classes' behaviour without samples is described in §11.5.
 
 ### Analyzer constraints worth knowing
 

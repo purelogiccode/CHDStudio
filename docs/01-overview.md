@@ -24,7 +24,7 @@ Developed by [Pure Logic Code](https://www.purelogiccode.com), the application c
 
 ### Intelligent Conversion & Extraction
 - **Automated batch processing** — convert entire directories with real-time progress, immediate cancellation, and per-file timeouts.
-- **Built-in encoder** - the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.1) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
+- **Built-in encoder** - the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.6.3) encodes in-process: the automatic fallback behind chdman on Windows and the only encoder on Linux/macOS. Its output is byte-identical to `chdman` 0.289, and because it is managed code there is no encoder executable to ship or probe.
 - **Codec presets** - Default (chdman-compatible), Smallest (zstd/cdzs), Most compatible (zlib/cdzl), Auto (per-platform), and Uncompressed (raw/DVD/HDD) are available for new conversions and recompression.
 - **Parent/child CHD support** - differential child images can be verified, extracted, hashed and consolidated with their parent; new conversions can optionally be written as delta children.
 - **Recompression** - existing CHDs can be recompressed with a different codec set or consolidated into standalone files, preserving metadata and optionally upgrading legacy CD/GD tags.

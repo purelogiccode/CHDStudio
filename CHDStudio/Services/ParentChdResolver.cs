@@ -110,6 +110,87 @@ internal static class ParentChdResolver
         );
     }
 
+    /// <summary>
+    ///     Orders a batch so child CHDs are processed before the parents they depend on. Moving or
+    ///     deleting a parent earlier in the batch (verification's Success folder, extraction's
+    ///     delete-original option) must not make a later child lose its parent.
+    /// </summary>
+    /// <param name="files">Full paths of the batch's CHD files.</param>
+    /// <param name="explicitParentPath">Optional user-selected parent path.</param>
+    /// <param name="autoDetect">True to search sibling CHD files when no explicit parent is supplied.</param>
+    /// <returns>The same paths, deepest children first.</returns>
+    internal static IReadOnlyList<string> OrderChildrenFirst(
+        IReadOnlyList<string> files,
+        string? explicitParentPath,
+        bool autoDetect
+    )
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
+        var batchFiles = new HashSet<string>(
+            files.Select(static file => NormalizePath(file)),
+            comparer
+        );
+        var parentByFile = new Dictionary<string, string?>(comparer);
+        foreach (var file in files)
+        {
+            var normalized = NormalizePath(file);
+            var resolution = Resolve(file, explicitParentPath, autoDetect);
+            parentByFile[normalized] =
+                resolution.ParentPath is { } parent && batchFiles.Contains(NormalizePath(parent))
+                    ? NormalizePath(parent)
+                    : null;
+        }
+
+        var depths = new Dictionary<string, int>(comparer);
+        foreach (var file in files)
+            _ = GetDepth(NormalizePath(file), new HashSet<string>(comparer));
+
+        return files
+            .OrderByDescending(file => depths.GetValueOrDefault(NormalizePath(file), 0))
+            .ToArray();
+
+        int GetDepth(string path, HashSet<string> visiting)
+        {
+            if (depths.TryGetValue(path, out var known))
+                return known;
+
+            // A cycle can only come from a malformed parent chain; treat it as a root so the
+            // batch still runs instead of recursing forever.
+            if (!visiting.Add(path))
+                return 0;
+
+            var depth =
+                parentByFile.TryGetValue(path, out var parent) && parent is not null
+                    ? GetDepth(parent, visiting) + 1
+                    : 0;
+
+            visiting.Remove(path);
+            depths[path] = depth;
+            return depth;
+        }
+    }
+
+    /// <summary>Returns a full path for comparison, falling back to the input when it is invalid.</summary>
+    /// <param name="path">Path to normalize.</param>
+    /// <returns>The normalized path, or the original path when normalization fails.</returns>
+    private static string NormalizePath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex)
+            when (ex is ArgumentException or IOException or NotSupportedException
+                or UnauthorizedAccessException
+            )
+        {
+            return path;
+        }
+    }
+
     /// <summary>Validates a user-selected parent and returns it when it is a readable CHD.</summary>
     /// <param name="childHeader">Header of the child CHD.</param>
     /// <param name="parentPath">User-selected parent path.</param>

@@ -1,4 +1,6 @@
 using System.Text;
+using CHDSharp;
+using CHDStudio.Services;
 
 namespace CHDStudio.Tests;
 
@@ -287,5 +289,48 @@ public class MainWindowHelperTests : IDisposable
     public void IsDamagedPbpBlock_OtherMessages(string? message, bool expected)
     {
         Assert.Equal(expected, MainWindow.IsDamagedPbpBlock(message));
+    }
+
+    [Fact]
+    public void ValidateStagedChd_DeltaOutput_VerifiesAgainstParent()
+    {
+        var parentBytes = new byte[4096 * 64];
+        for (var i = 0; i < parentBytes.Length; i++)
+            parentBytes[i] = (byte)(i * 17);
+        var parentSource = Path.Combine(_tempDir, "delta-parent.bin");
+        File.WriteAllBytes(parentSource, parentBytes);
+        var parentChd = Path.Combine(_tempDir, "delta-parent.chd");
+        ChdSharpEncoderService.Encode(
+            "createraw",
+            parentSource,
+            parentChd,
+            false,
+            2,
+            CancellationToken.None
+        );
+
+        var childBytes = (byte[])parentBytes.Clone();
+        for (var i = 0; i < 2048; i++)
+            childBytes[i] = (byte)(255 - childBytes[i]);
+        var childSource = Path.Combine(_tempDir, "delta-child.bin");
+        File.WriteAllBytes(childSource, childBytes);
+        var childChd = Path.Combine(_tempDir, "delta-child.chd");
+        ChdSharpEncoderService.Encode(
+            "createraw",
+            childSource,
+            childChd,
+            false,
+            2,
+            CancellationToken.None,
+            parentPath: parentChd
+        );
+
+        var result = MainWindow.ValidateStagedChd(
+            childChd,
+            parentChd,
+            CancellationToken.None
+        );
+
+        Assert.True(result.IsSuccess, result.Error.GetMessage());
     }
 }

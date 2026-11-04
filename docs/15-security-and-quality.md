@@ -83,13 +83,15 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 node scripts/ci/version.mjs
 
 # JetBrains InspectCode (the release gate requires zero warnings and errors)
-jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
+jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
 ```
 
-The full suite currently passes **1182 tests** (1153 unit tests plus 29
-integration tests); CI runs the unit tests only because the integration classes
-need the maintainer's local sample folders. InspectCode reports **zero warnings
-and zero errors**; the remaining notes are suggestions, not release blockers.
+The full suite currently passes **1,231 tests** (1,202 unit tests plus 29
+integration tests; the integration tests need the maintainer's local sample
+folders). CI runs the unit tests only with `--filter "Category!=Integration"`.
+InspectCode reports
+**zero warnings and zero errors**; the remaining notes are suggestions, not
+release blockers.
 
 ## 15.6 Release archive
 

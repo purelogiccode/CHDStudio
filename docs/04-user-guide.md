@@ -127,7 +127,7 @@ Auto-detection reads the CHD flags (via CHDSharp): DVD → `.iso`, hard disk →
 5. Optionally enable deep verification, legacy metadata upgrade, or deleting the original after success.
 6. Click **Start Recompression**.
 
-Recompression uses CHDSharp's `ChdEncoder.Copy`, so metadata is preserved (and legacy CD/GD tags can be upgraded). A child source is resolved through its parent and consolidated into a standalone output. Uncompressed output is available only for raw/DVD/HDD CHDs; CD and laserdisc sources fall back to the compatible codec set with a warning.
+Recompression uses CHDSharp's `ChdEncoder.Copy`, so metadata is preserved (and legacy CD/GD tags can be upgraded). A child source is resolved through its parent and consolidated into a standalone output. Uncompressed output is available only for raw/DVD/HDD CHDs; CD and laserdisc sources fall back to the compatible codec set.
 
 ## 4.5 Explorer
 

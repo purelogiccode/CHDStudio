@@ -77,14 +77,36 @@ internal static class PathUtils
         }
 
         var tempName = $"{tempDirPrefix}{guid}";
-        foreach (
-            var candidate in DriveInfo
-                .GetDrives()
-                .Where(static d => d is { DriveType: DriveType.Fixed, IsReady: true })
-                .OrderByDescending(static d => d.AvailableFreeSpace)
-                .Select(d =>
-                    Path.Join(TrimRootSeparator(d.RootDirectory.FullName), "CHDStudio_Temp", tempName)
+        var candidates = new List<(long FreeBytes, string Path)>();
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            try
+            {
+                if (drive is not { DriveType: DriveType.Fixed, IsReady: true })
+                    continue;
+
+                candidates.Add((
+                    drive.AvailableFreeSpace,
+                    Path.Join(
+                        TrimRootSeparator(drive.RootDirectory.FullName),
+                        "CHDStudio_Temp",
+                        tempName
+                    )
+                ));
+            }
+            catch (Exception ex)
+                when (ex is ArgumentException or IOException or NotSupportedException
+                    or UnauthorizedAccessException
                 )
+            {
+                Logger.Verbose(ex, "Failed to query drive {Root} while creating a temp directory", drive.Name);
+            }
+        }
+
+        foreach (
+            var candidate in candidates
+                .OrderByDescending(static candidate => candidate.FreeBytes)
+                .Select(static candidate => candidate.Path)
         )
         {
             try
