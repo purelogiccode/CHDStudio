@@ -70,7 +70,8 @@ The library is the CloneCD conversion engine used by [CHD Studio](https://github
 
 ## Features
 
-- **CloneCD descriptor parsing** — reads `[CloneCD]`, `[Disc]` and `[TRACK N]` sections, including track modes, index points, flags, ISRC and the media catalog number.
+- **CloneCD descriptor parsing** — reads `[CloneCD]`, `[Disc]`, `[TRACK N]` and `[Entry N]` TOC sections, including track modes, index points, flags, ISRC and the media catalog number.
+- **TOC-only descriptors** — trurip-style `.ccd` files that list the disc layout only as `[Entry N]` rows (no `[TRACK N]` sections) get their tracks rebuilt from the TOC; data-track modes are read from each track's first sector header.
 - **ISO conversion** — extracts the 2048-byte user data from Mode 1 and Mode 2 (Form 1 and Form 2) sectors, with a progress callback.
 - **CUE/BIN conversion** — writes a CUE sheet for the `.img` data and either references the `.img` in place or copies it to `.bin`.
 - **CUE sheet generation** — `CATALOG`, `FLAGS`, `ISRC`, `INDEX 00` pregaps and `INDEX 02+` sub-indexes, formatted as `MM:SS:FF`.
@@ -296,7 +297,7 @@ CCDSharp reports failures with the standard exceptions instead of an error enum,
 | Exception | Thrown when |
 |---|---|
 | `FileNotFoundException` | The `.ccd` file passed to `Parse` does not exist, the `.img` data file is missing for ISO/CUE output, or the `.sub` file passed to `SubcodeParser` does not exist. |
-| `InvalidOperationException` | ISO extraction finds no data track, or the `.img` ends with a partial raw sector (not a multiple of 2352 bytes). |
+| `InvalidOperationException` | ISO extraction finds no data track, the `.img` ends with a partial raw sector (not a multiple of 2352 bytes), or a CUE is requested for a descriptor that declares no tracks or a track without `INDEX 01`. |
 | `IOException` | An I/O operation fails, or the CUE/BIN copy still fails after four retries. |
 | `ArgumentNullException` | `SubcodeParser(Stream)` is constructed with a `null` stream. |
 
@@ -365,7 +366,8 @@ Lower-level ISO conversion for callers that already have streams or a parsed dis
 
 ## Supported images
 
-- **CloneCD descriptors** — `[CloneCD]` version, `[Disc]` fields (TOC entries, sessions, scrambled data flag, CD-TEXT length, catalog) and `[TRACK N]` fields (mode, indexes, flags, ISRC). `[Session N]` and `[Entry N]` sections are recognized and skipped.
+- **CloneCD descriptors** — `[CloneCD]` version, `[Disc]` fields (TOC entries, sessions, scrambled data flag, CD-TEXT length, catalog) and `[TRACK N]` fields (mode, indexes, flags, ISRC). `[Session N]` sections are recognized and skipped.
+- **TOC-only descriptors** — trurip and some CloneCD-derived tools write the layout as `[Entry N]` rows only. When a descriptor has no `[TRACK N]` sections, the tracks are rebuilt from the `POINT` 1–99 rows: `PLBA` is the track start, `CONTROL` bit 2 separates data from audio, and a data track's Mode 1/Mode 2 is read from its first raw sector header.
 - **Track modes** — audio (2352-byte PCM), Mode 1 and Mode 2 data tracks.
 - **Raw `.img` data** — 2352-byte sectors. ISO extraction handles Mode 1, Mode 2 Form 1 and Mode 2 Form 2; sectors without a valid sync mark are skipped.
 - **Subchannel `.sub` data** — 96 bytes per sector, exposed raw.
@@ -379,10 +381,13 @@ A CloneCD image is a text descriptor plus raw data files. CCDSharp parses the de
 |---|---|
 | `[CloneCD]` | `Version` |
 | `[Disc]` | `TocEntries`, `Sessions`, `DataTracksScrambled`, `CDTextLength`, `CATALOG` |
-| `[Session N]`, `[Entry N]` | Recognized and skipped |
+| `[Session N]` | Recognized and skipped |
+| `[Entry N]` | `Point`, `Control`, `PLBA` — used to rebuild the track list when no `[TRACK N]` section exists |
 | `[TRACK N]` | `MODE` (0 = audio, 1 = Mode 1, 2 = Mode 2), `INDEX n = <LBA>`, `FLAGS`, `ISRC` |
 
 The `.img` and `.sub` files are resolved by replacing the `.ccd` extension with `.img` and `.sub` next to the descriptor.
+
+A cue sheet needs at least one `TRACK` line. `ConvertToCueBin`, `GenerateCueSheet` and `WriteToStream` reject a disc with no tracks, or with a track that has no `INDEX 01`, instead of writing a cue that an encoder cannot use.
 
 The `.img` file stores raw 2352-byte sectors. CCDSharp recognizes the CD sync mark (`00 FF × 10 00`) and extracts user data according to the mode byte:
 
@@ -414,6 +419,12 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 ```
 
 ## Version history
+
+### 1.0.3
+
+- **TOC-only descriptors are supported.** trurip-style `.ccd` files (and some other CloneCD-derived tools) list the disc layout only as `[Entry N]` rows and omit every `[TRACK N]` section. When no track sections are present, the tracks are rebuilt from the `POINT` 1–99 rows: `PLBA` is the track start, `CONTROL` bit 2 separates data from audio, and a data track's Mode 1/Mode 2 is read from its first raw sector header. Before this, such a descriptor produced a cue with zero tracks.
+- **Unusable cue layouts are rejected.** `ConvertToCueBin`, `GenerateCueSheet` and `WriteToStream` throw `InvalidOperationException` when the descriptor declares no tracks or a track has no `INDEX 01`, instead of writing a FILE-only cue that encoders cannot use (chdman 0.289 loops forever on one).
+- Tests cover TOC-only track rebuilding, sector-header mode detection (including a track start past the image end), decimal/hex TOC fields, and both rejection cases.
 
 ### 1.0.2
 

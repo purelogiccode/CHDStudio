@@ -5111,6 +5111,30 @@ internal partial class MainWindow : Window, IDisposable
         }
     }
 
+    /// <summary>
+    ///     True when the cue/toc descriptor could be read and declares no TRACK entries. chdman then
+    ///     reads zero tracks and loops forever on an empty disc instead of failing, so such a file
+    ///     has to be skipped before the encoder starts. An unreadable descriptor returns false and
+    ///     is left to the encoder, whose message is the useful one.
+    /// </summary>
+    private static async Task<bool> CueDeclaresNoTracksAsync(string cuePath, CancellationToken token)
+    {
+        try
+        {
+            return !await GameFileParser
+                .CueDeclaresTracksAsync(cuePath, token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Runs a direct conversion and reports classified errors instead of letting them propagate.</summary>
     /// <param name="chdmanPath">Path of the chdman executable.</param>
     /// <param name="fileToProcess">File to hand to the encoder.</param>
@@ -6636,6 +6660,19 @@ internal partial class MainWindow : Window, IDisposable
                 // so stop here instead of attempting a direct conversion.
                 return false;
             }
+        }
+
+        // chdman does not fail on a cue that declares no TRACK entries: it reads zero tracks and
+        // then loops on an empty disc, printing "nan% complete" until the user cancels or the
+        // timeout fires. Reject that descriptor up front. An unreadable cue is left to the encoder
+        // so its own error message reaches the log.
+        if (isCueDescriptor && await CueDeclaresNoTracksAsync(inputFile, token))
+        {
+            LogWarning(
+                $" {Path.GetFileName(originalInputFile)} — the cue declares no TRACK entries, so there is nothing to convert. Skipping."
+            );
+            await TryCleanupAsciiTempAsync();
+            return false;
         }
 
         // chdman converts its UTF-16 command line down to the ANSI code page, so ANY non-ASCII

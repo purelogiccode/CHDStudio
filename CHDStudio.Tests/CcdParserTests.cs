@@ -1,3 +1,4 @@
+using CCDSharp;
 using CCDSharp.Models;
 using CCDSharp.Parsers;
 using CCDSharp.Writers;
@@ -29,6 +30,85 @@ public class CcdParserTests : IDisposable
                                    FLAGS=DCP
                                    ISRC=ABC123456789
                                    """;
+
+    private const string TruripCcd = """
+                                       [CloneCD]
+                                       Version=3
+
+                                       [Disc]
+                                       TocEntries=4
+                                       Sessions=1
+                                       DataTracksScrambled=0
+                                       CDTextLength=0
+
+                                       [Session 1]
+                                       PreGapMode=2
+                                       PreGapSubC=0
+
+                                       [Entry 0]
+                                       Session=1
+                                       Point=0xa0
+                                       ADR=0x01
+                                       Control=0x04
+                                       TrackNo=0
+                                       AMin=0
+                                       ASec=0
+                                       AFrame=0
+                                       ALBA=-150
+                                       Zero=0
+                                       PMin=1
+                                       PSec=0
+                                       PFrame=0
+                                       PLBA=4350
+
+                                       [Entry 1]
+                                       Session=1
+                                       Point=0xa1
+                                       ADR=0x01
+                                       Control=0x04
+                                       TrackNo=0
+                                       AMin=0
+                                       ASec=0
+                                       AFrame=0
+                                       ALBA=-150
+                                       Zero=0
+                                       PMin=1
+                                       PSec=0
+                                       PFrame=0
+                                       PLBA=4350
+
+                                       [Entry 2]
+                                       Session=1
+                                       Point=0xa2
+                                       ADR=0x01
+                                       Control=0x04
+                                       TrackNo=0
+                                       AMin=0
+                                       ASec=0
+                                       AFrame=0
+                                       ALBA=-150
+                                       Zero=0
+                                       PMin=0
+                                       PSec=26
+                                       PFrame=36
+                                       PLBA=1836
+
+                                       [Entry 3]
+                                       Session=1
+                                       Point=0x01
+                                       ADR=0x01
+                                       Control=0x04
+                                       TrackNo=0
+                                       AMin=0
+                                       ASec=0
+                                       AFrame=0
+                                       ALBA=-150
+                                       Zero=0
+                                       PMin=0
+                                       PSec=2
+                                       PFrame=0
+                                       PLBA=0
+                                       """;
 
     private readonly string _tempDir = Path.Combine(
         Path.GetTempPath(),
@@ -65,6 +145,17 @@ public class CcdParserTests : IDisposable
         var path = Path.Combine(_tempDir, name);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    /// <summary>
+    ///     Writes a raw .img whose first sector carries a valid sync mark and the given mode byte.
+    /// </summary>
+    private static void WriteImageWithModeByte(string path, byte modeByte, int sectors = 1)
+    {
+        var image = new byte[SectorConstants.RawSectorSize * sectors];
+        SectorConstants.SyncMark.CopyTo(image, 0);
+        image[SectorConstants.ModeOffset] = modeByte;
+        File.WriteAllBytes(path, image);
     }
 
     [Fact]
@@ -211,6 +302,217 @@ public class CcdParserTests : IDisposable
         );
 
         Assert.Equal(0, disc.Tracks[0].Index01Lba);
+    }
+
+    [Fact]
+    public void ParseDerivesTrackFromTocEntriesWhenNoTrackSectionsExist()
+    {
+        // trurip descriptors carry the whole layout as [Entry N] TOC rows and omit the [TRACK N]
+        // sections. The 3DO TOSEC-ISO sets look like this, and the missing fallback produced a cue
+        // with zero tracks, which made chdman loop forever instead of failing.
+        var disc = Parse(TruripCcd);
+
+        var track = Assert.Single(disc.Tracks);
+        Assert.Equal(1, track.Number);
+        Assert.Equal(TrackMode.Mode1, track.Mode);
+        Assert.Equal(0, track.Index01Lba);
+    }
+
+    [Fact]
+    public void ParseDerivesAudioTrackFromTocControlFlags()
+    {
+        var disc = Parse(
+            """
+            [Entry 1]
+            Point=0x01
+            Control=0x00
+            PLBA=0
+            """
+        );
+
+        Assert.Equal(TrackMode.Audio, Assert.Single(disc.Tracks).Mode);
+    }
+
+    [Fact]
+    public void ParseDerivesEveryTrackFromTocEntries()
+    {
+        var disc = Parse(
+            """
+            [Entry 0]
+            Point=0x01
+            Control=0x04
+            PLBA=0
+
+            [Entry 1]
+            Point=0x02
+            Control=0x04
+            PLBA=1000
+
+            [Entry 2]
+            Point=0x03
+            Control=0x00
+            PLBA=2000
+            """
+        );
+
+        Assert.Equal(3, disc.Tracks.Count);
+        Assert.Equal(new[] { 0, 1000, 2000 }, disc.Tracks.Select(static t => t.Index01Lba));
+        Assert.Equal(
+            new[] { TrackMode.Mode1, TrackMode.Mode1, TrackMode.Audio },
+            disc.Tracks.Select(static t => t.Mode)
+        );
+    }
+
+    [Fact]
+    public void ParseIgnoresTocEntriesOutsideTheTrackNumberRange()
+    {
+        var disc = Parse(
+            """
+            [Entry 0]
+            Point=0xa0
+            Control=0x04
+            PLBA=4350
+
+            [Entry 1]
+            Point=0xa1
+            Control=0x04
+            PLBA=4350
+
+            [Entry 2]
+            Point=0xa2
+            Control=0x04
+            PLBA=1836
+            """
+        );
+
+        Assert.Empty(disc.Tracks);
+    }
+
+    [Fact]
+    public void ParseTrackSectionsWinOverTocEntries()
+    {
+        var disc = Parse(
+            """
+            [TRACK 1]
+            MODE=2
+            INDEX 1=42
+
+            [Entry 1]
+            Point=0x01
+            Control=0x04
+            PLBA=0
+            """
+        );
+
+        var track = Assert.Single(disc.Tracks);
+        Assert.Equal(TrackMode.Mode2, track.Mode);
+        Assert.Equal(42, track.Index01Lba);
+    }
+
+    [Fact]
+    public void ParseTocEntryAcceptsDecimalPointAndControl()
+    {
+        var disc = Parse(
+            """
+            [Entry 1]
+            Point=1
+            Control=4
+            PLBA=0
+            """
+        );
+
+        Assert.Equal(TrackMode.Mode1, Assert.Single(disc.Tracks).Mode);
+    }
+
+    [Fact]
+    public void ParseDetectsModeTwoFromTheFirstSectorHeader()
+    {
+        var path = WriteCcd(
+            "mode2.ccd",
+            """
+            [Entry 1]
+            Point=0x01
+            Control=0x04
+            PLBA=0
+            """
+        );
+        WriteImageWithModeByte(Path.Combine(_tempDir, "mode2.img"), 2);
+
+        var disc = CcdParser.Parse(path);
+
+        Assert.Equal(TrackMode.Mode2, Assert.Single(disc.Tracks).Mode);
+    }
+
+    [Fact]
+    public void ParseFallsBackToModeOneWhenTheTrackStartIsPastTheImageEnd()
+    {
+        var path = WriteCcd(
+            "short.ccd",
+            """
+            [Entry 1]
+            Point=0x01
+            Control=0x04
+            PLBA=500
+            """
+        );
+        WriteImageWithModeByte(Path.Combine(_tempDir, "short.img"), 2);
+
+        var disc = CcdParser.Parse(path);
+
+        Assert.Equal(TrackMode.Mode1, Assert.Single(disc.Tracks).Mode);
+    }
+
+    [Fact]
+    public void ConvertToCueBinWritesTrackForTocOnlyDescriptor()
+    {
+        var path = WriteCcd("toconly.ccd", TruripCcd);
+        WriteImageWithModeByte(Path.Combine(_tempDir, "toconly.img"), 1, 32);
+
+        var cuePath = CcdConverter.ConvertToCueBin(path, Path.Combine(_tempDir, "toconly.cue"));
+        var cue = File.ReadAllText(cuePath);
+
+        Assert.Contains("TRACK 01 MODE1/2352", cue, StringComparison.Ordinal);
+        Assert.Contains("INDEX 01 00:00:00", cue, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConvertToCueBinRejectsDescriptorWithoutTracks()
+    {
+        // A FILE-only cue makes chdman report zero tracks and then spin forever, so the writer has
+        // to reject the descriptor instead of emitting that cue.
+        var path = WriteCcd("notracks.ccd", "[CloneCD]\r\nVersion=3\r\n");
+        File.WriteAllBytes(
+            Path.Combine(_tempDir, "notracks.img"),
+            new byte[SectorConstants.RawSectorSize]
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            CcdConverter.ConvertToCueBin(path, Path.Combine(_tempDir, "notracks.cue"))
+        );
+
+        Assert.Contains("no tracks", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ConvertToCueBinRejectsTrackWithoutIndexOne()
+    {
+        var path = WriteCcd(
+            "noindex.ccd",
+            """
+            [TRACK 1]
+            MODE=1
+            """
+        );
+        File.WriteAllBytes(
+            Path.Combine(_tempDir, "noindex.img"),
+            new byte[SectorConstants.RawSectorSize]
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            CcdConverter.ConvertToCueBin(path, Path.Combine(_tempDir, "noindex.cue"))
+        );
+
+        Assert.Contains("INDEX 01", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

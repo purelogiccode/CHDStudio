@@ -122,7 +122,8 @@ internal static class InputFileFilter
 
     /// <summary>
     ///     Applies <see cref="FindCompanionSuppressionsAsync" /> and returns the inputs that remain,
-    ///     reporting every drop through <paramref name="onLog" />. Input order is preserved.
+    ///     reporting every drop through <paramref name="onLog" />. A CloneCD descriptor that a .cue
+    ///     of the same base name already describes is dropped as well. Input order is preserved.
     /// </summary>
     /// <param name="files">Candidate input paths.</param>
     /// <param name="onLog">Callback used to report each suppressed file.</param>
@@ -133,7 +134,7 @@ internal static class InputFileFilter
         CancellationToken token
     )
     {
-        var ordered = files.ToList();
+        var ordered = RemoveCloneCdDescriptorsCoveredByCues(files.ToList(), onLog);
         var suppressions = await FindCompanionSuppressionsAsync(ordered, token)
             .ConfigureAwait(false);
         if (suppressions.Count == 0) return ordered;
@@ -151,6 +152,64 @@ internal static class InputFileFilter
         }
 
         return [.. ordered.Where(f => !suppressed.Contains(f))];
+    }
+
+    /// <summary>
+    ///     Drops a CloneCD descriptor when a .cue with the same base name sits beside it. trurip and
+    ///     some CloneCD rip sets ship both for the same disc; both resolve to the same output CHD, so
+    ///     converting the second one only wastes a full pass and is then rejected as a duplicate. The
+    ///     cue is kept because it is the format chdman reads natively and it states each track's mode
+    ///     instead of leaving it to be inferred.
+    /// </summary>
+    /// <param name="files">Candidate input paths.</param>
+    /// <param name="onLog">Callback used to report each dropped descriptor.</param>
+    /// <returns>The inputs to keep, in their original order.</returns>
+    internal static List<string> RemoveCloneCdDescriptorsCoveredByCues(
+        List<string> files,
+        Action<string>? onLog
+    )
+    {
+        var cueKeys = new HashSet<string>(
+            files
+                .Where(static f =>
+                    Path.GetExtension(f).Equals(FileExtensions.Cue, StringComparison.OrdinalIgnoreCase)
+                )
+                .Select(static f => GetDescriptorKey(f)),
+            StringComparer.OrdinalIgnoreCase
+        );
+        if (cueKeys.Count == 0) return files;
+
+        var suppressed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            if (
+                !Path.GetExtension(file).Equals(FileExtensions.Ccd, StringComparison.OrdinalIgnoreCase)
+            )
+                continue;
+
+            if (!cueKeys.Contains(GetDescriptorKey(file))) continue;
+
+            suppressed.Add(file);
+            onLog?.Invoke(
+                $" Skipping {Path.GetFileName(file)} - described by {Path.GetFileNameWithoutExtension(file)}{FileExtensions.Cue} (same base name)."
+            );
+        }
+
+        return suppressed.Count == 0 ? files : [.. files.Where(f => !suppressed.Contains(f))];
+    }
+
+    /// <summary>
+    ///     Returns the directory plus base name of a file, so descriptors of the same disc compare
+    ///     equal regardless of their extension.
+    /// </summary>
+    /// <param name="path">The file path.</param>
+    /// <returns>The comparison key.</returns>
+    private static string GetDescriptorKey(string path)
+    {
+        return Path.Combine(
+            Path.GetDirectoryName(path) ?? string.Empty,
+            Path.GetFileNameWithoutExtension(path)
+        );
     }
 
     /// <summary>

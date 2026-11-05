@@ -5,7 +5,7 @@ nav_order: 11
 
 # 10. Embedded Libraries
 
-The solution ships five in-house libraries that replace external tools (maxcso, psxpackager), add CloneCD support, and cover Alcohol 120% and UltraISO images. The app references them as project references. All five are published as NuGet packages for outside consumers — **PBPSharp** (<https://www.nuget.org/packages/PBPSharp>, 1.1.8), **CSOSharp** (<https://www.nuget.org/packages/CSOSharp>, 1.0.2), **CCDSharp** (<https://www.nuget.org/packages/CCDSharp>, 1.0.2), **MDSSharp** (<https://www.nuget.org/packages/MDSSharp>, 1.2.2) and **ISZSharp** (<https://www.nuget.org/packages/ISZSharp>, 1.0.3) — and they all multi-target `net8.0;net9.0;net10.0`, each shipping its XML docs, README and icon; releases are manual (see the repository's AGENTS.md). All five expose internals to `CHDStudio.Tests` via `InternalsVisibleTo`. A sixth in-house library, **CHDSharp**, is consumed as a NuGet package and is covered in [§10.4](#104-chdsharp-nuget).
+The solution ships five in-house libraries that replace external tools (maxcso, psxpackager), add CloneCD support, and cover Alcohol 120% and UltraISO images. The app references them as project references. All five are published as NuGet packages for outside consumers — **PBPSharp** (<https://www.nuget.org/packages/PBPSharp>, 1.1.8), **CSOSharp** (<https://www.nuget.org/packages/CSOSharp>, 1.0.2), **CCDSharp** (<https://www.nuget.org/packages/CCDSharp>, 1.0.3), **MDSSharp** (<https://www.nuget.org/packages/MDSSharp>, 1.2.2) and **ISZSharp** (<https://www.nuget.org/packages/ISZSharp>, 1.0.3) — and they all multi-target `net8.0;net9.0;net10.0`, each shipping its XML docs, README and icon; releases are manual (see the repository's AGENTS.md). All five expose internals to `CHDStudio.Tests` via `InternalsVisibleTo`. A sixth in-house library, **CHDSharp**, is consumed as a NuGet package and is covered in [§10.4](#104-chdsharp-nuget).
 
 | Library | Purpose | Replaces |
 |---------|---------|----------|
@@ -22,11 +22,13 @@ The solution ships five in-house libraries that replace external tools (maxcso, 
 **Purpose**: read CloneCD disc-image sets (`.ccd` descriptor + `.img` data + optional `.sub` subchannel) and convert them to CUE/BIN for chdman.
 
 - Main type: `CcdConverter` — `Parse(inputFile)` returns a parsed disc model (`DiscImage` with `ImgFilePath`, subchannel info, track table); `ConvertToCueBin(inputFile, tempCuePath)` writes the CUE/BIN pair.
+- Descriptors written by trurip list the layout as `[Entry N]` TOC rows only, with no `[TRACK N]` sections. When a descriptor has no track sections, `CcdParser` rebuilds the track list from `POINT` 1–99 rows (`PLBA` = track start, `CONTROL` bit 2 = data) and reads a data track's Mode 1/Mode 2 from its first raw sector header. Before that fallback existed, these descriptors produced a cue with zero tracks, which made chdman loop forever instead of failing.
+- `ConvertToCueBin`/`GenerateCueSheet` reject a descriptor with no tracks, or with a track that has no `INDEX 01`, with `InvalidOperationException` (`"CCDSharp: Conversion error"` in the log) instead of writing an unusable cue.
 - Integration: `ProcessCcdFileForConversionAsync` (`MainWindow.axaml.cs:1702`) parses the `.ccd`, converts to CUE/BIN in a temp dir, then converts the cue with chdman. On success the `.ccd`/`.img`/`.sub`/`.cdt` set is deleted when "delete originals" is enabled.
-- Archive extractions skip `.img` files that belong to a `.ccd` set to avoid double conversion (`MainWindow.axaml.cs:1562–1573`).
+- Archive extractions skip `.img` files that belong to a `.ccd` set to avoid double conversion (`MainWindow.axaml.cs:1562–1573`), and a `.ccd` beside a `.cue` of the same base name is dropped in favour of the cue.
 - Failure messages are prefixed `"CCDSharp: Conversion error"` and are excluded from bug reports.
 - Reference sources live under `References/` (`ccd2cue-master`, `ccd2iso-main`, `myccd2cue-main`) — third-party material used to build the library, not part of the build.
-- **Testing note**: the test project does not reference CCDSharp, so there are currently no CCDSharp unit tests (see [Testing](11-testing.md)).
+- Tests: `CcdParserTests`, `CcdModelTests` (parsing, TOC-only track rebuilding, mode detection, MSF formatting, `IsoWriter` whole/partial-sector handling, rejection of unusable cue layouts).
 
 ## 10.2 CSOSharp
 

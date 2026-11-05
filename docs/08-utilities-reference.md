@@ -90,7 +90,8 @@ chdman's cue parser does **not** skip a UTF-8 BOM — the first token becomes `"
   - **cue/toc**: `FILE ` lines; quoted or unquoted names; the last space-delimited token is stripped when it is a known track type. TOCs also recognize the cdrdao keywords `DATAFILE`/`AUDIOFILE` (unquoted names are a single token; offset/length arguments never become part of the name). A backslash directly before the closing quote is treated as the escape half of a quoted name (`FILE \"track01.bin\"` from tools that escape their quotes).
   - **gdi**: skips line 0 (track-count header); quoted names between first/last quote; unquoted lines need ≥ 5 whitespace parts, with names spanning parts 4..end when > 6 parts (spaces in filenames).
 - `ReadLinesWithDetectedEncodingAsync` — BOM detection (UTF-8 → **UTF-32LE before UTF-16LE** → UTF-16LE → UTF-16BE), then strict UTF-8, then legacy codepages `[932, 949, 936, 1251, 866, 1252]` ("ordered by likelihood for game rips") scored +10 per `FILE` line whose name resolves to an existing file; ties broken by declared order; last resort `Encoding.Default`.
-- Used by the conversion pipeline for dependency validation, by `CueNormalizer`, and by `DeleteOriginalGameFilesAsync`.
+- `CueDeclaresTracksAsync` — true when a cue/toc descriptor has at least one `TRACK ` line. `ConvertToChdAsync` uses it to reject a track-less descriptor before starting chdman, which would otherwise read zero tracks and then loop forever on an empty disc.
+- Used by the conversion pipeline for dependency validation, by `CueNormalizer`, by that track check, and by `DeleteOriginalGameFilesAsync`.
 
 ---
 
@@ -242,6 +243,7 @@ Locates the volumes of a multi-part RAR. SharpCompress can only decode a set whe
 ### InputFileFilter (`InputFileFilter.cs`)
 
 - `RemoveCompanionDataFilesAsync(paths, onLog, token)` — drops a raw `.bin`/`.img`/`.iso`/`.raw` when a descriptor in the **same directory** covers it, matched by base name and then by the descriptor's text. Applied at the folder scan, at batch start, and in the archive loop, so a cue/bin or CloneCD set converts once through its descriptor instead of once per file with both attempts aimed at the same output name.
+- `RemoveCloneCdDescriptorsCoveredByCues(files, onLog)` — applied by the method above: when `Game.cue` and `Game.ccd` sit in the same directory, the `.ccd` is dropped because both describe one disc and target `Game.chd`. The cue wins because it is the descriptor chdman reads natively and it states each track mode instead of leaving it to be inferred.
 - `RemoveRarVolumeParts(paths, onLog)` — drops every `.partNN.rar` volume except the first of its set, keeping the lowest-numbered one when the first is missing so extraction still reports the incomplete set. Applied at the folder scan and at batch start, so a multi-part RAR is decoded once from its first volume rather than once per volume.
 - `ResolveOutputCollisions(files, outputPathSelector)` — groups inputs that would all be written to the same output `.chd` and keeps only the **first non-archive input** of each colliding group (or the first input when every member is an archive). Returns the kept inputs plus one `SkippedDuplicate(SkippedFile, KeptFile, OutputPath)` per dropped input so the caller can log the resolution. Converting both would only overwrite one product with the other, so the redundant conversion — and, for archives, the redundant extraction — is skipped up front.
 

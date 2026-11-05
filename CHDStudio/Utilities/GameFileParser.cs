@@ -31,6 +31,31 @@ internal static class GameFileParser
     }
 
     /// <summary>
+    ///     Returns whether a cue or toc descriptor declares at least one TRACK entry. chdman does not
+    ///     reject a descriptor without tracks: it reads zero tracks and then loops on an empty disc
+    ///     forever, so the caller has to reject such a file before starting the encoder.
+    /// </summary>
+    /// <param name="descriptorPath">Path of the .cue or .toc file.</param>
+    /// <param name="token">Cancellation token to cancel the operation.</param>
+    /// <returns>True when a TRACK line is present; false when the descriptor has none.</returns>
+    internal static async Task<bool> CueDeclaresTracksAsync(
+        string descriptorPath,
+        CancellationToken token
+    )
+    {
+        var (lines, _, _) = await ReadLinesWithDetectedEncodingAsync(descriptorPath, token)
+            .ConfigureAwait(false);
+
+        foreach (var line in lines)
+        {
+            if (line.TrimStart().StartsWith("TRACK ", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     ///     Extracts referenced file paths from a GDI (Dreamcast GD-ROM) file.
     /// </summary>
     /// <param name="gdiPath">Path to the GDI file to parse.</param>

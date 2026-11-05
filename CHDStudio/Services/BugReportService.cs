@@ -75,6 +75,9 @@ internal class BugReportService
         "CRITICAL ERROR: The following required component",
         "referenced files are missing",
         "could not be resolved",
+        // A cue/toc without TRACK entries is a malformed user descriptor: chdman would read zero
+        // tracks and loop forever, so the app skips it with an actionable message.
+        "declares no TRACK entries",
         // An Alcohol descriptor without its data file (incomplete set, renamed file).
         "the .mdf data file was not found",
         "MP3 audio track could not be decoded",

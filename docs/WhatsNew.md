@@ -5,6 +5,19 @@ nav_order: 16
 
 # What's New
 
+## 3.13.0 (2026-11-04)
+
+### CloneCD and trurip descriptors
+
+*   **TOC-only `.ccd` images convert again.** trurip and some other CloneCD-derived tools write the whole disc layout as `[Entry N]` TOC rows and omit the `[TRACK N]` sections. CCDSharp now rebuilds the track list from those rows (`PLBA` is the track start, `CONTROL` bit 2 marks a data track) and reads each data track's Mode 1/Mode 2 from its first raw sector header. The generated cue is valid and produces a CHD byte-identical to the one made from the set's own `.cue`.
+*   **The zero-track hang is gone.** Before this, such a descriptor produced a cue with only a `FILE` line; `chdman` 0.289 reads zero tracks and then loops forever (`Compressing, nan% complete...`) instead of failing, so the batch had to be cancelled. A cue/toc with no `TRACK` entries is now rejected up front with a clear message, and CCDSharp refuses to write a cue with no tracks or a track without `INDEX 01`.
+*   **Cue + CCD sets convert once.** When a folder or archive contains `Game.cue` and `Game.ccd` for the same disc, the cue is now the input that gets converted and the `.ccd` is skipped with a log line. Both used to target the same `Game.chd`, so the second conversion was wasted and was then reported as a duplicate failure.
+
+### Libraries and packaging
+
+*   **CCDSharp 1.0.3** is published to NuGet with the TOC-only descriptor support and the unusable-cue rejection.
+*   Version bump: application 3.13.0; library CCDSharp 1.0.3.
+
 ## 3.12.0 (2026-11-03)
 
 ### Parent/child CHD support

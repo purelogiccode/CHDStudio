@@ -326,6 +326,8 @@ public class BugReportServiceTests
     [InlineData("referenced files are missing")]
     [InlineData("could not be resolved")]
     [InlineData(
+        " 3DO Storage Manager (JP).cue — the cue declares no TRACK entries, so there is nothing to convert. Skipping.")]
+    [InlineData(
         " Virtua Tennis 2 (USA).mds cannot be converted: the .mdf data file was not found next to the .mds descriptor."
     )]
     [InlineData("MP3 audio track could not be decoded")]

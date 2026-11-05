@@ -47,9 +47,9 @@ The order matters:
 | Extension | Handler | What it does |
 |-----------|---------|--------------|
 | `.cso` | `ProcessCsoFileForConversionAsync` | `_archiveService.ExtractCsoAsync` decompresses to a temp `.iso`, then converts. |
-| `.zip`/`.7z`/`.rar` | `ProcessArchiveFileForConversionAsync` | Extracts to a temp dir; drops raw images already covered by a descriptor in the archive (`InputFileFilter.RemoveCompanionDataFilesAsync`); maps auto-cue outputs; validates cue/gdi/toc dependencies; converts each supported file. `.ccd` goes through CCDSharp, `.mds` through the Alcohol parser, `.isz` through `ConvertIszViaImageAsync`. |
+| `.zip`/`.7z`/`.rar` | `ProcessArchiveFileForConversionAsync` | Extracts to a temp dir; drops raw images already covered by a descriptor in the archive and a `.ccd` already described by a same-named `.cue` (`InputFileFilter.RemoveCompanionDataFilesAsync`); maps auto-cue outputs; validates cue/gdi/toc dependencies; converts each supported file. `.ccd` goes through CCDSharp, `.mds` through the Alcohol parser, `.isz` through `ConvertIszViaImageAsync`. |
 | `.pbp` | `ProcessPbpFileForConversionAsync` | `ExtractPbpToCueBinAsync` via PBPSharp; `PbpError.InvalidPsarHeader`/`TruncatedPsar` → informational skip (user-data conditions, not reported); `PbpError.InvalidHeader` → the bytes are sniffed and a mislabelled archive/CSO/ISZ/ECM/disc image is routed by content; converts each disc cue. |
-| `.ccd` | `ProcessCcdFileForConversionAsync` | `CcdConverter.Parse` + `ConvertToCueBin` into a temp dir, then converts the cue. |
+| `.ccd` | `ProcessCcdFileForConversionAsync` | `CcdConverter.Parse` + `ConvertToCueBin` into a temp dir, then converts the cue. TOC-only (trurip) descriptors get their tracks rebuilt from `[Entry N]` rows. |
 | `.mds` | `ProcessMdsFileForConversionAsync` | `MdsParser` + `MdsInputPreparer` produce a cue (or a stripped image, or a DVD image), then convert. |
 | everything else | direct path | `TryStageCueForRawImageAsync` may generate a cue for a raw CD image, then `ValidateDependentFilesAsync` → `TryDirectConversionAsync`. |
 

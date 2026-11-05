@@ -336,6 +336,62 @@ public class InputFileFilterTests : IDisposable
         Assert.All(skipped, s => Assert.Equal(@"C:\in\Game.iso", s.KeptFile));
     }
 
+    [Fact]
+    public async Task CloneCdDescriptorIsSuppressedWhenACueDescribesTheSameDisc()
+    {
+        // trurip sets ship Game.ccd and Game.cue for one disc. Both resolve to Game.chd, so the
+        // second one is only wasted work; the cue is the descriptor chdman reads natively.
+        var ccd = CreateFile("Game.ccd", "[CloneCD]\r\nVersion=3\r\n");
+        var cue = CreateFile("Game.cue", "FILE \"Game.img\" BINARY\r\n  TRACK 01 MODE1/2352\r\n");
+        var img = CreateFile("Game.img");
+
+        var remaining = await InputFileFilter.RemoveCompanionDataFilesAsync(
+            [ccd, cue, img],
+            _log.Add,
+            CancellationToken.None
+        );
+
+        Assert.Equal([cue], remaining);
+        Assert.Contains(
+            _log,
+            m =>
+                m.Contains("Game.ccd", StringComparison.Ordinal)
+                && m.Contains("described by Game.cue", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public async Task CloneCdDescriptorWithoutACueIsKept()
+    {
+        var ccd = CreateFile("Game.ccd", "[CloneCD]\r\nVersion=3\r\n");
+        var img = CreateFile("Game.img");
+
+        var remaining = await InputFileFilter.RemoveCompanionDataFilesAsync(
+            [ccd, img],
+            _log.Add,
+            CancellationToken.None
+        );
+
+        Assert.Equal([ccd], remaining);
+    }
+
+    [Fact]
+    public async Task CloneCdDescriptorSuppressionIgnoresCaseAndStaysInTheFolder()
+    {
+        var cue = CreateFile(Path.Combine("discA", "Game.cue"), "FILE \"Game.img\" BINARY\r\n");
+        var sameFolder = CreateFile(Path.Combine("discA", "GAME.CCD"), "[CloneCD]\r\n");
+        var otherFolder = CreateFile(Path.Combine("discB", "Game.ccd"), "[CloneCD]\r\n");
+
+        var remaining = await InputFileFilter.RemoveCompanionDataFilesAsync(
+            [cue, sameFolder, otherFolder],
+            _log.Add,
+            CancellationToken.None
+        );
+
+        Assert.Equal([cue, otherFolder], remaining);
+        Assert.Single(_log);
+    }
+
     // --- RemoveRarVolumeParts ---
 
     [Fact]

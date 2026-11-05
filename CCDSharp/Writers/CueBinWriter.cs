@@ -22,8 +22,13 @@ internal static class CueBinWriter
     /// <param name="disc">The parsed disc image.</param>
     /// <param name="binFileName">The BIN file name to reference in the CUE sheet (without path).</param>
     /// <returns>The complete CUE sheet content as a string.</returns>
+    /// <exception cref="InvalidOperationException">
+    ///     The descriptor declares no tracks, or a track has no INDEX 01 position.
+    /// </exception>
     internal static string GenerateCueSheet(DiscImage disc, string binFileName)
     {
+        ValidateTracks(disc);
+
         var sb = new StringBuilder();
 
         // CATALOG if present
@@ -96,6 +101,10 @@ internal static class CueBinWriter
         if (disc.ImgFilePath == null || !File.Exists(disc.ImgFilePath))
             throw new FileNotFoundException("IMG data file not found.", disc.ImgFilePath);
 
+        // Validate before the optional .img copy: a descriptor with no usable track layout must not
+        // leave a full disc-sized .bin behind before failing.
+        ValidateTracks(disc);
+
         var cueDir = Path.GetDirectoryName(outputCuePath) ?? ".";
         string binFileName;
 
@@ -127,6 +136,31 @@ internal static class CueBinWriter
         File.WriteAllText(outputCuePath, cueContent, new UTF8Encoding(false));
 
         return outputCuePath;
+    }
+
+    /// <summary>
+    ///     Throws when the disc cannot be expressed as a cue sheet. A FILE-only cue makes chdman
+    ///     read zero tracks and then loop forever instead of failing, so an incomplete track layout
+    ///     must be reported here rather than written out.
+    /// </summary>
+    /// <param name="disc">The disc image to validate.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The descriptor declares no tracks, or a track has no INDEX 01 position.
+    /// </exception>
+    private static void ValidateTracks(DiscImage disc)
+    {
+        if (disc.Tracks.Count == 0)
+            throw new InvalidOperationException(
+                "The descriptor declares no tracks, so no cue sheet can be built from it."
+            );
+
+        foreach (var track in disc.Tracks)
+        {
+            if (track.Index01Lba < 0)
+                throw new InvalidOperationException(
+                    $"Track {track.Number.ToString(CultureInfo.InvariantCulture)} has no INDEX 01 position, so no cue sheet can be built from it."
+                );
+        }
     }
 
     /// <summary>

@@ -444,4 +444,45 @@ public class GameFileParserTests : IDisposable
         Assert.False(sjisHasBom);
         Assert.Equal(932, sjisEncoding.CodePage);
     }
+
+    [Fact]
+    public async Task CueDeclaresTracksAsyncFindsTrackLines()
+    {
+        var cuePath = Path.Combine(_tempDir, "game.cue");
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"game.bin\" BINARY\r\n  TRACK 01 MODE1/2352\r\n    INDEX 01 00:00:00\r\n"
+        );
+
+        Assert.True(
+            await GameFileParser.CueDeclaresTracksAsync(cuePath, CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task CueDeclaresTracksAsyncRejectsFileOnlyCue()
+    {
+        // The descriptor CCDSharp used to emit for a TOC-only .ccd: a FILE line and nothing else.
+        var cuePath = Path.Combine(_tempDir, "trackless.cue");
+        await File.WriteAllTextAsync(cuePath, "FILE \"game.img\" BINARY\r\n");
+
+        Assert.False(
+            await GameFileParser.CueDeclaresTracksAsync(cuePath, CancellationToken.None)
+        );
+    }
+
+    [Fact]
+    public async Task CueDeclaresTracksAsyncHandlesUtf16Cue()
+    {
+        var cuePath = Path.Combine(_tempDir, "utf16.cue");
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"game.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n",
+            Encoding.Unicode
+        );
+
+        Assert.True(
+            await GameFileParser.CueDeclaresTracksAsync(cuePath, CancellationToken.None)
+        );
+    }
 }

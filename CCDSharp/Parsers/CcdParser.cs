@@ -19,6 +19,11 @@ public static partial class CcdParser
     private const int MaxTrackNumber = 99;
 
     /// <summary>
+    ///     Control-flag bit of a TOC entry that marks its track as a data track.
+    /// </summary>
+    private const int DataTrackControl = 0x04;
+
+    /// <summary>
     ///     Matches the [CloneCD] section header.
     /// </summary>
     [GeneratedRegex(@"^\s*\[CloneCD\]")]
@@ -71,6 +76,24 @@ public static partial class CcdParser
     /// </summary>
     [GeneratedRegex(@"^\s*ISRC\s*=\s*(\S+)")]
     private static partial Regex TrackIsrcRegex();
+
+    /// <summary>
+    ///     Matches the Point field of a TOC entry.
+    /// </summary>
+    [GeneratedRegex(@"^\s*Point\s*=\s*(\S+)")]
+    private static partial Regex EntryPointRegex();
+
+    /// <summary>
+    ///     Matches the Control field of a TOC entry.
+    /// </summary>
+    [GeneratedRegex(@"^\s*Control\s*=\s*(\S+)")]
+    private static partial Regex EntryControlRegex();
+
+    /// <summary>
+    ///     Matches the PLBA field of a TOC entry.
+    /// </summary>
+    [GeneratedRegex(@"^\s*PLBA\s*=\s*([-+]?\d+)")]
+    private static partial Regex EntryPlbaRegex();
 
     /// <summary>
     ///     Matches the Version field of the [CloneCD] section.
@@ -162,6 +185,8 @@ public static partial class CcdParser
         var inCcd = false;
         var inDisc = false;
         var currentTrack = -1;
+        var tocEntries = new List<TocEntry>();
+        TocEntry? currentEntry = null;
 
         foreach (var rawLine in lines)
         {
@@ -175,6 +200,7 @@ public static partial class CcdParser
                 inCcd = true;
                 inDisc = false;
                 currentTrack = -1;
+                currentEntry = null;
                 continue;
             }
 
@@ -183,6 +209,7 @@ public static partial class CcdParser
                 inCcd = false;
                 inDisc = true;
                 currentTrack = -1;
+                currentEntry = null;
                 continue;
             }
 
@@ -192,6 +219,7 @@ public static partial class CcdParser
                 inCcd = false;
                 inDisc = false;
                 currentTrack = -1;
+                currentEntry = null;
                 continue;
             }
 
@@ -201,6 +229,8 @@ public static partial class CcdParser
                 inCcd = false;
                 inDisc = false;
                 currentTrack = -1;
+                currentEntry = new TocEntry();
+                tocEntries.Add(currentEntry);
                 continue;
             }
 
@@ -209,6 +239,7 @@ public static partial class CcdParser
             {
                 inCcd = false;
                 inDisc = false;
+                currentEntry = null;
                 if (
                     !int.TryParse(
                         trackMatch.Groups[1].Value,
@@ -248,8 +279,16 @@ public static partial class CcdParser
                 ParseCcdSection(line, disc);
             else if (inDisc)
                 ParseDiscSection(line, disc);
-            else if (currentTrack > 0) ParseTrackSection(line, disc.Tracks[currentTrack - 1]);
+            else if (currentTrack > 0)
+                ParseTrackSection(line, disc.Tracks[currentTrack - 1]);
+            else if (currentEntry is not null) ParseEntrySection(line, currentEntry);
         }
+
+        // trurip and some CloneCD-derived tools describe the disc only through [Entry N] TOC rows
+        // and omit every [TRACK N] section. Without this fallback such a descriptor yields no
+        // tracks at all, and the cue generated from it makes chdman loop forever on an empty disc.
+        if (disc.Tracks.Count == 0 && tocEntries.Count > 0)
+            PopulateTracksFromToc(disc, tocEntries);
 
         return disc;
     }
@@ -366,6 +405,153 @@ public static partial class CcdParser
 
         var isrcMatch = TrackIsrcRegex().Match(line);
         if (isrcMatch.Success) track.Isrc = isrcMatch.Groups[1].Value.Trim();
+    }
+
+    /// <summary>
+    ///     Parses a field line inside an [Entry N] TOC row.
+    /// </summary>
+    /// <param name="line">The trimmed line to parse.</param>
+    /// <param name="entry">The TOC entry being populated.</param>
+    private static void ParseEntrySection(string line, TocEntry entry)
+    {
+        var pointMatch = EntryPointRegex().Match(line);
+        if (pointMatch.Success)
+        {
+            if (TryParseCcdNumber(pointMatch.Groups[1].Value, out var point)) entry.Point = point;
+
+            return;
+        }
+
+        var controlMatch = EntryControlRegex().Match(line);
+        if (controlMatch.Success)
+        {
+            if (TryParseCcdNumber(controlMatch.Groups[1].Value, out var control))
+                entry.Control = control;
+
+            return;
+        }
+
+        var plbaMatch = EntryPlbaRegex().Match(line);
+        if (plbaMatch.Success && TryParseInt(plbaMatch, out var plba)) entry.Plba = plba;
+    }
+
+    /// <summary>
+    ///     Builds the track list from the TOC rows of a descriptor that has no [TRACK N] sections.
+    ///     Track starts come from the P-LBA of each POINT 1-99 row; the control flags separate data
+    ///     from audio.
+    /// </summary>
+    /// <param name="disc">The disc image being populated.</param>
+    /// <param name="entries">The TOC rows in file order.</param>
+    private static void PopulateTracksFromToc(DiscImage disc, List<TocEntry> entries)
+    {
+        var byTrackNumber = new Dictionary<int, TocEntry>();
+        foreach (var entry in entries)
+        {
+            if (entry.Point is < 1 or > MaxTrackNumber || entry.Plba is null) continue;
+
+            byTrackNumber[entry.Point] = entry;
+        }
+
+        foreach (var trackNumber in byTrackNumber.Keys.Order())
+        {
+            // A TOC that skips a track number still needs a track in the list for the cue track
+            // numbers to stay aligned with the descriptor.
+            while (disc.Tracks.Count < trackNumber)
+                disc.Tracks.Add(new Track { Number = disc.Tracks.Count + 1 });
+
+            var track = disc.Tracks[trackNumber - 1];
+            var entry = byTrackNumber[trackNumber];
+            track.Number = trackNumber;
+            track.Mode = ResolveEntryMode(disc.ImgFilePath, entry);
+            track.Indexes[1] = entry.Plba!.Value;
+        }
+    }
+
+    /// <summary>
+    ///     Resolves the mode of a TOC-derived track: audio when the control flags lack the data
+    ///     bit, otherwise the mode encoded in the track's first sector header.
+    /// </summary>
+    /// <param name="imgFilePath">Path of the .img data file, or null when unknown.</param>
+    /// <param name="entry">The TOC row describing the track.</param>
+    /// <returns>The resolved track mode.</returns>
+    private static TrackMode ResolveEntryMode(string? imgFilePath, TocEntry entry)
+    {
+        if ((entry.Control & DataTrackControl) == 0) return TrackMode.Audio;
+
+        return DetectDataTrackMode(imgFilePath, entry.Plba!.Value) ?? TrackMode.Mode1;
+    }
+
+    /// <summary>
+    ///     Reads the mode byte of the raw sector at <paramref name="lba" />. The TOC does not say
+    ///     whether a data track is Mode 1 or Mode 2, but the sector header does.
+    /// </summary>
+    /// <param name="imgFilePath">Path of the .img data file, or null when unknown.</param>
+    /// <param name="lba">Absolute LBA of the track start.</param>
+    /// <returns>The detected mode, or null when the sector cannot be inspected.</returns>
+    private static TrackMode? DetectDataTrackMode(string? imgFilePath, int lba)
+    {
+        if (imgFilePath is null || lba < 0 || !File.Exists(imgFilePath)) return null;
+
+        try
+        {
+            using var stream = new FileStream(
+                imgFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite
+            );
+            var offset = (long)lba * SectorConstants.RawSectorSize;
+            if (offset + SectorConstants.RawSectorSize > stream.Length) return null;
+
+            stream.Seek(offset, SeekOrigin.Begin);
+            var sector = new byte[SectorConstants.RawSectorSize];
+            stream.ReadExactly(sector);
+
+            if (
+                !sector
+                    .AsSpan(0, SectorConstants.SyncMark.Length)
+                    .SequenceEqual(SectorConstants.SyncMark)
+            )
+                return null;
+
+            return sector[SectorConstants.ModeOffset] == 2 ? TrackMode.Mode2 : TrackMode.Mode1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Parses a CCD numeric field written either in hexadecimal ("0x04") or in plain decimal.
+    /// </summary>
+    /// <param name="text">The field text.</param>
+    /// <param name="value">When this method returns, contains the parsed value.</param>
+    /// <returns>True when the value parsed.</returns>
+    private static bool TryParseCcdNumber(string text, out int value)
+    {
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            return int.TryParse(
+                text.AsSpan(2),
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out value
+            );
+
+        return int.TryParse(text, CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>One [Entry N] row of the descriptor's table of contents.</summary>
+    private sealed class TocEntry
+    {
+        /// <summary>POINT value: 1-99 for a track, 0xA0-0xA2 for lead-in/lead-out rows.</summary>
+        public int Point { get; set; }
+
+        /// <summary>CONTROL flags; <see cref="DataTrackControl" /> marks a data track.</summary>
+        public int Control { get; set; }
+
+        /// <summary>Absolute track start LBA, or null when the row has no PLBA field.</summary>
+        public int? Plba { get; set; }
     }
 
     /// <summary>
