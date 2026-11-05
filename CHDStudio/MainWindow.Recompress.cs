@@ -275,12 +275,12 @@ internal partial class MainWindow
         var processed = 0;
         ResetSpeedCounters();
 
-        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
-            selectedFiles,
-            parentPath,
-            autoDetectParent
+        LogMessage("Checking CHD headers for parent/child images...");
+        var plan = await Task.Run(
+            () => ParentChdResolver.PrepareBatch(selectedFiles, parentPath, autoDetectParent, token),
+            token
         );
-        foreach (var file in orderedFiles)
+        foreach (var file in plan.OrderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -296,8 +296,7 @@ internal partial class MainWindow
                 outputFolder,
                 file,
                 preset,
-                parentPath,
-                autoDetectParent,
+                plan.ResolutionFor(file),
                 verify,
                 deleteOriginal,
                 upgradeMetadata,
@@ -323,20 +322,28 @@ internal partial class MainWindow
     }
 
     /// <summary>Recompresses one CHD and moves the verified output into place.</summary>
+    /// <param name="inputFolder">Root of the recompression input folder.</param>
+    /// <param name="outputFolder">Root of the recompression output folder.</param>
+    /// <param name="sourcePath">Full path of the CHD to recompress.</param>
+    /// <param name="preset">Compression preset to apply.</param>
+    /// <param name="resolution">Precomputed parent resolution for the source file.</param>
+    /// <param name="verify">True to verify each recompressed CHD.</param>
+    /// <param name="deleteOriginal">True to delete the source after a successful recompression.</param>
+    /// <param name="upgradeMetadata">True to upgrade the CHD metadata while recompressing.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>True when the file was recompressed successfully.</returns>
     private async Task<bool> RecompressSingleFileAsync(
         string inputFolder,
         string outputFolder,
         string sourcePath,
         ChdCompressionPreset preset,
-        string? parentPath,
-        bool autoDetectParent,
+        ParentChdResolver.Resolution resolution,
         bool verify,
         bool deleteOriginal,
         bool upgradeMetadata,
         CancellationToken token
     )
     {
-        var resolution = ParentChdResolver.Resolve(sourcePath, parentPath, autoDetectParent);
         if (!string.IsNullOrWhiteSpace(resolution.Warning))
             LogWarning($" {resolution.Warning}");
 

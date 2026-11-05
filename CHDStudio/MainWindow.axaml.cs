@@ -2326,12 +2326,12 @@ internal partial class MainWindow : Window, IDisposable
         var processedCount = 0;
         ResetSpeedCounters();
 
-        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
-            selectedFiles,
-            parentPath,
-            autoDetectParent
+        LogMessage("Checking CHD headers for parent/child images...");
+        var plan = await Task.Run(
+            () => ParentChdResolver.PrepareBatch(selectedFiles, parentPath, autoDetectParent, token),
+            token
         );
-        foreach (var file in orderedFiles)
+        foreach (var file in plan.OrderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -2342,7 +2342,7 @@ internal partial class MainWindow : Window, IDisposable
                 "Extracting"
             );
 
-            var resolution = ParentChdResolver.Resolve(file, parentPath, autoDetectParent);
+            var resolution = plan.ResolutionFor(file);
             if (!string.IsNullOrWhiteSpace(resolution.Warning))
                 LogWarning($" {resolution.Warning}");
 
@@ -5554,12 +5554,12 @@ internal partial class MainWindow : Window, IDisposable
         var processed = 0;
         ResetSpeedCounters();
 
-        var orderedFiles = ParentChdResolver.OrderChildrenFirst(
-            selectedFiles,
-            parentPath,
-            autoDetectParent
+        LogMessage("Checking CHD headers for parent/child images...");
+        var plan = await Task.Run(
+            () => ParentChdResolver.PrepareBatch(selectedFiles, parentPath, autoDetectParent, token),
+            token
         );
-        foreach (var file in orderedFiles)
+        foreach (var file in plan.OrderedFiles)
         {
             token.ThrowIfCancellationRequested();
 
@@ -5571,7 +5571,7 @@ internal partial class MainWindow : Window, IDisposable
                 "Verifying"
             );
 
-            var resolution = ParentChdResolver.Resolve(file, parentPath, autoDetectParent);
+            var resolution = plan.ResolutionFor(file);
             if (!string.IsNullOrWhiteSpace(resolution.Warning))
                 LogWarning($" {resolution.Warning}");
 

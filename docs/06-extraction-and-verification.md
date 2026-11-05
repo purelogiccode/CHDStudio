@@ -13,7 +13,7 @@ This page covers the internals of the two CHD-consuming workflows. References ar
 
 ### Entry & batch loop
 
-`StartExtractionButton_ClickAsync` (`:693`) validates paths, reads options (subfolders, delete original, optional parent CHD and auto-detection), and calls `PerformBatchExtractionAsync` (`:1355`), which runs `CheckDiskSpaceAsync` off the UI thread (extraction mode: warns when output free space < total input size) and then loops per file with `ExtractChdAsync` (`:2123`). Each file is resolved with `ParentChdResolver` first; a child without a parent fails with a clear message instead of a bare `Chderrrequiresparent`. The built-in reader opens the file with `ChdFile.Open(chd, parentPath, ...)`, laserdisc extraction uses the parent-aware `ExtractLaserDisc` overload, and the chdman fallback adds `-ip <parent>`.
+`StartExtractionButton_ClickAsync` (`:693`) validates paths, reads options (subfolders, delete original, optional parent CHD and auto-detection), and calls `PerformBatchExtractionAsync` (`:1355`), which runs `CheckDiskSpaceAsync` off the UI thread (extraction mode: warns when output free space < total input size) and then loops per file with `ExtractChdAsync` (`:2123`). Before the loop, `ParentChdResolver.PrepareBatch` runs off the UI thread: it reads each CHD header once, resolves parents (and orders children before their parents), and the loop reuses those resolutions. A child without a parent fails with a clear message instead of a bare `Chderrrequiresparent`. The built-in reader opens the file with `ChdFile.Open(chd, parentPath, ...)`, laserdisc extraction uses the parent-aware `ExtractLaserDisc` overload, and the chdman fallback adds `-ip <parent>`.
 
 ### Format selection
 
@@ -93,7 +93,7 @@ The CHDSharp failure is reported to the bug API **only when the chdman fallback 
 
 ### Entry & batch loop
 
-`StartVerificationButton_ClickAsync` (`:1110`) reads the move options, creates the `Success`/`Failed` folders up front when requested (`:2022–2030`), and calls `PerformBatchVerificationAsync` (`:2011`).
+`StartVerificationButton_ClickAsync` (`:1110`) reads the move options, creates the `Success`/`Failed` folders up front when requested (`:2022–2030`), and calls `PerformBatchVerificationAsync` (`:2011`). The batch is prepared once with `ParentChdResolver.PrepareBatch` on a background task (header-only reads, child-before-parent order); the loop uses the precomputed resolution for each file.
 
 ### VerifyChdAsync
 

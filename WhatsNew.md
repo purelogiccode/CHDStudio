@@ -5,6 +5,13 @@ nav_order: 16
 
 # What's New
 
+## 3.13.1 (2026-11-04)
+
+### Verification reliability
+
+*   **Verify no longer hangs on large CHD folders.** Batch preparation ran on the UI thread and read every CHD's full header, including its compressed hunk map, before verification started. On a folder with 1,366 CHDs that blocked the window for about 84 seconds, so Windows reported the app as hung and closed it. Preparation now reads only the fixed 76/80/120/108/124-byte header, runs off the UI thread, caches sibling headers for the whole batch, and reuses the resolved parent data in the Verify, Extract and Recompress loops. Cancelling during preparation now works as well.
+*   Version bump: application 3.13.1.
+
 ## 3.13.0 (2026-11-04)
 
 ### CloneCD and trurip descriptors

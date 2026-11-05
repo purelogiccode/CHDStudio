@@ -222,6 +222,10 @@ Resolves the parent of a differential child CHD for verification, extraction, ch
 | Member | Purpose |
 |--------|---------|
 | `Resolve(childPath, explicitParentPath = null, autoDetect = true)` (static) | Reads the child header. If no parent is required it returns `IsRequired = false`. An explicit parent is validated and returned (with a warning when its hash differs). Otherwise sibling `.chd` files are matched against the child's `ParentSha1`/`ParentMd5`. Returns a user-facing `Error` when a required parent cannot be found. |
+| `PrepareBatch(files, explicitParentPath, autoDetect, cancellationToken)` (static) | Resolves every file once and returns a `BatchPlan` with the files ordered children-first and the precomputed `Resolution` for each path. Callers run it on a background task and use `plan.ResolutionFor(file)` in the batch loop. |
+| `OrderChildrenFirst(files, explicitParentPath, autoDetect)` (static) | Convenience wrapper over `PrepareBatch` that returns only the ordered paths. |
+
+Only the fixed 76/80/120/108/124-byte CHD header is read to obtain the parent hashes; the compressed hunk map is deliberately not parsed. `PrepareBatch` shares one header cache across the batch, so a folder with many children reads each sibling header once instead of re-reading it for every child.
 
 ---
 

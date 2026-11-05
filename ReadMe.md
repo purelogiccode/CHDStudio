@@ -186,7 +186,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.0_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
+Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.1_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
 
 Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 
