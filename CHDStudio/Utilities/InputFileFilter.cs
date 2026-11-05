@@ -180,15 +180,14 @@ internal static class InputFileFilter
         if (cueKeys.Count == 0) return files;
 
         var suppressed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in files)
-        {
-            if (
-                !Path.GetExtension(file).Equals(FileExtensions.Ccd, StringComparison.OrdinalIgnoreCase)
+        foreach (
+            var file in files.Where(file =>
+                Path.GetExtension(file)
+                    .Equals(FileExtensions.Ccd, StringComparison.OrdinalIgnoreCase)
+                && cueKeys.Contains(GetDescriptorKey(file))
             )
-                continue;
-
-            if (!cueKeys.Contains(GetDescriptorKey(file))) continue;
-
+        )
+        {
             suppressed.Add(file);
             onLog?.Invoke(
                 $" Skipping {Path.GetFileName(file)} - described by {Path.GetFileNameWithoutExtension(file)}{FileExtensions.Cue} (same base name)."
@@ -206,7 +205,9 @@ internal static class InputFileFilter
     /// <returns>The comparison key.</returns>
     private static string GetDescriptorKey(string path)
     {
-        return Path.Combine(
+        // Path.Join never discards the earlier parts, unlike Path.Combine, which a rooted second
+        // argument would silently replace.
+        return Path.Join(
             Path.GetDirectoryName(path) ?? string.Empty,
             Path.GetFileNameWithoutExtension(path)
         );

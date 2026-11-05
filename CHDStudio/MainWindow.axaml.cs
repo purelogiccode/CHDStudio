@@ -5129,7 +5129,14 @@ internal partial class MainWindow : Window, IDisposable
         {
             throw;
         }
-        catch
+        catch (Exception ex)
+            when (ex
+                is IOException
+                or UnauthorizedAccessException
+                or ArgumentException
+                or NotSupportedException
+                or SecurityException
+            )
         {
             return false;
         }

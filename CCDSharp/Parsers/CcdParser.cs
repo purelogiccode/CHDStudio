@@ -445,10 +445,12 @@ public static partial class CcdParser
     private static void PopulateTracksFromToc(DiscImage disc, List<TocEntry> entries)
     {
         var byTrackNumber = new Dictionary<int, TocEntry>();
-        foreach (var entry in entries)
+        foreach (
+            var entry in entries.Where(static entry =>
+                entry.Point is >= 1 and <= MaxTrackNumber && entry.Plba is not null
+            )
+        )
         {
-            if (entry.Point is < 1 or > MaxTrackNumber || entry.Plba is null) continue;
-
             byTrackNumber[entry.Point] = entry;
         }
 
