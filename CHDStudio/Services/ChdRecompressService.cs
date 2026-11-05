@@ -59,13 +59,10 @@ internal static class ChdRecompressService
             }
         }
 
-        if (
-            preset == ChdCompressionPreset.Uncompressed
-            && command is "createcd" or "createld"
-        )
+        if (preset == ChdCompressionPreset.Uncompressed && command is "createld")
         {
-            // Match the Convert tab: uncompressed output is only meaningful for raw media, so
-            // CD/laserdisc sources fall back to the compatible codec set instead of failing.
+            // Laserdisc output requires AVHuff; there is no uncompressed A/V codec. CD images
+            // support -c none in both chdman and the built-in encoder, so they keep the preset.
             preset = ChdCompressionPreset.Compatible;
         }
 

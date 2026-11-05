@@ -62,7 +62,7 @@ Environment Details includes: date/time, app name + version, OS version, archite
 
 ## 9.4 Exclusion Patterns
 
-`IsExcludedFromBugReport` (`BugReportService.cs:187`) performs a case-insensitive substring match against `ExcludedMessagePatterns` (`:17–142`). Any match → the report is **dropped entirely** (no HTTP call). The categories:
+`IsExcludedFromBugReport` (`BugReportService.cs:187`) performs a case-insensitive substring match against `ExcludedMessagePatterns` in `BugReportService.cs`. Any match → the report is **dropped entirely** (no HTTP call). The categories:
 
 | Category | Example patterns |
 |----------|------------------|
@@ -74,6 +74,7 @@ Environment Details includes: date/time, app name + version, OS version, archite
 | **Corrupt/unopenable CHD data** | `"Not a valid CHD file"`, `"Invalid or corrupt data"`, `"Cannot open file"`, `"Failed to open '"` (CHD open/read failures during extraction) |
 | **chdman output (user data)** | `"Fatal error occurred"` (chdman exit summary), `"cannot create std::vector"` (chdman C++ crash on user input), `"libc++abi"`, `"Pure virtual function called"`, `"terminate called after throwing"`, `"terminate called without an active exception"` (a C++ runtime abort inside the bundled chdman build - the app logs one actionable crash notice and switches the rest of the batch to the built-in encoder), `"Error during compression"`, `"Error parsing input file"`, `"failed due to an I/O error"`, `"its output is not a valid CHD"` (the validation notice for a partial output - the classified final message that follows reports the real cause) |
 | **Encoder fallback (routine)** | `"chdman failed for"`, `"Falling back to the built-in CHDSharp"` — when both encoders fail, the classified error reported afterwards still reaches the API |
+| **Preset policy (by design)** | `"Uncompressed output is not supported for laserdisc images"` — AVHuff is the only laserdisc codec; the app falls back to the compatible set |
 | **File moves (environment)** | `"Failed to move temp output to destination"`, `"Failed to move CHDSharp output to destination"` |
 | **Duplicate batch products (by design)** | `"was already produced earlier in this batch"` — two inputs resolved to the same CHD (typically an archive whose contents were not known at the collision preflight); the duplicate is skipped before conversion, the first product is kept, and the notice is logged at Information level; the pattern remains as a safety net should it ever be logged as a warning |
 | **CHDSharp device/permission errors** | `"CHDSharp could not read or write"` — the drive vanished, the disk failed, the destination is full or access was denied; an environment condition, not an encoder defect |

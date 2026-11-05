@@ -205,7 +205,10 @@ internal class BugReportService
         // either - its avhuff codec has exactly the same restriction - so the source has to be
         // re-encoded. Filing a bug for a limitation of the input format is noise.
         "Unsupported AVI video format",
-        "Unsupported AVI audio format"
+        "Unsupported AVI audio format",
+        // Laserdisc output has no uncompressed codec; the app falls back to the compatible
+        // AVHuff set as designed. This is a user choice, not an application defect.
+        "Uncompressed output is not supported for laserdisc images"
     ];
 
     private static readonly string[] DirectlyReportedMessagePatterns =

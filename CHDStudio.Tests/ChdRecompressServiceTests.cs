@@ -82,7 +82,7 @@ public class ChdRecompressServiceTests : IDisposable
     }
 
     [Fact]
-    public void Recompress_CdWithUncompressedPreset_FallsBackToCompatible()
+    public void Recompress_CdWithUncompressedPreset_WritesUncompressedChdAndVerifies()
     {
         File.WriteAllBytes(PathFor("cd.bin"), new byte[2352 * 5]);
         var cuePath = PathFor("cd.cue");
@@ -100,7 +100,7 @@ public class ChdRecompressServiceTests : IDisposable
             CancellationToken.None
         );
 
-        var outputPath = PathFor("cd-fallback.chd");
+        var outputPath = PathFor("cd-uncompressed.chd");
         ChdRecompressService.Recompress(
             sourcePath,
             outputPath,
@@ -112,6 +112,8 @@ public class ChdRecompressServiceTests : IDisposable
         );
 
         AssertVerifies(outputPath);
+        Assert.Equal(ChdError.Chderrnone, Chd.ReadHeader(outputPath, out var header));
+        Assert.Contains(ChdCodec.None, header!.Compression);
     }
 
     [Fact]

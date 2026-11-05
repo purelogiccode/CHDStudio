@@ -47,6 +47,11 @@ internal partial class MainWindow : Window, IDisposable
     // the verification and extraction tabs.
     private const string StagingExtension = ".chdtmp";
 
+    // A temp directory younger than this may belong to a conversion that started while the
+    // startup cleanup was still running. Deleting it on Unix unlinks the output file the encoder
+    // is still writing, so the conversion finishes successfully with nothing visible on disk.
+    private static readonly TimeSpan LeftoverTempMinimumAge = TimeSpan.FromHours(1);
+
     // On-screen log limits, so a chatty tool (chdman streams progress lines) can never freeze the
     // window: at most MaxLogLength characters are kept (the oldest half is dropped when exceeded),
     // at most MaxPendingLogLines are buffered while the UI thread is busy (a longer burst drops the
@@ -574,6 +579,8 @@ internal partial class MainWindow : Window, IDisposable
     {
         _ = Task.Run(static () =>
         {
+            var utcNow = DateTime.UtcNow;
+
             try
             {
                 foreach (var basePath in PathUtils.GetPossibleTempBasePaths())
@@ -585,6 +592,13 @@ internal partial class MainWindow : Window, IDisposable
                         {
                             try
                             {
+                                // Only remove directories old enough to be orphaned. A conversion
+                                // that started while this cleanup was pending uses a fresh
+                                // directory, and unlinking it on Unix would make the encoder
+                                // finish against a file that no longer has a name.
+                                if (!IsStaleTempDirectory(dir, utcNow, LeftoverTempMinimumAge))
+                                    continue;
+
                                 Directory.Delete(dir, true);
                                 PathUtils.TryDeleteEmptyTempParent(dir);
                             }
@@ -611,6 +625,24 @@ internal partial class MainWindow : Window, IDisposable
                 /* ignore */
             }
         });
+    }
+
+    /// <summary>
+    ///     Returns whether a temporary directory is old enough to be treated as a leftover from a
+    ///     previous run. Fresh directories are kept because a conversion may still be writing to
+    ///     them, and deleting a directory does not stop an open file on Unix.
+    /// </summary>
+    /// <param name="directory">Directory to test.</param>
+    /// <param name="utcNow">Current UTC time.</param>
+    /// <param name="minimumAge">Minimum age before the directory is considered orphaned.</param>
+    /// <returns>True when the directory is old enough to delete.</returns>
+    internal static bool IsStaleTempDirectory(
+        string directory,
+        DateTime utcNow,
+        TimeSpan minimumAge
+    )
+    {
+        return utcNow - Directory.GetLastWriteTimeUtc(directory) >= minimumAge;
     }
 
     /// <summary>
@@ -1368,10 +1400,10 @@ internal partial class MainWindow : Window, IDisposable
 
     /// <summary>Scans the conversion input folder and populates the conversion file grid.</summary>
     /// <returns>A task that completes when the file list has been loaded.</returns>
-    private Task LoadFilesForConversionAsync()
+    private async Task LoadFilesForConversionAsync()
     {
         var inputFolder = ConversionInputFolderTextBox.Text;
-        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return Task.CompletedTask;
+        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return;
 
         var includeSub = SearchSubfoldersConversionCheckBox.IsChecked ?? false;
 
@@ -1381,7 +1413,7 @@ internal partial class MainWindow : Window, IDisposable
             token = _cts.Token;
         }
 
-        return Task.Run(
+        await AwaitFileScanAsync(Task.Run(
             async () =>
             {
                 var options = new EnumerationOptions
@@ -1451,15 +1483,15 @@ internal partial class MainWindow : Window, IDisposable
                 }
             },
             token
-        );
+        ));
     }
 
     /// <summary>Scans the verification input folder for CHD files and populates the verification grid.</summary>
     /// <returns>A task that completes when the file list has been loaded.</returns>
-    private Task LoadFilesForVerificationAsync()
+    private async Task LoadFilesForVerificationAsync()
     {
         var inputFolder = VerificationInputFolderTextBox.Text;
-        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return Task.CompletedTask;
+        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return;
 
         var includeSub = SearchSubfoldersVerificationCheckBox.IsChecked ?? false;
 
@@ -1469,7 +1501,7 @@ internal partial class MainWindow : Window, IDisposable
             token = _cts.Token;
         }
 
-        return Task.Run(
+        await AwaitFileScanAsync(Task.Run(
             async () =>
             {
                 var options = new EnumerationOptions
@@ -1528,15 +1560,15 @@ internal partial class MainWindow : Window, IDisposable
                 }
             },
             token
-        );
+        ));
     }
 
     /// <summary>Scans the extraction input folder for CHD files and populates the extraction grid.</summary>
     /// <returns>A task that completes when the file list has been loaded.</returns>
-    private Task LoadFilesForExtractionAsync()
+    private async Task LoadFilesForExtractionAsync()
     {
         var inputFolder = ExtractionInputFolderTextBox.Text;
-        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return Task.CompletedTask;
+        if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder)) return;
 
         var includeSub = SearchSubfoldersExtractionCheckBox.IsChecked ?? false;
 
@@ -1546,7 +1578,7 @@ internal partial class MainWindow : Window, IDisposable
             token = _cts.Token;
         }
 
-        return Task.Run(
+        await AwaitFileScanAsync(Task.Run(
             async () =>
             {
                 var options = new EnumerationOptions
@@ -1605,7 +1637,7 @@ internal partial class MainWindow : Window, IDisposable
                 }
             },
             token
-        );
+        ));
     }
 
     /// <summary>Selects every conversion input file.</summary>
@@ -6579,7 +6611,7 @@ internal partial class MainWindow : Window, IDisposable
         if (!ChdCompressionPresets.IsSupported(effectivePreset, command))
         {
             LogWarning(
-                " Uncompressed output is not supported for CD or laserdisc images; using the compatible codec set instead."
+                " Uncompressed output is not supported for laserdisc images; using the compatible codec set instead."
             );
             effectivePreset = ChdCompressionPreset.Compatible;
         }
@@ -7503,11 +7535,34 @@ internal partial class MainWindow : Window, IDisposable
             // before moving it into place so a zero-length or truncated file is never reported as
             // a successful conversion. A delta output needs its parent to be verifiable, and the
             // deep pass is what makes the compatible-codec retry below meaningful.
-            if (!File.Exists(outputFile) || new FileInfo(outputFile).Length == 0)
+            if (!File.Exists(outputFile))
             {
-                chdSharpFailure = "the encoder did not produce an output file";
+                chdSharpFailure = $"the encoder did not produce an output file at '{outputFile}'";
                 LogError(
-                    $" CHDSharp reported success for '{Path.GetFileName(originalInputFile)}' but produced no output file."
+                    $" CHDSharp reported success for '{Path.GetFileName(originalInputFile)}' but the output file is missing: {outputFile}"
+                );
+                return false;
+            }
+
+            long outputLength;
+            try
+            {
+                outputLength = new FileInfo(outputFile).Length;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                chdSharpFailure = $"the encoder output could not be read: {ex.Message}";
+                LogError(
+                    $" CHDSharp reported success for '{Path.GetFileName(originalInputFile)}' but its output could not be read: {ex.Message}"
+                );
+                return false;
+            }
+
+            if (outputLength == 0)
+            {
+                chdSharpFailure = $"the encoder produced an empty output file at '{outputFile}'";
+                LogError(
+                    $" CHDSharp reported success for '{Path.GetFileName(originalInputFile)}' but produced an empty output file: {outputFile}"
                 );
                 return false;
             }
@@ -9621,6 +9676,24 @@ internal partial class MainWindow : Window, IDisposable
             },
             TaskContinuationOptions.OnlyOnFaulted
         );
+    }
+
+    /// <summary>
+    ///     Awaits a folder-scan task, treating cancellation as a normal outcome. A scan started
+    ///     with an already-cancelled token otherwise completes as a cancelled task, and the
+    ///     exception escapes through an async-void event handler.
+    /// </summary>
+    /// <param name="task">The folder-scan task to await.</param>
+    internal static async Task AwaitFileScanAsync(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The folder changed, the tab switched, or the window closed.
+        }
     }
 
     /// <summary>Sends a bug report through the shared bug report service, ignoring failures.</summary>

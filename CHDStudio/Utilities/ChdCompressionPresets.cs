@@ -15,11 +15,14 @@ internal static class ChdCompressionPresets
     /// <summary>Returns whether the preset can be used for the given creation command.</summary>
     /// <param name="preset">The selected preset.</param>
     /// <param name="command">The chdman-style creation command (e.g. <c>createcd</c>).</param>
-    /// <returns>False only for uncompressed CD/laserdisc output, which is not supported.</returns>
+    /// <returns>
+    ///     False only for uncompressed laserdisc output. Laserdiscs require the AVHuff codec;
+    ///     CD images support <c>none</c> in both chdman and the built-in encoder.
+    /// </returns>
     internal static bool IsSupported(ChdCompressionPreset preset, string command)
     {
         return preset != ChdCompressionPreset.Uncompressed
-               || command is "createdvd" or "createhd" or "createraw";
+               || command is not "createld";
     }
 
     /// <summary>
@@ -137,6 +140,11 @@ internal static class ChdCompressionPresets
         if (tags is null || tags.Length == 0)
             return null;
 
-        return string.Join(",", tags.Select(static tag => CodecTags.ToString(tag)));
+        return string.Join(
+            ",",
+            tags.Select(static tag =>
+                tag == CodecTags.None ? "none" : CodecTags.ToString(tag)
+            )
+        );
     }
 }

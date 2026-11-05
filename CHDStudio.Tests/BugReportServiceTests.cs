@@ -410,6 +410,9 @@ public class BugReportServiceTests
         "CHDSharp encoding failed: Unsupported AVI video format 'IV50'; YUY2, VYUY or UYVY is required"
     )]
     [InlineData("Unsupported AVI audio format (PCM 8/16-bit required, got 24-bit)")]
+    [InlineData(
+        " Uncompressed output is not supported for laserdisc images; using the compatible codec set instead."
+    )]
     // A write failure while extracting a CHD: full, disconnected or read-only output volume.
     [InlineData(
         " Could not write the extracted files for 'Zusar Vasar (JP).chd': Extraction failed; track 3: Chderrwriteerror The output drive could not be written: it may be full, disconnected, read-only, or access may be denied."

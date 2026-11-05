@@ -31,6 +31,43 @@ public class MainWindowHelperTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    [Theory]
+    [InlineData(59, false)]
+    [InlineData(61, true)]
+    public void IsStaleTempDirectory_RespectsMinimumAge(int ageMinutes, bool expected)
+    {
+        var directory = Path.Combine(_tempDir, $"temp_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        var utcNow = DateTime.UtcNow;
+        Directory.SetLastWriteTimeUtc(directory, utcNow.AddMinutes(-ageMinutes));
+
+        Assert.Equal(
+            expected,
+            MainWindow.IsStaleTempDirectory(directory, utcNow, TimeSpan.FromHours(1))
+        );
+    }
+
+    [Fact]
+    public async Task AwaitFileScanAsync_CancelledScanIsIgnored()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await MainWindow.AwaitFileScanAsync(Task.Run(static () => { }, cts.Token));
+    }
+
+    [Fact]
+    public async Task AwaitFileScanAsync_RealFailurePropagates()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                MainWindow.AwaitFileScanAsync(
+                    Task.FromException(new InvalidOperationException("scan failed"))
+                )
+        );
+    }
+
     [Fact]
     public async Task StripUtf8BomIfPresentAsync_RemovesBom()
     {

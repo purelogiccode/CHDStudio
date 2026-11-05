@@ -19,11 +19,11 @@ namespace CHDStudio;
 internal partial class MainWindow
 {
     /// <summary>Reloads the recompression file list for the current input folder.</summary>
-    private Task LoadFilesForRecompressionAsync()
+    private async Task LoadFilesForRecompressionAsync()
     {
         var inputFolder = RecompressInputFolderTextBox.Text;
         if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder))
-            return Task.CompletedTask;
+            return;
 
         CancellationToken token;
         lock (_ctsLock)
@@ -31,7 +31,7 @@ internal partial class MainWindow
             token = _cts.Token;
         }
 
-        return Task.Run(
+        await AwaitFileScanAsync(Task.Run(
             async () =>
             {
                 var options = new EnumerationOptions
@@ -84,7 +84,7 @@ internal partial class MainWindow
                 }
             },
             token
-        );
+        ));
     }
 
     /// <summary>Writes the Recompress tab guidance to the activity log.</summary>
@@ -107,7 +107,14 @@ internal partial class MainWindow
         if (string.IsNullOrWhiteSpace(RecompressOutputFolderTextBox.Text))
             RecompressOutputFolderTextBox.Text = folder;
 
-        await LoadFilesForRecompressionAsync();
+        try
+        {
+            await LoadFilesForRecompressionAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogError("Failed to load CHD files for recompression", ex);
+        }
     }
 
     /// <summary>Opens the recompression output folder picker.</summary>

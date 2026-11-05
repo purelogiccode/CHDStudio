@@ -207,7 +207,7 @@ Recompresses an existing CHD with CHDSharp's `ChdEncoder.Copy`. It preserves met
 
 | Member | Purpose |
 |--------|---------|
-| `Recompress(sourcePath, outputPath, preset, parentPath, upgradeMetadata, taskCount, token, onHunkCompleted = null)` (static) | Opens the source (with `parentPath` when it is a child), chooses codec tags for the selected `ChdCompressionPreset`, and calls `ChdEncoder.Copy`. Throws `InvalidDataException` when the source cannot be opened. Uncompressed CD/laserdisc output falls back to the compatible codec set. |
+| `Recompress(sourcePath, outputPath, preset, parentPath, upgradeMetadata, taskCount, token, onHunkCompleted = null)` (static) | Opens the source (with `parentPath` when it is a child), chooses codec tags for the selected `ChdCompressionPreset`, and calls `ChdEncoder.Copy`. Throws `InvalidDataException` when the source cannot be opened. Uncompressed laserdisc output falls back to the compatible AVHuff codec set; CD output supports `none`. |
 
 The command used for preset selection is derived from the source flags (`createcd`, `createdvd`, `createhd`, `createraw`, or `createld` when the source carries `AVAV` metadata). `Auto` only detects a platform for CD/DVD sources, and auto-preset codecs whose media type does not match the command are rejected in favour of the defaults.
 
@@ -233,7 +233,7 @@ Only the fixed 76/80/120/108/124-byte CHD header is read to obtain the parent ha
 
 `internal static class ChdCompressionPresets` (`Utilities/ChdCompressionPresets.cs`)
 
-Maps a `ChdCompressionPreset` to codec tags and chdman `-c` arguments. Defaults preserve the existing chdman-compatible behaviour; Smallest uses zstd/cdzs, Compatible uses zlib/cdzl, Auto uses `PlatformDetector.AutoCodecs`, and Uncompressed is limited to raw/DVD/HDD media.
+Maps a `ChdCompressionPreset` to codec tags and chdman `-c` arguments. Defaults preserve the existing chdman-compatible behaviour; Smallest uses zstd/cdzs, Compatible uses zlib/cdzl, Auto uses `PlatformDetector.AutoCodecs`, and Uncompressed is supported for raw/DVD/HDD and CD media. Laserdisc output requires AVHuff.
 
 ---
 

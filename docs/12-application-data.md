@@ -37,7 +37,7 @@ Temp directories use the **system temp folder** by default; a folder at a drive 
 - Pattern: `CHDStudio_Temp_<guid>` under the system temp folder, or `{drive}\CHDStudio_Temp\` as the fallback (`PathUtils.GetBestTempDirectory`, see [Utilities Reference](08-utilities-reference.md#81-pathutils)).
 - Raw CD images that need a generated cue are staged in `{drive}\CHDStudio_Temp\` on the image's own volume, because chdman resolves a cue's `FILE` entry relative to the cue's directory.
 - Used for: archive extraction, CSO decompression, PBP/CCD cue generation, retry-via-temp-copy fallback, and cue work directories.
-- **Cleanup**: temp dirs are deleted after each file is processed; an emptied `CHDStudio_Temp` folder is removed with them, and at startup leftover `CHDStudio_Temp_*` folders (plus stale Explorer extractions older than a day) are removed (`CleanupLeftoverTempDirectories`, `MainWindow.axaml.cs`).
+- **Cleanup**: temp dirs are deleted after each file is processed; an emptied `CHDStudio_Temp` folder is removed with them, and at startup leftover `CHDStudio_Temp_*` folders older than one hour (plus stale Explorer extractions older than a day) are removed (`CleanupLeftoverTempDirectories`, `MainWindow.axaml.cs`). Fresh folders are kept so an in-flight conversion's output is never unlinked.
 
 ## 12.4 What Lives Next to the Executable
 

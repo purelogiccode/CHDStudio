@@ -347,7 +347,7 @@ The 10%-step rule matches `EcmImageDecoder`, so a CD-sized image produces about 
 
 ### ChdCompressionPresets (`Utilities/ChdCompressionPresets.cs`)
 
-Maps `ChdCompressionPreset` values to CHDSharp codec tags and chdman `-c` arguments. `IsSupported` rejects uncompressed CD/laserdisc output; `GetCodecTags` returns `null` for the command defaults and filters `Auto` presets whose codecs do not match the command's CD/raw media type; `DetectPlatformAsync` runs `PlatformDetector.Detect` off the UI thread.
+Maps `ChdCompressionPreset` values to CHDSharp codec tags and chdman `-c` arguments. `IsSupported` rejects uncompressed laserdisc output (AVHuff is required); CD output supports `none`. `GetCodecTags` returns `null` for the command defaults and filters `Auto` presets whose codecs do not match the command's CD/raw media type; `DetectPlatformAsync` runs `PlatformDetector.Detect` off the UI thread.
 
 ### ChdPlatformMapping (`Utilities/ChdPlatformMapping.cs`)
 

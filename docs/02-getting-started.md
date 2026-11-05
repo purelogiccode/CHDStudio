@@ -99,7 +99,7 @@ The path is applied in `MainWindow_LoadedAsync` via `SetInputFolder` (`MainWindo
 1. The built-in CHDSharp encoder is always available, so a batch can never be refused for a missing encoder. On Windows only, when the bundled `chdman.exe` is missing or fails the startup probe, a notice explains that every conversion will run on the built-in encoder (status bar indicators + a message box).
 2. Usage statistics are recorded once (anonymous `{ applicationId, version }` POST — see [Services Reference](07-services-reference.md#stats-service)).
 3. An update check against GitHub releases runs in the background.
-4. Leftover temp directories from crashed sessions and legacy files are cleaned up after a short delay.
+4. Leftover temp directories from crashed sessions (older than one hour) and legacy files are cleaned up after a short delay.
 
 ### Single-instance behavior
 

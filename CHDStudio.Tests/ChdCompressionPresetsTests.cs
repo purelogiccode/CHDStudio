@@ -48,17 +48,44 @@ public class ChdCompressionPresetsTests
     }
 
     [Fact]
-    public void Uncompressed_IsOnlySupportedForRawMedia()
+    public void Uncompressed_IsSupportedForAllMediaExceptLaserdisc()
     {
         Assert.True(
             ChdCompressionPresets.IsSupported(ChdCompressionPreset.Uncompressed, "createdvd")
         );
-        Assert.False(
+        Assert.True(
             ChdCompressionPresets.IsSupported(ChdCompressionPreset.Uncompressed, "createcd")
+        );
+        Assert.True(
+            ChdCompressionPresets.IsSupported(ChdCompressionPreset.Uncompressed, "createhd")
+        );
+        Assert.True(
+            ChdCompressionPresets.IsSupported(ChdCompressionPreset.Uncompressed, "createraw")
+        );
+        Assert.False(
+            ChdCompressionPresets.IsSupported(ChdCompressionPreset.Uncompressed, "createld")
         );
         Assert.Equal(
             [CodecTags.None],
             ChdCompressionPresets.GetCodecTags(ChdCompressionPreset.Uncompressed, "createdvd")!
+        );
+        Assert.Equal(
+            [CodecTags.None],
+            ChdCompressionPresets.GetCodecTags(ChdCompressionPreset.Uncompressed, "createcd")!
+        );
+        Assert.Equal(
+            "none",
+            ChdCompressionPresets.GetChdmanCodecArgument(
+                ChdCompressionPreset.Uncompressed,
+                "createcd"
+            )
+        );
+        Assert.Equal(
+            "none",
+            ChdCompressionPresets.GetChdmanCodecArgument(
+                ChdCompressionPreset.Uncompressed,
+                "createdvd"
+            )
         );
     }
 }

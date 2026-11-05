@@ -5,6 +5,20 @@ nav_order: 16
 
 # What's New
 
+## 3.13.2 (2026-11-05)
+
+### Reliability fixes
+
+*   **Fresh temp directories are no longer deleted at startup.** `CleanupLeftoverTempDirectories` now removes only `CHDStudio_Temp_*` folders older than one hour. A conversion that starts while the delayed cleanup is still pending can no longer have its work/output directory unlinked on Linux, which previously made CHDSharp finish successfully with no visible output file. The missing and zero-length output checks now report the two cases separately and name the path.
+*   **Uncompressed output is supported for CDs.** The Convert and Recompress tabs now honour the Uncompressed preset for `createcd`; chdman receives `-c none` and the built-in encoder writes an uncompressed CHD. Laserdisc output still uses AVHuff because no uncompressed A/V codec exists, and that expected fallback is no longer sent to the bug-report API. The chdman codec argument for uncompressed raw/DVD/HDD output was also corrected from NUL characters to `none`.
+*   **Cancelling a folder scan no longer raises an unhandled `TaskCanceledException`.** All four file-list scans (Convert, Verify, Extract, Recompress) treat cancellation as a normal outcome, and the Recompress browse handler logs real load failures instead of letting them escape an `async void` event handler.
+*   Version bump: application 3.13.2.
+
+### Verification
+
+*   **Test suite:** 1,260 tests pass (1,231 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.13.1 (2026-11-04)
 
 ### Verification reliability
