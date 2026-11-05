@@ -86,7 +86,7 @@ node scripts/ci/version.mjs
 jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
 ```
 
-The full suite currently passes **1,231 tests** (1,202 unit tests plus 29
+The full suite currently passes **1,249 tests** (1,220 unit tests plus 29
 integration tests; the integration tests need the maintainer's local sample
 folders). CI runs the unit tests only with `--filter "Category!=Integration"`.
 InspectCode reports
