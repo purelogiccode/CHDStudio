@@ -30,6 +30,32 @@ internal static class CueNormalizer
         "AUDIO"
     ];
 
+    /// <summary>
+    ///     Track types the CUE parsers in chdman and CHDSharp accept. A cue that carries any other
+    ///     token (some rippers write the literal "UNKNOWN") makes both encoders reject the image,
+    ///     so the token is inferred from the referenced file when possible.
+    /// </summary>
+    private static readonly HashSet<string> KnownCueTrackTypes = new(
+        [
+            "AUDIO",
+            "MODE1",
+            "MODE1/2048",
+            "MODE1/2352",
+            "MODE1_RAW",
+            "MODE2",
+            "MODE2/2048",
+            "MODE2/2324",
+            "MODE2/2336",
+            "MODE2/2352",
+            "MODE2_FORM1",
+            "MODE2_FORM2",
+            "MODE2_FORM_MIX",
+            "MODE2_RAW",
+            "CDI/2352"
+        ],
+        StringComparer.OrdinalIgnoreCase
+    );
+
     /// <summary>Extensions a cue's data track can legitimately be stored under.</summary>
     private static readonly HashSet<string> DataFileExtensions = new(
         [FileExtensions.Bin, FileExtensions.Img, FileExtensions.Iso, FileExtensions.Raw],
@@ -84,6 +110,14 @@ internal static class CueNormalizer
         // last-resort match by elimination when the recorded name is unusable.
         var isSingleFileCue = CountReferenceLines(lines, isToc) == 1;
 
+        CueFileReference? currentReference = null;
+
+        // An unknown TRACK type can be inferred from the sector layout only for the first track
+        // in its file. A later track shares the file, and its start offset is not known until the
+        // cue's INDEX lines are resolved, so guessing from the file's first sector would risk
+        // labelling a data track as audio (or the reverse).
+        var firstTrackInFile = false;
+
         foreach (var line in lines)
         {
             var trimmedLine = line.Trim();
@@ -134,6 +168,21 @@ internal static class CueNormalizer
                 continue;
             }
 
+            if (trimmedLine.StartsWith("TRACK ", StringComparison.OrdinalIgnoreCase))
+            {
+                var canonicalTrackLine = NormalizeTrackLine(
+                    line,
+                    currentReference,
+                    firstTrackInFile
+                );
+                if (!string.Equals(canonicalTrackLine, line, StringComparison.Ordinal))
+                    needsRewrite = true;
+
+                firstTrackInFile = false;
+                canonicalLines.Add(canonicalTrackLine);
+                continue;
+            }
+
             if (
                 !trimmedLine.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase)
                 || !GameFileParser.TryGetFileNameFromFileLine(trimmedLine, out var referencedName)
@@ -154,6 +203,8 @@ internal static class CueNormalizer
                 reference = AsUnresolved(reference, referencedName);
 
             references.Add(reference);
+            currentReference = reference;
+            firstTrackInFile = true;
 
             if (!reference.IsResolved) unresolved.Add(referencedName);
 
@@ -554,6 +605,88 @@ internal static class CueNormalizer
         var keywordEnd = trimmedLine.IndexOfAny(TokenSeparators);
         var keyword = keywordEnd < 0 ? trimmedLine : trimmedLine[..keywordEnd];
         return tail.Length == 0 ? $"{keyword} \"{name}\"" : $"{keyword} \"{name}\" {tail}";
+    }
+
+    /// <summary>
+    ///     Rewrites a CUE TRACK line whose type token neither encoder recognizes. The token is
+    ///     inferred from the referenced image's sector layout; when it cannot be inferred the line
+    ///     is left unchanged so the encoder reports the original problem.
+    /// </summary>
+    /// <param name="line">The raw TRACK line.</param>
+    /// <param name="reference">The most recent resolved FILE reference, or null.</param>
+    /// <param name="firstTrackInFile">
+    ///     True when this is the first TRACK after its FILE line, so the referenced file starts at
+    ///     this track's first sector and its layout can be inspected safely.
+    /// </param>
+    /// <returns>The line with a supported track type, or the original line.</returns>
+    private static string NormalizeTrackLine(
+        string line,
+        CueFileReference? reference,
+        bool firstTrackInFile
+    )
+    {
+        var trimmed = line.Trim();
+        var tokens = trimmed.Split(TokenSeparators, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 3 || !tokens[0].Equals("TRACK", StringComparison.OrdinalIgnoreCase))
+            return line;
+
+        var type = tokens[2];
+        string? replacement;
+        if (KnownCueTrackTypes.Contains(type))
+        {
+            // CHDSharp's track-type switch is case-sensitive, so a lowercase but valid token
+            // still fails. Canonicalize the accepted spelling without changing its meaning.
+            replacement = string.Equals(type, type.ToUpperInvariant(), StringComparison.Ordinal)
+                ? null
+                : type.ToUpperInvariant();
+        }
+        else
+        {
+            replacement = firstTrackInFile ? InferCueTrackType(reference) : null;
+        }
+
+        if (replacement is null) return line;
+
+        var indentLength = line.Length - line.TrimStart().Length;
+        var indent = line[..indentLength];
+        var suffix = tokens.Length > 3 ? " " + string.Join(' ', tokens.Skip(3)) : string.Empty;
+        return $"{indent}TRACK {tokens[1]} {replacement}{suffix}";
+    }
+
+    /// <summary>
+    ///     Infers a CUE track type from the resolved image's sector layout: 2352-byte raw sectors
+    ///     use their sync/mode byte, 2048-byte sectors are Mode 1 data, and 2336/2324-byte sectors
+    ///     are Mode 2 data. Audio files are AUDIO. Returns null when the layout is not identifiable.
+    /// </summary>
+    /// <param name="reference">The resolved FILE reference preceding the TRACK line.</param>
+    /// <returns>The inferred track type token, or null.</returns>
+    private static string? InferCueTrackType(CueFileReference? reference)
+    {
+        if (reference is not { IsResolved: true }) return null;
+
+        var path = reference.ResolvedFullPath;
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        if (extension is ".wav" or ".mp3" or ".aif" or ".aiff" or ".flac") return "AUDIO";
+
+        var rawMode = RawCdImageDetector.DetectTrackMode(path);
+        if (rawMode is not null) return rawMode;
+
+        long length;
+        try
+        {
+            length = new FileInfo(path).Length;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        if (length <= 0) return null;
+
+        if (length % 2048 == 0) return "MODE1/2048";
+        if (length % 2336 == 0) return "MODE2/2336";
+        if (length % 2324 == 0) return "MODE2/2324";
+        return null;
     }
 
     /// <summary>

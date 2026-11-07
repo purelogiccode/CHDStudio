@@ -2378,24 +2378,57 @@ internal partial class MainWindow : Window, IDisposable
             if (!string.IsNullOrWhiteSpace(resolution.Warning))
                 LogWarning($" {resolution.Warning}");
 
+            var resolvedParentPath = resolution.ParentPath;
             if (resolution.Error is not null)
             {
-                LogError($" Failed to extract '{Path.GetFileName(file)}': {resolution.Error}");
-                Interlocked.Increment(ref _failedCount);
-                processedCount++;
-                UpdateProgressDisplay(
-                    processedCount,
-                    _totalFilesProcessed,
-                    Path.GetFileName(file),
-                    "Finishing"
+                // A file that disappeared after the folder was scanned (most often because the
+                // previous extraction deleted it and the list was not refreshed) cannot be
+                // processed. Tell the user to rescan instead of filing a bug report.
+                if (!File.Exists(file))
+                {
+                    LogWarning(
+                        $" Skipping extraction of '{Path.GetFileName(file)}': the file no longer exists (it may have been deleted or moved after the folder was scanned). Rescan the folder."
+                    );
+                    Interlocked.Increment(ref _failedCount);
+                    processedCount++;
+                    UpdateProgressDisplay(
+                        processedCount,
+                        _totalFilesProcessed,
+                        Path.GetFileName(file),
+                        "Finishing"
+                    );
+                    UpdateStatsDisplay();
+                    UpdateProcessingTimeDisplay();
+                    continue;
+                }
+
+                // A header read failure can be transient (antivirus/indexer lock) or mean the
+                // file is damaged. Extraction is still attempted so the real encoder error is
+                // reported; for a valid file the transient condition has usually cleared by now.
+                if (!IsRecoverableHeaderReadFailure(resolution.Error))
+                {
+                    LogError($" Failed to extract '{Path.GetFileName(file)}': {resolution.Error}");
+                    Interlocked.Increment(ref _failedCount);
+                    processedCount++;
+                    UpdateProgressDisplay(
+                        processedCount,
+                        _totalFilesProcessed,
+                        Path.GetFileName(file),
+                        "Finishing"
+                    );
+                    UpdateStatsDisplay();
+                    UpdateProcessingTimeDisplay();
+                    continue;
+                }
+
+                LogWarning(
+                    $" Could not read the CHD header for '{Path.GetFileName(file)}': {resolution.Error} Attempting extraction anyway."
                 );
-                UpdateStatsDisplay();
-                UpdateProcessingTimeDisplay();
-                continue;
+                resolvedParentPath = null;
             }
 
-            if (!string.IsNullOrWhiteSpace(resolution.ParentPath))
-                LogMessage($" Parent: {Path.GetFileName(resolution.ParentPath)}");
+            if (!string.IsNullOrWhiteSpace(resolvedParentPath))
+                LogMessage($" Parent: {Path.GetFileName(resolvedParentPath)}");
 
             var success = await ExtractChdAsync(
                 _chdmanExePath,
@@ -2403,7 +2436,7 @@ internal partial class MainWindow : Window, IDisposable
                 inputFolder,
                 outputFolder,
                 deleteOriginal,
-                resolution.ParentPath,
+                resolvedParentPath,
                 token
             );
             if (success)
@@ -6674,7 +6707,7 @@ internal partial class MainWindow : Window, IDisposable
         // Warn early about likely-corrupt disc images, but still let chdman try: some
         // legitimate images use non-standard sector layouts (e.g. 2448-byte sectors with
         // subchannel data) that chdman can convert. The post-failure check remains the hard gate.
-        if (string.Equals(command, "createdvd", StringComparison.Ordinal))
+        if (command is "createdvd" or "createcd")
         {
             var sectorWarning = IsoSectorValidator.GetSectorSizeWarning(originalInputFile);
             if (sectorWarning is not null)
@@ -7184,18 +7217,19 @@ internal partial class MainWindow : Window, IDisposable
                     var fileSize = new FileInfo(effectiveInput).Length;
                     if (fileSize > 0)
                     {
-                        // Standard CD/DVD sector sizes to try.
-                        // 2352: raw CD audio/data (2352 bytes/sector)
-                        // 2048: Mode 1 / DVD data (2048 bytes/sector)
-                        // 2336: Mode 2 XA (2336 bytes/sector)
-                        // 2324: Mode 2 Form 1 (2324 bytes/sector)
-                        var sectorSizes = new[] { 2352L, 2048L, 2336L, 2324L };
-                        var isSectorAligned = sectorSizes.Any(ss => fileSize % ss == 0);
+                        // Standard CD/DVD sector sizes, including the subchannel-bearing
+                        // 2368/2448-byte layouts used by Alcohol and CloneCD rips.
+                        var isSectorAligned = IsoSectorValidator.StandardSectorSizes.Any(
+                            sectorSize => fileSize % sectorSize == 0
+                        );
 
                         if (!isSectorAligned)
                         {
+                            var sectorWarning =
+                                IsoSectorValidator.GetSectorSizeWarning(effectiveInput)
+                                ?? $"file size ({fileSize:N0} bytes) is not divisible by any standard sector size (2048/2324/2336/2352/2368/2448). The file may be corrupt or truncated.";
                             LogError(
-                                $" Failed to convert '{Path.GetFileName(originalInputFile)}': file size ({fileSize:N0} bytes) is not divisible by any standard sector size (2048/2324/2336/2352). The file may be corrupt or truncated."
+                                $" Failed to convert '{Path.GetFileName(originalInputFile)}': {sectorWarning}"
                             );
                             return false;
                         }
@@ -7521,6 +7555,25 @@ internal partial class MainWindow : Window, IDisposable
                         "       The image contains less data than the cue declares. Re-download or re-rip the disc; the source is truncated."
                     );
                 }
+                else if (
+                    ex.Message.Contains(
+                        "Unrecognized ISO sector size",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    LogMessage(
+                        "       The ISO's size is not a whole number of 2048-, 2336- or 2352-byte sectors. The file is truncated or has a few non-sector bytes at the end; re-download it, or pad the final sector with zeros."
+                    );
+                }
+                else if (
+                    ex.Message.Contains("Unknown track type", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    LogMessage(
+                        "       The cue uses a TRACK type the encoders do not recognize. Change it to MODE1/2048, MODE2/2352 or AUDIO (the usual types for a CD image)."
+                    );
+                }
 
                 return false;
             }
@@ -7751,6 +7804,21 @@ internal partial class MainWindow : Window, IDisposable
         {
             LogMessage($"[CHDMAN] {line}");
         }
+    }
+
+    /// <summary>
+    ///     Returns whether a parent-resolution failure is only a header read failure for the
+    ///     selected CHD itself. Such a failure must not stop a batch extraction: the condition can
+    ///     be transient (a lock held by antivirus or an indexer) and the extraction path reports the
+    ///     real error when the file is genuinely damaged or missing.
+    /// </summary>
+    /// <param name="resolutionError">Error text from <see cref="ParentChdResolver" />, or null.</param>
+    internal static bool IsRecoverableHeaderReadFailure(string? resolutionError)
+    {
+        return resolutionError?.StartsWith(
+                   "The CHD header could not be read",
+                   StringComparison.Ordinal
+               ) == true;
     }
 
     /// <summary>
@@ -8676,6 +8744,14 @@ internal partial class MainWindow : Window, IDisposable
                         LogMessage(
                             "  Error: this is a child CHD. Select its parent CHD (or place the parent in the same folder) and verify again."
                         );
+                    }
+                    else if (result.Error == ChdError.Chderrdecompressionerror)
+                    {
+                        LogMessage(
+                            "  Error: Decompression failed - the decompressed data does not match the SHA-1/MD5 hashes stored in the CHD header. The file is corrupt or was modified after it was created; re-create it from a known-good source."
+                        );
+                        var detail = ChdSharpLoggerFactory.TakeLastWarning();
+                        if (!string.IsNullOrWhiteSpace(detail)) LogMessage($"  Detail: {detail}");
                     }
                     else
                     {

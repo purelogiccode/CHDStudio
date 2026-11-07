@@ -409,6 +409,31 @@ public class BugReportServiceTests
     [InlineData(
         "CHDSharp encoding failed: Unsupported AVI video format 'IV50'; YUY2, VYUY or UYVY is required"
     )]
+    // A truncated/misaligned ISO: both encoders reject the same input, so it is user data.
+    [InlineData(
+        "CHDSharp encoding failed: Unrecognized ISO sector size (4479647748 bytes is not a multiple of 2048, 2336 or 2352)"
+    )]
+    // A malformed cue whose TRACK type is not one of the accepted tokens.
+    [InlineData("CHDSharp encoding failed: Unknown track type [UNKNOWN]")]
+    // A CHD verified against its own stored hashes: a mismatch means the user's file is corrupt
+    // or was modified, not that the application failed.
+    [InlineData(
+        "CHDSharp.Chd: Data Decompress Failed: Chderrdecompressionerror | file is 199,362,115 bytes: header raw SHA-1 mismatch: computed d8fd384f55575438319753d34eb44c3999f97321, header stores 5414323c7372cd8acb37c5bba618e519129fd051 - the decompressed data does not match the hashes recorded in the CHD header"
+    )]
+    // The extraction pre-flight could not read the selected CHD's header; extraction is retried
+    // and the real error is reported by the extraction path.
+    [InlineData("The CHD header could not be read (File not found).")]
+    [InlineData("The CHD header could not be read (Read error).")]
+    // A stale extraction list after the source was deleted or moved.
+    [InlineData(
+        " Skipping extraction of 'game.chd': the file no longer exists (it may have been deleted or moved after the folder was scanned). Rescan the folder."
+    )]
+    // Selecting a child CHD without its parent, or an unusable explicit parent, is a user action.
+    [InlineData(
+        "This is a child CHD. Select its parent CHD, or place the parent in the same folder as the child."
+    )]
+    [InlineData(@"The selected parent CHD does not exist: D:\roms\parent.chd")]
+    [InlineData(@"The selected parent is not a readable CHD (File not found): D:\roms\parent.chd")]
     [InlineData("Unsupported AVI audio format (PCM 8/16-bit required, got 24-bit)")]
     [InlineData(
         " Uncompressed output is not supported for laserdisc images; using the compatible codec set instead."

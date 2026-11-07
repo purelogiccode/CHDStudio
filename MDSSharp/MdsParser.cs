@@ -420,7 +420,16 @@ public static partial class MdsParser
         var directory = Path.GetDirectoryName(mdsPath);
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) return null;
 
-        var name = Path.GetFileName(declaredName.Trim());
+        var declared = declaredName.Trim().Trim('"');
+        if (string.IsNullOrWhiteSpace(declared)) return null;
+
+        // Descriptors are written on Windows and may record either separator. Normalize before
+        // taking the file name so a relative path is not treated as one long file name on Linux.
+        var normalized = declared
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+
+        var name = Path.GetFileName(normalized);
         if (string.IsNullOrWhiteSpace(name)) return null;
 
         if (name.Contains('*'))
@@ -428,6 +437,13 @@ public static partial class MdsParser
             var dot = name.IndexOf('.');
             var extension = dot >= 0 ? name[dot..] : string.Empty;
             name = Path.GetFileNameWithoutExtension(mdsPath) + extension;
+        }
+        else if (!IsRootedPath(declared))
+        {
+            // A descriptor may record "images\Game.mdf" or ".\Game.mdf". Honor that directory
+            // before reducing the name to its file name and searching beside the descriptor.
+            var relative = TryResolveRelativeDeclaredFile(directory, normalized);
+            if (relative is not null) return relative;
         }
 
         var candidate = Path.Combine(directory, name);
@@ -445,6 +461,62 @@ public static partial class MdsParser
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Resolves a descriptor-recorded relative path inside the descriptor's folder, matching
+    ///     the file name case-insensitively when the exact spelling is not present.
+    /// </summary>
+    /// <param name="directory">Folder holding the descriptor.</param>
+    /// <param name="relativeName">Normalized relative name recorded in the descriptor.</param>
+    private static string? TryResolveRelativeDeclaredFile(string directory, string relativeName)
+    {
+        if (relativeName.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return null;
+
+        string candidate;
+        try
+        {
+            candidate = Path.GetFullPath(Path.Combine(directory, relativeName));
+        }
+        catch (Exception ex)
+            when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        if (File.Exists(candidate)) return candidate;
+
+        try
+        {
+            var candidateDirectory = Path.GetDirectoryName(candidate);
+            if (candidateDirectory is null || !Directory.Exists(candidateDirectory)) return null;
+
+            return Directory
+                .GetFiles(candidateDirectory)
+                .FirstOrDefault(f =>
+                    string.Equals(
+                        Path.GetFileName(f),
+                        Path.GetFileName(candidate),
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                );
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Returns whether a descriptor-recorded name is rooted on Windows or Unix, including a
+    ///     Windows drive-letter path read on a non-Windows host.
+    /// </summary>
+    /// <param name="path">Name recorded in the descriptor.</param>
+    private static bool IsRootedPath(string path)
+    {
+        return Path.IsPathRooted(path)
+               || path.StartsWith(@"\\", StringComparison.Ordinal)
+               || path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':';
     }
 
     /// <summary>
@@ -523,8 +595,10 @@ public static partial class MdsParser
     }
 
     /// <summary>
-    ///     Finds the exact base name in the immediate subfolders of <paramref name="directory" />, or
-    ///     null when nothing matches or more than one folder holds a match.
+    ///     Finds the data file in the immediate subfolders of <paramref name="directory" />: an exact
+    ///     base-name match wins, otherwise a single decorated match is accepted. Null is returned when
+    ///     nothing matches or more than one folder holds a plausible match, so a sibling game's image
+    ///     is never picked up.
     /// </summary>
     private static string? FindCompanionInSubdirectories(
         string directory,
@@ -542,7 +616,8 @@ public static partial class MdsParser
             return null;
         }
 
-        var matches = new List<string>();
+        var exactMatches = new List<string>();
+        var decoratedMatches = new List<string>();
         foreach (var subdirectory in subdirectories)
         {
             string[] candidates;
@@ -563,12 +638,20 @@ public static partial class MdsParser
                 continue;
             }
 
-            matches.AddRange(
-                candidates.Where(f => NamesMatch(Path.GetFileNameWithoutExtension(f), baseName))
-            );
+            foreach (var candidate in candidates)
+            {
+                var candidateName = Path.GetFileNameWithoutExtension(candidate);
+                if (NamesMatch(candidateName, baseName))
+                    exactMatches.Add(candidate);
+                else if (IsDecoratedMatch(candidateName, baseName))
+                    decoratedMatches.Add(candidate);
+            }
         }
 
-        return matches.Count == 1 ? matches[0] : null;
+        if (exactMatches.Count == 1) return exactMatches[0];
+        if (exactMatches.Count > 1) return null;
+
+        return decoratedMatches.Count == 1 ? decoratedMatches[0] : null;
     }
 
     /// <summary>True when two base names match once case and Unicode composition are ignored.</summary>

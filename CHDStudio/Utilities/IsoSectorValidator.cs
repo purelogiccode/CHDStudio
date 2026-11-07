@@ -14,7 +14,7 @@ internal static class IsoSectorValidator
     ///     Alcohol and CloneCD rips routinely use; without them such images are wrongly reported as
     ///     possibly corrupt.
     /// </summary>
-    internal static readonly long[] StandardSectorSizes = [2352, 2048, 2336, 2324, 2448, 2368];
+    internal static readonly long[] StandardSectorSizes = [2048, 2352, 2336, 2324, 2448, 2368];
 
     /// <summary>
     ///     Returns a user-facing warning when <paramref name="imagePath" /> has a size that is not
@@ -45,10 +45,47 @@ internal static class IsoSectorValidator
 
         if (fileSize > 0 && StandardSectorSizes.All(sectorSize => fileSize % sectorSize != 0))
         {
+            var boundary = FindClosestSectorBoundary(fileSize);
+            var hint = string.Empty;
+            if (boundary is { DistanceBytes: <= 64 } closest)
+            {
+                hint = closest.PastBoundary
+                    ? $" It is only {closest.DistanceBytes:N0} byte(s) past a whole number of {closest.SectorSize}-byte sectors, so the final sector is incomplete; re-download the file or pad the final sector with zeros."
+                    : $" It is only {closest.DistanceBytes:N0} byte(s) short of a whole number of {closest.SectorSize}-byte sectors, so the file is truncated; re-download it or pad the final sector with zeros.";
+            }
+
             return
-                $"file size ({fileSize:N0} bytes) is not divisible by any standard sector size (2048/2324/2336/2352/2368/2448). The file may be corrupt or truncated.";
+                $"file size ({fileSize:N0} bytes) is not divisible by any standard sector size (2048/2324/2336/2352/2368/2448). The file may be corrupt or truncated.{hint}";
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     Finds the standard sector size whose nearest whole-sector boundary is closest to
+    ///     <paramref name="fileSize" />, so a file that is only a few bytes past or short of a
+    ///     boundary can be described precisely. Returns null when no size is available.
+    /// </summary>
+    /// <param name="fileSize">Size of the image in bytes.</param>
+    private static (long SectorSize, long DistanceBytes, bool PastBoundary)? FindClosestSectorBoundary(
+        long fileSize
+    )
+    {
+        (long SectorSize, long DistanceBytes, bool PastBoundary)? best = null;
+        foreach (var sectorSize in StandardSectorSizes)
+        {
+            var remainder = fileSize % sectorSize;
+            if (remainder == 0) continue;
+
+            var pastBoundary = remainder;
+            var shortOfBoundary = sectorSize - remainder;
+            var candidate = pastBoundary <= shortOfBoundary
+                ? (SectorSize: sectorSize, DistanceBytes: pastBoundary, PastBoundary: true)
+                : (SectorSize: sectorSize, DistanceBytes: shortOfBoundary, PastBoundary: false);
+
+            if (best is null || candidate.DistanceBytes < best.Value.DistanceBytes) best = candidate;
+        }
+
+        return best;
     }
 }

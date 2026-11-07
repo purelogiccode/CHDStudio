@@ -194,6 +194,30 @@ internal class BugReportService
         // A cue/image that describes more data than its file holds (a truncated rip) makes
         // both encoders stop at EOF. The source is incomplete, not the app.
         "CHDSharp encoding failed: Unexpected end of file",
+        // The built-in encoder reports an ISO whose size is not a whole number of CD/DVD
+        // sectors (a truncated or padded download). chdman refuses the same input, so this is
+        // a user-data problem; the app already tells the user to re-download or pad the file.
+        "Unrecognized ISO sector size",
+        // A cue whose TRACK line uses a type neither encoder recognizes (often the literal
+        // "UNKNOWN") is malformed user data. The app now normalizes inferable types and tells
+        // the user which types are accepted when it cannot.
+        "Unknown track type [",
+        // A CHD's decompressed data not matching the SHA-1/MD5 stored in its header means the
+        // file is corrupt or was modified after it was created. This is the user's file, not an
+        // application defect; the verification view shows the hash detail.
+        "does not match the hashes recorded in the CHD header",
+        // The parent-resolution pre-flight cannot read a selected CHD's header (stale scan,
+        // removed file, unreadable/corrupt file). Extraction is still attempted, and any real
+        // failure is reported by the extraction path instead.
+        "The CHD header could not be read",
+        // A stale extraction table after "delete original" was enabled: the file no longer
+        // exists on disk. The app asks the user to rescan the folder.
+        "the file no longer exists",
+        // Choosing a child CHD without its parent, or selecting a parent that is missing or not
+        // a CHD, is a user action; the message already explains what to select.
+        "This is a child CHD",
+        "The selected parent CHD does not exist",
+        "The selected parent is not a readable CHD",
         // A CD CHD whose track metadata cannot be parsed is a damaged user file. A valid CHD
         // created from the same source extracts correctly; re-creating it is the fix.
         "CD track metadata is missing or damaged",

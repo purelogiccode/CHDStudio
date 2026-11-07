@@ -350,6 +350,93 @@ public class CueNormalizerTests : IDisposable
         Assert.Equal("track1.bin", result.References[0].ResolvedName);
     }
 
+    // ---- CueNormalizer: TRACK type repair ----
+
+    [Fact]
+    public async Task NormalizeAsyncUnknownTrackTypeInfersRawCdMode()
+    {
+        var binPath = Path.Combine(_tempDir, "game.bin");
+        var sector = new byte[2352];
+        byte[] sync =
+        [
+            0x00,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0x00
+        ];
+        sync.CopyTo(sector, 0);
+        sector[15] = 2;
+        await File.WriteAllBytesAsync(binPath, sector);
+
+        var cuePath = CreateFile(
+            "unknown-raw.cue",
+            "FILE \"game.bin\" BINARY\r\n  TRACK 01 UNKNOWN\r\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.True(result.NeedsRewrite);
+        Assert.Contains("TRACK 01 MODE2/2352", result.CanonicalCueText, StringComparison.Ordinal);
+        Assert.DoesNotContain("UNKNOWN", result.CanonicalCueText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncUnknownTrackTypeInfersCookedIsoMode()
+    {
+        var isoPath = Path.Combine(_tempDir, "game.iso");
+        await File.WriteAllBytesAsync(isoPath, new byte[2048 * 4]);
+
+        var cuePath = CreateFile(
+            "unknown-iso.cue",
+            "FILE \"game.iso\" BINARY\r\n  TRACK 01 UNKNOWN\r\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.True(result.NeedsRewrite);
+        Assert.Contains("TRACK 01 MODE1/2048", result.CanonicalCueText, StringComparison.Ordinal);
+        Assert.DoesNotContain("UNKNOWN", result.CanonicalCueText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncAcceptedTrackTypeIsLeftAlone()
+    {
+        CreateFile("game.bin", "dummy");
+        var cuePath = CreateFile(
+            "known-type.cue",
+            "FILE \"game.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.False(result.NeedsRewrite);
+        Assert.Contains("TRACK 01 MODE2/2352", result.CanonicalCueText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NormalizeAsyncLowercaseAcceptedTrackTypeIsUppercased()
+    {
+        CreateFile("game.bin", "dummy");
+        var cuePath = CreateFile(
+            "lowercase-type.cue",
+            "FILE \"game.bin\" BINARY\r\n  TRACK 01 mode2/2352\r\n    INDEX 01 00:00:00"
+        );
+
+        var result = await CueNormalizer.NormalizeAsync(cuePath, CancellationToken.None);
+
+        Assert.True(result.NeedsRewrite);
+        Assert.Contains("TRACK 01 MODE2/2352", result.CanonicalCueText, StringComparison.Ordinal);
+        Assert.DoesNotContain("mode2/2352", result.CanonicalCueText, StringComparison.Ordinal);
+    }
+
     // ---- CueNormalizer: writing ----
 
     [Fact]

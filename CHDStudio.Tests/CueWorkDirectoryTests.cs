@@ -104,6 +104,71 @@ public class CueWorkDirectoryTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsyncUnknownTrackTypeWritesRepairedCueInPlace()
+    {
+        var binPath = Path.Combine(_tempDir, "track1.bin");
+        var sector = new byte[2352];
+        byte[] sync =
+        [
+            0x00,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0x00
+        ];
+        sync.CopyTo(sector, 0);
+        sector[15] = 2;
+        await File.WriteAllBytesAsync(binPath, sector);
+
+        var cuePath = CreateFile(
+            "unknown.cue",
+            "FILE \"track1.bin\" BINARY\r\n  TRACK 01 UNKNOWN\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+            Assert.Equal(
+                ["game.cue"],
+                Directory
+                    .GetFiles(workDir)
+                    .Select(Path.GetFileName)
+                    .OrderBy(static f => f, StringComparer.Ordinal)
+                    .ToList()
+            );
+
+            var workCue = await File.ReadAllTextAsync(result.WorkCuePath, Encoding.UTF8);
+            Assert.Contains("TRACK 01 MODE2/2352", workCue, StringComparison.Ordinal);
+            Assert.DoesNotContain("UNKNOWN", workCue, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsyncKoreanCp949CueCreatesAsciiWorkDirWithAllFiles()
     {
         const string koreanName = "진설 사무라이 스피리츠 무사도열전.bin";

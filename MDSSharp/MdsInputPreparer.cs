@@ -54,7 +54,14 @@ public static class MdsInputPreparer
                 : [];
 
         if (dataFiles.Count == 0 || dataFiles.Any(static f => !File.Exists(f)))
-            return Result.Failed("the .mdf data file was not found next to the .mds descriptor");
+        {
+            var expected = dataFiles.Count > 0
+                ? string.Join(", ", dataFiles.Select(Path.GetFileName))
+                : "an .mdf file with the descriptor's base name";
+            return Result.Failed(
+                $"the .mdf data file was not found next to the .mds descriptor (expected {expected} in {Path.GetDirectoryName(disc.MdsPath)})"
+            );
+        }
 
         string dataFilePath;
         if (disc.HasEncryptedTrackData || disc.HasCompressedTrackData || disc.IsMdxContainer)

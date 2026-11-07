@@ -5,6 +5,24 @@ nav_order: 16
 
 # What's New
 
+## 3.13.3 (2026-11-07)
+
+### Retrieved bug reports and input handling
+
+*   **37 retrieved reports fixed or correctly classified.** The 20 `BatchConvertToCHD` and 17 `CHDStudio` reports in the Bug Report API were reviewed, the application defects behind them were fixed, and user-data/environment failures were classified so they no longer create new reports. The full report log is kept in `bugs.md`.
+*   **Alcohol data files resolve from the descriptor's own directory.** MDSSharp now honours a relative directory recorded in the file footer (`images\Game.mdf`), matches a uniquely decorated `.mdf` in a subdirectory (`Game (USA).mdf`), and normalizes Windows/Unix path separators on every platform. A missing file now names the expected file and folder instead of only saying the `.mdf` was not found. Published as **MDSSharp 1.2.3**.
+*   **Malformed cue TRACK types are repaired.** A cue that writes `TRACK 01 UNKNOWN` (or a lowercase accepted type) is normalized from the referenced image's sector layout — raw 2352 sync/mode, 2048, 2336 or 2324 — before either encoder sees it. Cue rewrites that only change a type no longer copy the whole image set into a temporary directory. If the layout cannot be inferred, the log names the accepted `TRACK` types instead of filing an application bug.
+*   **Truncated ISOs are identified precisely.** Sector-size validation now reports how many bytes are past or short of a whole sector (the retrieved reports were consistently 4 bytes past 2048-byte sectors) and recommends re-downloading or zero-padding the final sector. The message is classified as user data, so it no longer creates a bug report.
+*   **Extraction survives header-read failures.** A file whose CHD header cannot be read during the parent/child pre-flight is still handed to the extractor, and a file that disappeared after the folder was scanned is skipped with a "rescan the folder" warning. Transient antivirus/indexer locks no longer fail the whole batch.
+*   **Hash mismatches are explained.** Verifying a CHD whose decompressed data does not match the SHA-1/MD5 stored in its header now states that the file is corrupt or was modified and must be re-created from a known-good source; the raw library line is no longer filed as an application defect.
+*   **Aligned raw inputs are validated for CD conversions too.** The early sector-layout warning now covers `createcd` as well as `createdvd`, and the post-failure check accepts the 2368/2448-byte subchannel layouts used by Alcohol and CloneCD rips.
+*   Version bump: application 3.13.3; library MDSSharp 1.2.3.
+
+### Verification
+
+*   **Test suite:** 1,284 tests pass (1,255 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.13.2 (2026-11-05)
 
 ### Reliability fixes

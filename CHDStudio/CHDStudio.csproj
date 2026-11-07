@@ -10,8 +10,8 @@
         <AssemblyName>CHDStudio</AssemblyName>
         <RootNamespace>CHDStudio</RootNamespace>
         <ApplicationIcon>icon\chd.ico</ApplicationIcon>
-        <AssemblyVersion>3.13.2</AssemblyVersion>
-        <FileVersion>3.13.2</FileVersion>
+        <AssemblyVersion>3.13.3</AssemblyVersion>
+        <FileVersion>3.13.3</FileVersion>
         <IsPackable>false</IsPackable>
         <NeutralLanguage>en</NeutralLanguage>
         <DebugType>embedded</DebugType>
@@ -38,7 +38,7 @@
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
         <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
         <PackageReference Include="CHDSharp" Version="1.6.3" />
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.320">
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.321">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>

@@ -107,14 +107,15 @@ internal static class CueWorkDirectory
 
         try
         {
-            // Fast path for BOM-only cues (canonical content, ASCII names, no MP3, safe path
-            // lengths): write the BOM-free canonical cue into the work directory and reference
-            // each bin via a relative path from the work directory, so chdman reads the bins in
-            // place without copying them. chdman prepends the cue's directory to every FILE name,
-            // so the relative path must stay relative — a rooted path (bins on another drive)
-            // forces the copy-based fallback below.
+            // Fast path for cues that only need a content rewrite (a BOM, an inferred FILE type or
+            // a normalized TRACK type) with ASCII names and safe path lengths: write the canonical
+            // cue into the work directory and reference each bin via a relative path from the work
+            // directory, so chdman reads the bins in place without copying them. chdman prepends
+            // the cue's directory to every FILE name, so the relative path must stay relative — a
+            // rooted path (bins on another drive) forces the copy-based fallback below.
             if (
-                result.HasBom
+                (result.HasBom || result.NeedsRewrite)
+                && !result.ReferencesChanged
                 && !hasMp3Tracks
                 && !namesNeedAscii
                 && !pathTooLong

@@ -171,7 +171,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
     * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.2) - Pure C# CSO/CISO decompression (deflate + LZ4)
     * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.8) - Pure C# PBP extraction and SFO parsing
     * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.3) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
-    * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.2) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
+    * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.3) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
     * [ISZSharp](https://www.nuget.org/packages/ISZSharp) (v1.0.3) — Pure C# UltraISO ISZ decompression
     * [SharpCompress](https://github.com/adamhathcock/sharpcompress) (v0.50.8) - Archive extraction, and bzip2 decompression for ISZ images
     * [NAudio](https://github.com/naudio/NAudio) (v3.3.0) - MP3 audio track decoding on Windows (Media Foundation); Linux and macOS use `ffmpeg` from `PATH`
@@ -186,7 +186,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.2_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
+Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.3_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
 
 Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 

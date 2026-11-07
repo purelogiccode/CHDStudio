@@ -62,7 +62,7 @@ The library is the Alcohol 120% conversion engine used by [CHD Studio](https://g
 
 - **MDS descriptor parsing** — reads the medium type, session and track tables of Alcohol 120% descriptors, including track number, mode, sector size, start LBA, subchannel mode and ADR/CTL.
 - **MDS v2 / Daemon Tools descriptors** — decrypts the AES-256 + zlib-obfuscated descriptor (RIPEMD-160 PBKDF2 key derivation, no external crypto dependency), parses the wider v2 session/track/footer blocks and resolves their UTF-16 data file names. Compressed track data (per-track compression tables with stored/RLE/deflate groups) and encrypted track data (AES-256 LRW with GF(2^128) tweaks, including TAGES-style password-less images) are decoded automatically, and single-file `.mdx` containers are read end to end.
-- **Data file resolution** — uses the file names embedded in the track footers (single-byte or UTF-16), falling back to the matching `.mdf`, a split `.i00` first volume, or an unambiguously named file one folder down.
+- **Data file resolution** - uses the file names embedded in the track footers (single-byte or UTF-16), honors a relative directory recorded in the footer (`images\Game.mdf`), and falls back to the matching `.mdf`, a uniquely decorated name (`Game (USA).mdf`), a split `.i00` first volume, or an unambiguous match one folder down. A missing file is reported with the expected name and folder.
 - **Multi-file and split sets** — joins descriptors that name several data files, plus `.i00`/`.i01` (Alcohol) and `.001`/`.002` (byte-splitter) sets, tolerating case differences and archive-looking extensions.
 - **Subchannel stripping** — rewrites 2448-byte (2352 data + 96 subchannel) and 2368-byte (2352 + 16) images down to the 2352-byte sectors `chdman` reads.
 - **Pregap handling** — when the descriptor records pregaps that the data file does not contain, rebuilds them as zeros so the CUE can place `INDEX 00` without shifting later tracks.
@@ -310,7 +310,7 @@ Turns a parsed image into something `chdman` can read.
 
 ## How it works
 
-An Alcohol image is a binary descriptor plus at least one data file. MDSSharp parses the descriptor's medium type, session blocks (24 bytes each) and track blocks (80 bytes each), taking the mode, POINT (track number), sector size and start LBA per track, and reads the per-track extra block (pregap and length) and footer blocks (data file names). The data files are resolved from those names, or by base name in the descriptor's folder or exactly one subfolder when the names cannot be found.
+An Alcohol image is a binary descriptor plus at least one data file. MDSSharp parses the descriptor's medium type, session blocks (24 bytes each) and track blocks (80 bytes each), taking the mode, POINT (track number), sector size and start LBA per track, and reads the per-track extra block (pregap and length) and footer blocks (data file names). The data files are resolved from those names, including a relative directory recorded in a footer, or by base name in the descriptor's folder, a uniquely decorated name in an immediate subfolder, or the first volume of a split set when the names cannot be found.
 
 The medium type and the stored sector layout determine what has to happen before conversion:
 
@@ -345,6 +345,13 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 ```
 
 ## Version history
+
+### 1.2.3
+
+- Data-file footers that record a relative directory (`images\Game.mdf`) are resolved inside the descriptor's folder, with Windows and Unix separators normalized on every platform.
+- When the exact file is absent, a uniquely decorated `.mdf` in an immediate subfolder (`Game (USA).mdf`) is accepted; ambiguous matches still fail instead of guessing.
+- The missing-data-file message now names the expected file and folder.
+- No public API changes; the package still targets `net8.0`, `net9.0` and `net10.0`.
 
 ### 1.2.2
 

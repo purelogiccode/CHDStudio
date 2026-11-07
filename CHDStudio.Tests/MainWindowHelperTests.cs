@@ -109,6 +109,21 @@ public class MainWindowHelperTests : IDisposable
         );
     }
 
+    [Theory]
+    [InlineData("The CHD header could not be read (File not found).", true)]
+    [InlineData("The CHD header could not be read (Read error).", true)]
+    [InlineData("The CHD header could not be read (Decompression failed).", true)]
+    [InlineData("This is a child CHD. Select its parent CHD to verify it.", false)]
+    [InlineData("The selected parent CHD does not exist: D:\\parent.chd", false)]
+    [InlineData(null, false)]
+    public void IsRecoverableHeaderReadFailure_OnlyMatchesHeaderReadErrors(
+        string? error,
+        bool expected
+    )
+    {
+        Assert.Equal(expected, MainWindow.IsRecoverableHeaderReadFailure(error));
+    }
+
     [Fact]
     public void SelectChdmanErrorLine_SkipsProgressLinesAndReturnsLastRealError()
     {

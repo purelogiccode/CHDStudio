@@ -73,6 +73,40 @@ public class IsoSectorValidatorTests : IDisposable
     }
 
     [Fact]
+    public void IsoWithTrailingBytesExplainsTheIncompleteFinalSector()
+    {
+        // Six real reports had sizes exactly 4 bytes past a whole number of 2048-byte sectors.
+        var path = CreateFile("game.iso", 2048L * 100 + 4);
+
+        var warning = IsoSectorValidator.GetSectorSizeWarning(path);
+
+        Assert.NotNull(warning);
+        Assert.Contains("not divisible by any standard sector size", warning, StringComparison.Ordinal);
+        Assert.Contains(
+            "only 4 byte(s) past a whole number of 2048-byte sectors",
+            warning,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("pad the final sector", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IsoShortOfAFullSectorExplainsTheTruncation()
+    {
+        var path = CreateFile("game.iso", 2048L * 100 - 4);
+
+        var warning = IsoSectorValidator.GetSectorSizeWarning(path);
+
+        Assert.NotNull(warning);
+        Assert.Contains(
+            "only 4 byte(s) short of a whole number of 2048-byte sectors",
+            warning,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("file is truncated", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TextDescriptorsAreNeverValidated()
     {
         var cue = CreateFile("game.cue", 12345);
