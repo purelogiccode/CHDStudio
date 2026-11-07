@@ -692,9 +692,9 @@ public class MdsTests : IDisposable
             0x00,
             new TrackSpec(0xEC, 1, 2352, 0, Files: [@"images\Nested Name.mdf"])
         );
-        var subdirectory = Path.Combine(_tempDir, "images");
+        var subdirectory = Path.Join(_tempDir, "images");
         Directory.CreateDirectory(subdirectory);
-        var expected = Path.Combine(subdirectory, "Nested Name.mdf");
+        var expected = Path.Join(subdirectory, "Nested Name.mdf");
         File.WriteAllBytes(expected, new byte[2352]);
 
         var disc = MdsParser.Parse(mds);
@@ -706,9 +706,9 @@ public class MdsTests : IDisposable
     public void DecoratedMdfIsFoundInASubdirectoryWhenUnique()
     {
         var mds = WriteMds("Wild Arms 4.mds", (0xEC, 1, 2352, 0));
-        var subdirectory = Path.Combine(_tempDir, "Wild Arms 4");
+        var subdirectory = Path.Join(_tempDir, "Wild Arms 4");
         Directory.CreateDirectory(subdirectory);
-        var expected = Path.Combine(subdirectory, "Wild Arms 4 (USA).mdf");
+        var expected = Path.Join(subdirectory, "Wild Arms 4 (USA).mdf");
         File.WriteAllBytes(expected, new byte[2352]);
         WriteMdf("Unrelated Game.mdf", 2352, 1);
         WriteMdf("Another Game.mdf", 2352, 1);

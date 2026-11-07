@@ -106,7 +106,7 @@ public class CueWorkDirectoryTests : IDisposable
     [Fact]
     public async Task PrepareAsyncUnknownTrackTypeWritesRepairedCueInPlace()
     {
-        var binPath = Path.Combine(_tempDir, "track1.bin");
+        var binPath = Path.Join(_tempDir, "track1.bin");
         var sector = new byte[2352];
         byte[] sync =
         [
@@ -160,7 +160,10 @@ public class CueWorkDirectoryTests : IDisposable
                 {
                     Directory.Delete(workDir, true);
                 }
-                catch
+                catch (Exception ex)
+                    when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                        or NotSupportedException
+                    )
                 {
                     /* ignore */
                 }

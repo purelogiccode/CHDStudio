@@ -602,7 +602,10 @@ internal partial class MainWindow : Window, IDisposable
                                 Directory.Delete(dir, true);
                                 PathUtils.TryDeleteEmptyTempParent(dir);
                             }
-                            catch
+                            catch (Exception ex)
+                                when (ex is IOException or UnauthorizedAccessException
+                                    or ArgumentException or NotSupportedException
+                                )
                             {
                                 /* ignore */
                             }
@@ -612,7 +615,10 @@ internal partial class MainWindow : Window, IDisposable
                         // removed too, so previous runs do not leave it on drive roots.
                         PathUtils.TryDeleteEmptyTempFolder(basePath);
                     }
-                    catch
+                    catch (Exception ex)
+                        when (ex is IOException or UnauthorizedAccessException
+                            or ArgumentException or NotSupportedException
+                        )
                     {
                         /* ignore */
                     }
@@ -620,7 +626,10 @@ internal partial class MainWindow : Window, IDisposable
 
                 CleanupStaleExplorerExtractions();
             }
-            catch
+            catch (Exception ex)
+                when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                    or NotSupportedException
+                )
             {
                 /* ignore */
             }

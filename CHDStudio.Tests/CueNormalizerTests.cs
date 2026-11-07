@@ -355,7 +355,7 @@ public class CueNormalizerTests : IDisposable
     [Fact]
     public async Task NormalizeAsyncUnknownTrackTypeInfersRawCdMode()
     {
-        var binPath = Path.Combine(_tempDir, "game.bin");
+        var binPath = Path.Join(_tempDir, "game.bin");
         var sector = new byte[2352];
         byte[] sync =
         [
@@ -391,7 +391,7 @@ public class CueNormalizerTests : IDisposable
     [Fact]
     public async Task NormalizeAsyncUnknownTrackTypeInfersCookedIsoMode()
     {
-        var isoPath = Path.Combine(_tempDir, "game.iso");
+        var isoPath = Path.Join(_tempDir, "game.iso");
         await File.WriteAllBytesAsync(isoPath, new byte[2048 * 4]);
 
         var cuePath = CreateFile(

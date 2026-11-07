@@ -23,7 +23,10 @@ public class MainWindowHelperTests : IDisposable
         {
             if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true);
         }
-        catch
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             /* ignore */
         }
@@ -36,7 +39,7 @@ public class MainWindowHelperTests : IDisposable
     [InlineData(61, true)]
     public void IsStaleTempDirectory_RespectsMinimumAge(int ageMinutes, bool expected)
     {
-        var directory = Path.Combine(_tempDir, $"temp_{Guid.NewGuid():N}");
+        var directory = Path.Join(_tempDir, $"temp_{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
 
         var utcNow = DateTime.UtcNow;
@@ -104,7 +107,7 @@ public class MainWindowHelperTests : IDisposable
     {
         // Best-effort helper: must not throw for a missing file.
         await MainWindow.StripUtf8BomIfPresentAsync(
-            Path.Combine(_tempDir, "nope.cue"),
+            Path.Join(_tempDir, "nope.cue"),
             CancellationToken.None
         );
     }

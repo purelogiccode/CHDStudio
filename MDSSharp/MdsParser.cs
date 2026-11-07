@@ -92,7 +92,10 @@ public static partial class MdsParser
 
             return Encoding.ASCII.GetString(header).Equals(Signature, StringComparison.Ordinal);
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return false;
         }
@@ -457,7 +460,10 @@ public static partial class MdsParser
                     string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase)
                 );
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return null;
         }
@@ -476,7 +482,7 @@ public static partial class MdsParser
         string candidate;
         try
         {
-            candidate = Path.GetFullPath(Path.Combine(directory, relativeName));
+            candidate = Path.GetFullPath(Path.Join(directory, relativeName));
         }
         catch (Exception ex)
             when (ex is ArgumentException or NotSupportedException or PathTooLongException)
@@ -501,7 +507,10 @@ public static partial class MdsParser
                     )
                 );
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return null;
         }
@@ -575,7 +584,10 @@ public static partial class MdsParser
                     )
             ];
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return null;
         }
@@ -611,7 +623,10 @@ public static partial class MdsParser
         {
             subdirectories = Directory.GetDirectories(directory);
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return null;
         }
@@ -633,7 +648,10 @@ public static partial class MdsParser
                         )
                 ];
             }
-            catch (Exception)
+            catch (Exception ex)
+                when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                    or NotSupportedException
+                )
             {
                 continue;
             }

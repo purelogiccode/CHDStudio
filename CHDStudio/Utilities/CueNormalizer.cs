@@ -630,27 +630,44 @@ internal static class CueNormalizer
         if (tokens.Length < 3 || !tokens[0].Equals("TRACK", StringComparison.OrdinalIgnoreCase))
             return line;
 
-        var type = tokens[2];
-        string? replacement;
-        if (KnownCueTrackTypes.Contains(type))
-        {
-            // CHDSharp's track-type switch is case-sensitive, so a lowercase but valid token
-            // still fails. Canonicalize the accepted spelling without changing its meaning.
-            replacement = string.Equals(type, type.ToUpperInvariant(), StringComparison.Ordinal)
-                ? null
-                : type.ToUpperInvariant();
-        }
-        else
-        {
-            replacement = firstTrackInFile ? InferCueTrackType(reference) : null;
-        }
-
+        var replacement = GetReplacementTrackType(
+            tokens[2],
+            reference,
+            firstTrackInFile
+        );
         if (replacement is null) return line;
 
         var indentLength = line.Length - line.TrimStart().Length;
         var indent = line[..indentLength];
         var suffix = tokens.Length > 3 ? " " + string.Join(' ', tokens.Skip(3)) : string.Empty;
         return $"{indent}TRACK {tokens[1]} {replacement}{suffix}";
+    }
+
+    /// <summary>
+    ///     Returns the replacement token for a TRACK type, or null when the line needs no change.
+    ///     An accepted type is only canonicalized to uppercase; an unknown type is inferred from the
+    ///     referenced image when this is the first track in its file.
+    /// </summary>
+    /// <param name="type">The TRACK type token as written.</param>
+    /// <param name="reference">The resolved FILE reference preceding the TRACK line.</param>
+    /// <param name="firstTrackInFile">True when the referenced file starts at this track.</param>
+    /// <returns>The replacement token, or null to keep the original line.</returns>
+    private static string? GetReplacementTrackType(
+        string type,
+        CueFileReference? reference,
+        bool firstTrackInFile
+    )
+    {
+        if (KnownCueTrackTypes.Contains(type))
+        {
+            // CHDSharp's track-type switch is case-sensitive, so a lowercase but valid token
+            // still fails. Canonicalize the accepted spelling without changing its meaning.
+            return string.Equals(type, type.ToUpperInvariant(), StringComparison.Ordinal)
+                ? null
+                : type.ToUpperInvariant();
+        }
+
+        return firstTrackInFile ? InferCueTrackType(reference) : null;
     }
 
     /// <summary>
@@ -676,7 +693,10 @@ internal static class CueNormalizer
         {
             length = new FileInfo(path).Length;
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException
+            )
         {
             return null;
         }

@@ -110,16 +110,21 @@ internal static class ParentChdResolver
             files.Select(static file => NormalizePath(file)),
             comparer
         );
-        var parentByFile = new Dictionary<string, string?>(comparer);
-        foreach (var file in files)
-        {
-            var normalized = NormalizePath(file);
-            var resolution = resolutions[normalized];
-            parentByFile[normalized] =
-                resolution.ParentPath is { } parent && batchFiles.Contains(NormalizePath(parent))
-                    ? NormalizePath(parent)
-                    : null;
-        }
+        var parentByFile = files
+            .Select(NormalizePath)
+            .Distinct(comparer)
+            .ToDictionary(
+                static normalized => normalized,
+                normalized =>
+                {
+                    var resolution = resolutions[normalized];
+                    return resolution.ParentPath is { } parent
+                           && batchFiles.Contains(NormalizePath(parent))
+                        ? NormalizePath(parent)
+                        : null;
+                },
+                comparer
+            );
 
         var depths = new Dictionary<string, int>(comparer);
         foreach (var file in files)
@@ -320,19 +325,35 @@ internal static class ParentChdResolver
     private static bool MatchesParent(Header childHeader, Header candidateHeader)
     {
         if (HasHash(childHeader.ParentSha1))
-        {
-            return childHeader.ParentSha1 is { Length: 20 } parentSha1
-                && (
-                    candidateHeader.Sha1 is { Length: 20 } sha1
-                    && sha1.AsSpan().SequenceEqual(parentSha1)
-                    || candidateHeader.RawSha1 is { Length: 20 } rawSha1
-                    && rawSha1.AsSpan().SequenceEqual(parentSha1)
-                );
-        }
+            return MatchesSha1(childHeader.ParentSha1, candidateHeader);
 
-        return childHeader.ParentMd5 is { Length: 16 } parentMd5
-               && candidateHeader.Md5 is { Length: 16 } md5
-               && md5.AsSpan().SequenceEqual(parentMd5);
+        return MatchesMd5(childHeader.ParentMd5, candidateHeader);
+    }
+
+    /// <summary>Returns whether either candidate SHA-1 matches the child header's parent SHA-1.</summary>
+    /// <param name="parentSha1">Parent SHA-1 recorded in the child header, or null.</param>
+    /// <param name="candidateHeader">Header of a possible parent.</param>
+    /// <returns>True when a candidate SHA-1 matches.</returns>
+    private static bool MatchesSha1(byte[]? parentSha1, Header candidateHeader)
+    {
+        if (parentSha1 is not { Length: 20 } expected) return false;
+
+        return candidateHeader.Sha1 is { Length: 20 } sha1
+               && sha1.AsSpan().SequenceEqual(expected)
+               || candidateHeader.RawSha1 is { Length: 20 } rawSha1
+               && rawSha1.AsSpan().SequenceEqual(expected);
+    }
+
+    /// <summary>Returns whether the candidate MD5 matches the child header's parent MD5.</summary>
+    /// <param name="parentMd5">Parent MD5 recorded in the child header, or null.</param>
+    /// <param name="candidateHeader">Header of a possible parent.</param>
+    /// <returns>True when the candidate MD5 matches.</returns>
+    private static bool MatchesMd5(byte[]? parentMd5, Header candidateHeader)
+    {
+        if (parentMd5 is not { Length: 16 } expected) return false;
+
+        return candidateHeader.Md5 is { Length: 16 } md5
+               && md5.AsSpan().SequenceEqual(expected);
     }
 
     /// <summary>Returns the path comparer for the current platform.</summary>
@@ -549,21 +570,22 @@ internal static class ParentChdResolver
             var key = NormalizePath(directory);
             if (_directories.TryGetValue(key, out var cached)) return cached;
 
-            var candidates = new List<(string Path, Header Header)>();
-            foreach (
-                var file in Directory.EnumerateFiles(
-                    directory,
-                    "*.chd",
-                    SearchOption.TopDirectoryOnly
-                )
-            )
-            {
-                if (Read(file, out var header) == ChdError.Chderrnone)
-                    candidates.Add((file, header));
-            }
+            var candidates = Directory
+                .EnumerateFiles(directory, "*.chd", SearchOption.TopDirectoryOnly)
+                .Select(TryReadSibling)
+                .Where(static item => item is not null)
+                .Select(static item => item!.Value)
+                .ToList();
 
             _directories[key] = candidates;
             return candidates;
+
+            (string Path, Header Header)? TryReadSibling(string file)
+            {
+                return Read(file, out var header) == ChdError.Chderrnone
+                    ? (file, header)
+                    : null;
+            }
         }
     }
 }
