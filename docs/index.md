@@ -35,7 +35,7 @@ This documentation covers the project from both a user and a developer perspecti
 | Fact | Value |
 |------|-------|
 | **Application name** | `CHDStudio` |
-| **Latest version** | 3.13.3 |
+| **Latest version** | 3.13.4 |
 | **Target framework** | .NET 10.0 (`net10.0;net10.0-windows`), Avalonia |
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
@@ -61,7 +61,7 @@ CHDStudio/
 │   ├── Services/                   # Archive, BugReport, FileWatcher, Stats, Update, ...
 │   └── Utilities/                  # PathUtils, CueNormalizer, GameFileParser, ...
 │       └── Ecm/                    # in-process ECM decoding
-├── CHDStudio.Tests/        # xUnit test suite (1255 tests)
+├── CHDStudio.Tests/        # xUnit test suite (1296 tests)
 ├── CCDSharp/                       # CloneCD (.ccd/.img/.sub) parsing library
 ├── CSOSharp/                       # CSO/CISO decompression library (deflate + LZ4)
 ├── PBPSharp/                       # PlayStation PBP extraction + SFO parsing library

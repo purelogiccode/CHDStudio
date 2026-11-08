@@ -357,13 +357,21 @@ Maps CHDSharp's `DiscPlatform` to the Explorer's `ConsoleType` (`TryDetect`, `To
 
 `IProgress<ArchiveProgress>` implementation that logs archive extraction at ten-percent steps. It reports bytes for ZIP extraction (or entry counts when byte totals are unavailable) and is used by `ArchiveService.ExtractArchiveAsync`.
 
+### ConversionReport (`Utilities/ConversionReport.cs`)
+
+Measures and reports what a conversion batch did:
+
+- `GetSourceBytesAsync(files, token)` adds each input and the data files its cue/gdi/toc/ccd/mds descriptor references, expanding split-image volumes, and sums the distinct paths. `GetSourceBytesByInputAsync(files, token)` returns the same measurement per input, which lets the batch add only successful inputs while **Delete originals** is removing sources. Descriptor parse failures are ignored; the descriptor's own length still counts.
+- `FormatSavings(sourceBytes, outputBytes)` returns `saved 1.5 GB (29.2%)`, `500 MB larger (5.1%)` or `no change` for the batch summary.
+- `WriteFailureReportAsync(outputFolder, inputFolder, failedFiles, token)` writes `failed-conversions.txt` with the timestamp, source/output folders and one path per failed input; it returns the report path, or `null` when there are no failures or the file cannot be written. `DeleteFailureReport(outputFolder)` removes the previous batch's report so a clean run does not leave a stale list.
+
 ---
 
 ## 8.14 Models
 
 ### FileItem (`Models/FileItem.cs`)
 
-Bindable row for the file list DataGrids: `FileName` (relative path when searching subfolders), `FullPath`, `FileSize` (long), `IsSelected` (INotifyPropertyChanged). `DisplaySize` formats bytes with binary units `B/KB/MB/GB/TB` (`{size:0.##} {suffix}`).
+Bindable row for the file list DataGrids: `FileName` (relative path when searching subfolders), `FullPath`, `FileSize` (long), `IsSelected` (INotifyPropertyChanged), and `Status` (the batch outcome shown in the conversion list: `Pending`, `Converting`, `OK`, `Failed` or `Skipped`). `DisplaySize` formats bytes with binary units `B/KB/MB/GB/TB` (`{size:0.##} {suffix}`).
 
 ### PbpExtractionResult (`Models/PbpExtractionResult.cs`)
 

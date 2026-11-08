@@ -152,6 +152,14 @@ internal partial class MainWindow : Window, IDisposable
     private bool _wasCancelled;
     private IoThroughputCounter? _writeBytesCounter;
 
+    // Conversion batch accounting. Source bytes are measured before the first conversion, output
+    // bytes after the last one, so the summary describes what actually happened on disk instead
+    // of the encoder's ratio for a single stream.
+    private long _conversionSourceBytes;
+    private long _conversionOutputBytes;
+    private bool _conversionDeleteOriginals;
+    private readonly List<string> _conversionFailedInputs = [];
+
     /// <summary>
     ///     Initializes a new instance of the <see cref="MainWindow" /> class.
     ///     Sets up services, checks for required executables, and initializes the UI.
@@ -1661,6 +1669,25 @@ internal partial class MainWindow : Window, IDisposable
         foreach (var f in _conversionFiles) f.IsSelected = false;
     }
 
+    /// <summary>Selects only the conversion inputs that failed in the last batch.</summary>
+    private void SelectFailedConversion_Click(object sender, RoutedEventArgs e)
+    {
+        var failed = _conversionFiles
+            .Where(static f => string.Equals(f.Status, "Failed", StringComparison.Ordinal))
+            .ToList();
+        if (failed.Count == 0)
+        {
+            ShowError("No conversion failures are available to select.");
+            return;
+        }
+
+        foreach (var file in _conversionFiles)
+            file.IsSelected = string.Equals(file.Status, "Failed", StringComparison.Ordinal);
+
+        LogMessage($"Selected {failed.Count} failed file(s) for retry.");
+        UpdateStatusBarMessage("Ready to retry failed files");
+    }
+
     /// <summary>Selects every verification CHD file.</summary>
     private void SelectAllVerification_Click(object sender, RoutedEventArgs e)
     {
@@ -1759,6 +1786,7 @@ internal partial class MainWindow : Window, IDisposable
             ResetSpeedCounters();
 
             var deleteFiles = DeleteOriginalsCheckBox.IsChecked ?? false;
+            _conversionDeleteOriginals = deleteFiles;
             var processSmallerFirst = ProcessSmallerFirstCheckBox.IsChecked ?? false;
             var forceCd = ForceCreateCdCheckBox.IsChecked ?? false;
             var forceDvd = ForceCreateDvdCheckBox.IsChecked ?? false;
@@ -1810,6 +1838,33 @@ internal partial class MainWindow : Window, IDisposable
             }
             finally
             {
+                // A cancelled or aborted batch can leave the file that was in flight marked
+                // "Converting"; it did not finish, so return it to the retryable state.
+                foreach (var item in _conversionFiles)
+                {
+                    if (string.Equals(item.Status, "Converting", StringComparison.Ordinal))
+                        item.Status = "Pending";
+                }
+
+                if (_conversionFailedInputs.Count > 0)
+                {
+                    var reportPath = await ConversionReport.WriteFailureReportAsync(
+                        outputFolder,
+                        inputFolder,
+                        _conversionFailedInputs,
+                        CancellationToken.None
+                    );
+                    if (reportPath is not null)
+                    {
+                        LogMessage(
+                            $" {_conversionFailedInputs.Count} failed file(s) listed in: {reportPath}"
+                        );
+                        LogMessage(
+                            "       The same files are marked 'Failed' in the list; use 'Select Failed' to retry only those."
+                        );
+                    }
+                }
+
                 await FinishOperationAsync("Conversion");
             }
         }
@@ -1972,6 +2027,11 @@ internal partial class MainWindow : Window, IDisposable
         DeleteOriginalsCheckBox.IsEnabled = enabled;
         ProcessSmallerFirstCheckBox.IsEnabled = enabled;
         StartConversionButton.IsEnabled = enabled;
+        SelectFailedConversionButton.IsEnabled =
+            enabled
+            && _conversionFiles.Any(static f =>
+                string.Equals(f.Status, "Failed", StringComparison.Ordinal)
+            );
         ForceCreateCdCheckBox.IsEnabled = enabled;
         ForceCreateDvdCheckBox.IsEnabled = enabled;
         ConversionCompressionComboBox.IsEnabled = enabled;
@@ -2223,6 +2283,28 @@ internal partial class MainWindow : Window, IDisposable
 
         filesToConvert = ResolveOutputCollisions(filesToConvert, inputFolder, outputFolder);
 
+        var statusComparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var keptPaths = new HashSet<string>(filesToConvert, statusComparer);
+        foreach (var item in _conversionFiles)
+        {
+            if (!item.IsSelected)
+            {
+                item.Status = string.Empty;
+                continue;
+            }
+
+            item.Status = keptPaths.Contains(item.FullPath) ? "Pending" : "Skipped";
+        }
+
+        // Measure each input before the first conversion: with "Delete originals" enabled the
+        // source set is gone by the time the batch ends.
+        var sourceBytesByInput = await ConversionReport.GetSourceBytesByInputAsync(
+            filesToConvert,
+            token
+        );
+
         lock (_batchOutputPathsLock)
         {
             _batchOutputPaths.Clear();
@@ -2286,6 +2368,10 @@ internal partial class MainWindow : Window, IDisposable
             return;
         }
 
+        // A report left by an earlier batch would otherwise stay next to the new CHDs and look
+        // current even when this run has no failures.
+        ConversionReport.DeleteFailureReport(outputFolder);
+
         await Dispatcher.UIThread.InvokeAsync(() =>
             ProgressBar.Maximum = _totalFilesProcessed
         );
@@ -2305,6 +2391,8 @@ internal partial class MainWindow : Window, IDisposable
                 "Converting"
             );
 
+            SetConversionFileStatus(file, "Converting");
+
             var success = await ProcessSingleFileForConversionAsync(
                 chdmanPath,
                 file,
@@ -2317,10 +2405,19 @@ internal partial class MainWindow : Window, IDisposable
                 timeoutMinutes,
                 token
             );
+            SetConversionFileStatus(file, success ? "OK" : "Failed");
+
             if (success)
+            {
+                if (sourceBytesByInput.TryGetValue(file, out var sourceBytes))
+                    _conversionSourceBytes += sourceBytes;
                 Interlocked.Increment(ref _processedOkCount);
+            }
             else
+            {
                 Interlocked.Increment(ref _failedCount);
+                _conversionFailedInputs.Add(file);
+            }
 
             processedCount++;
             UpdateProgressDisplay(
@@ -2333,6 +2430,61 @@ internal partial class MainWindow : Window, IDisposable
             UpdateProcessingTimeDisplay();
             UpdateWriteSpeedFromPerformanceCounter();
         }
+
+        _conversionOutputBytes = GetProducedChdBytes();
+
+        if (_conversionSourceBytes > 0)
+        {
+            if (_conversionOutputBytes > 0)
+            {
+                LogMessage(
+                    $" Space: {ChdExplorerItem.FormatSize((ulong)_conversionSourceBytes)} of converted source -> "
+                        + $"{ChdExplorerItem.FormatSize((ulong)_conversionOutputBytes)} of CHD "
+                        + $"({ConversionReport.FormatSavings(_conversionSourceBytes, _conversionOutputBytes)})."
+                );
+            }
+            else
+            {
+                LogMessage(" No CHD output was produced, so the source files still occupy their original space.");
+            }
+        }
+    }
+
+    /// <summary>Marks a listed conversion input with its batch outcome.</summary>
+    /// <param name="file">Full path of the input.</param>
+    /// <param name="status">Short status shown in the file list.</param>
+    private void SetConversionFileStatus(string file, string status)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var item = _conversionFiles.FirstOrDefault(f =>
+            string.Equals(f.FullPath, file, comparison)
+        );
+        if (item is not null) item.Status = status;
+    }
+
+    /// <summary>Returns the total size of the CHD files produced by the running batch.</summary>
+    /// <returns>The output size in bytes.</returns>
+    private long GetProducedChdBytes()
+    {
+        long total = 0;
+        lock (_batchOutputPathsLock)
+        {
+            foreach (var path in _batchOutputPaths)
+            {
+                try
+                {
+                    total += new FileInfo(path).Length;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A path that vanished after being reserved contributes nothing.
+                }
+            }
+        }
+
+        return total;
     }
 
     /// <summary>Runs the extraction batch over the selected CHD files.</summary>
@@ -8823,6 +8975,10 @@ internal partial class MainWindow : Window, IDisposable
         _totalFilesProcessed = 0;
         _processedOkCount = 0;
         _failedCount = 0;
+        _conversionSourceBytes = 0;
+        _conversionOutputBytes = 0;
+        _conversionDeleteOriginals = false;
+        _conversionFailedInputs.Clear();
         _operationTimer.Reset();
         UpdateStatsDisplay();
         UpdateProcessingTimeDisplay();
@@ -9648,8 +9804,73 @@ internal partial class MainWindow : Window, IDisposable
             $"--- {op} {verb}. Total: {_totalFilesProcessed}, OK: {_processedOkCount}, Failed: {_failedCount}"
         );
         UpdateStatusBarMessage($"{op} {verb}" + (_failedCount > 0 ? " with errors" : ""));
+
+        var summary =
+            $"{op} {verb}.\nTotal: {_totalFilesProcessed}\nOK: {_processedOkCount}\nFailed: {_failedCount}";
+
+        if (
+            string.Equals(op, "Conversion", StringComparison.Ordinal)
+            && _conversionSourceBytes > 0
+        )
+        {
+            // Recompute here so a cancelled batch reports only the CHDs that actually exist,
+            // instead of the zero left by the loop's early exit.
+            _conversionOutputBytes = GetProducedChdBytes();
+            var savedBytes = _conversionSourceBytes - _conversionOutputBytes;
+            summary +=
+                $"\n\nConverted source: {ChdExplorerItem.FormatSize((ulong)_conversionSourceBytes)}"
+                + $"\nCHD output: {ChdExplorerItem.FormatSize((ulong)_conversionOutputBytes)}";
+
+            if (_conversionOutputBytes == 0)
+            {
+                const string noOutputNotice =
+                    "No CHD output was produced, so the source files still occupy their original space.";
+                LogMessage($" {noOutputNotice}");
+                summary += $"\n\n{noOutputNotice}";
+            }
+            else
+            {
+                summary +=
+                    $"\n{ConversionReport.FormatSavings(_conversionSourceBytes, _conversionOutputBytes)}";
+            }
+
+            if (_conversionOutputBytes > 0 && savedBytes <= 0)
+            {
+                var explanation =
+                    _conversionCompressionPreset == ChdCompressionPreset.Uncompressed
+                        ? "The 'Uncompressed (none)' compression preset is selected, so the CHD "
+                            + "stores the image without compression. Choose Default or Smallest to "
+                            + "let the encoder compress it."
+                        : "The CHD output is not smaller than the source. CHD stores the image data and "
+                            + "compresses it, but it cannot shrink data that is already compressed (PBP, "
+                            + "CSO, ISZ, ECM or an archive) or an image whose payload is largely incompressible.";
+                LogMessage($" {explanation}");
+                summary += $"\n\n{explanation}";
+            }
+            else if (_conversionOutputBytes > 0 && !_conversionDeleteOriginals)
+            {
+                const string keptNotice =
+                    "The source files were kept. Enable 'Delete originals after a successful "
+                    + "conversion' (or remove the sources manually) to actually reclaim the space.";
+                LogMessage($" {keptNotice}");
+                summary += $"\n\n{keptNotice}";
+            }
+        }
+
+        if (
+            string.Equals(op, "Conversion", StringComparison.Ordinal)
+            && _conversionFailedInputs.Count > 0
+        )
+        {
+            var failedNotice =
+                $"{_conversionFailedInputs.Count} failed file(s) are marked 'Failed' in the list. "
+                + "Use 'Select Failed' to retry only those, or see 'failed-conversions.txt' in the output folder.";
+            LogMessage($" {failedNotice}");
+            summary += $"\n\n{failedNotice}";
+        }
+
         await ShowMessageBoxAsync(
-            $"{op} {verb}.\nTotal: {_totalFilesProcessed}\nOK: {_processedOkCount}\nFailed: {_failedCount}",
+            summary,
             "Complete",
             MessageBoxButton.Ok,
             _failedCount > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information

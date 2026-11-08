@@ -5,6 +5,20 @@ nav_order: 16
 
 # What's New
 
+## 3.13.4 (2026-11-08)
+
+### Conversion reporting and failed-file retry (issue #15)
+
+*   **Conversion batches report real disk usage.** The batch measures each successful input's source set before converting it - the descriptor plus every data file it references, all split-image volumes, or the archive/PBP/CSO file itself - and sums the CHDs that were actually produced. The activity log and completion dialog now show a line such as `Space: 22.8 GB of converted source -> 20.0 GB of CHD (saved 2.8 GB / 12.1%)`. Measuring before conversion keeps the figure correct when **Delete originals** removes sources during the batch.
+*   **A CHD that does not shrink is explained.** When the output is the same size or larger, the summary says why: the source is already compressed (`.pbp`, `.cso`, `.isz`, `.ecm`, archives), the image payload is largely incompressible, or the **Uncompressed (none)** preset is selected. When the output is smaller but **Delete originals** is off, it also states that the source files still occupy their original space.
+*   **Failed files are marked and easy to retry.** The conversion list has a new **Status** column (`Pending`, `Converting`, `OK`, `Failed`, `Skipped`) and a **Select Failed** button that selects only the failed rows for the next run. Failed inputs are also written to `failed-conversions.txt` in the output folder with the source/output folders and one path per file, so the list survives after the activity log is cleared. A clean batch removes the previous report, and a cancelled batch no longer leaves a row stuck on `Converting`.
+*   Version bump: application 3.13.4.
+
+### Verification
+
+*   **Test suite:** 1,296 tests pass (1,267 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.13.3 (2026-11-07)
 
 ### Retrieved bug reports and input handling

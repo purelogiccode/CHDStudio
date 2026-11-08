@@ -35,7 +35,8 @@ Title-bar buttons: **Donate** (opens the project's donation page), **About** (in
 ### File list
 
 - Every file matching the supported extensions (see [Overview → Supported Formats](01-overview.md#12-supported-formats)) is listed pre-selected.
-- **Select All** / **Deselect All** toggle the whole list.
+- **Select All** / **Deselect All** toggle the whole list; **Select Failed** selects only the rows marked `Failed` after a batch so they can be retried without reconverting the successful files.
+- The **Status** column shows the outcome of the current or last batch: `Pending`, `Converting`, `OK`, `Failed`, or `Skipped` (a companion data file covered by a descriptor, or a duplicate output).
 - The list is loaded in chunks (100 items at background priority) to stay responsive on huge folders.
 - When recursive search is on, the **File Name** column shows the path relative to the source folder.
 
@@ -58,6 +59,18 @@ Each file's encoder mode is chosen automatically (see [Technical Logic](01-overv
 - **"Prepared self-contained cue set ..."** — the cue was normalized (BOM, encoding, zero-padding, MP3 tracks) into a work directory before conversion.
 - **"Falling back to system temp"** — the preferred temp drive was not writable; the system temp is used instead.
 - **"TIMEOUT: Conversion ... exceeded N minute(s). Marking as failed."** — the per-file timeout fired.
+
+### Space and failure summaries
+
+The batch summary measures the source set (a cue and every data file it references, every part of a split image, or the archive/PBP/CSO itself) and the CHDs that were produced. The completion dialog and the activity log report the totals and the measured saving, for example:
+
+```
+Space: 22.8 GB of converted source -> 20.0 GB of CHD (saved 2.8 GB / 12.1%).
+```
+
+CHD is a container with compression, not a general-purpose archiver. It shrinks uncompressed BIN/CUE, ISO and raw images well, but it cannot shrink data that is **already compressed**: `.pbp`, `.cso`, `.isz`, `.ecm` and `.zip`/`.7z`/`.rar` inputs, and images whose payload is itself compressed or encrypted, can produce a CHD close to the source size. The summary says so explicitly when no space was saved. The space is only reclaimed when the sources are removed — enable **Delete originals after a successful conversion**, or delete them manually.
+
+Files that fail are marked `Failed` in the list and listed in `failed-conversions.txt` in the output folder (next to the CHDs, with the source folder, output folder and one path per failed input). Use **Select Failed** to select exactly those rows and click **Start Conversion** to retry them; the activity log and the application log file still contain the per-file error.
 
 ---
 

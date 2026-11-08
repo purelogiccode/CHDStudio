@@ -12,6 +12,37 @@ public class FileItemTests
     }
 
     [Fact]
+    public void StatusDefaultIsEmptyAndChangesFirePropertyChanged()
+    {
+        var item = new FileItem();
+        Assert.Empty(item.Status);
+
+        var fired = false;
+        item.PropertyChanged += (_, e) =>
+        {
+            if (string.Equals(e.PropertyName, nameof(FileItem.Status), StringComparison.Ordinal))
+                fired = true;
+        };
+
+        item.Status = "Failed";
+
+        Assert.True(fired);
+        Assert.Equal("Failed", item.Status);
+    }
+
+    [Fact]
+    public void StatusSameValueDoesNotFireEvent()
+    {
+        var item = new FileItem { Status = "OK" };
+        var fired = false;
+        item.PropertyChanged += (_, _) => fired = true;
+
+        item.Status = "OK";
+
+        Assert.False(fired);
+    }
+
+    [Fact]
     public void IsSelectedPropertyChangedFiresEvent()
     {
         var item = new FileItem();

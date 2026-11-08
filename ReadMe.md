@@ -186,7 +186,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.3_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
+Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.4_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
 
 Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 
@@ -214,6 +214,7 @@ CHDStudio.exe "C:\ROMs\MyGames"
 8.  *(Optional)* Set a time limit per file to abort conversions that exceed the specified duration.
 9.  *(Optional)* Enable "Delete original files" to clean up source data after a successful conversion.
 10. Click **Start Conversion**.
+11. Review the **Status** column and the batch summary. Failed rows are marked `Failed` and listed in `failed-conversions.txt` in the output folder; **Select Failed** selects only those rows for a retry. The summary reports the measured source size, CHD output size and space saved.
 
 ### Extraction Workflow
 1.  Navigate to the **Extract CHD Files** tab.

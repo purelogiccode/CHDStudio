@@ -355,6 +355,11 @@
                                                     <TextBlock Text="Size" ToolTip.Tip="File size" />
                                                 </DataGridTextColumn.Header>
                                             </DataGridTextColumn>
+                                            <DataGridTextColumn Binding="{Binding Status}" SortMemberPath="Status" Width="100" IsReadOnly="True">
+                                                <DataGridTextColumn.Header>
+                                                    <TextBlock Text="Status" ToolTip.Tip="Outcome of the current or last conversion batch" />
+                                                </DataGridTextColumn.Header>
+                                            </DataGridTextColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                     <StackPanel
@@ -374,6 +379,13 @@
                                             Content="_Deselect All"
                                             Click="DeselectAllConversion_Click"
                                             ToolTip.Tip="Deselect all files in the list" />
+                                        <Button
+                                            x:Name="SelectFailedConversionButton"
+                                            Classes="primary"
+                                            Content="Select _Failed"
+                                            IsEnabled="False"
+                                            Click="SelectFailedConversion_Click"
+                                            ToolTip.Tip="Select only the files that failed in the last conversion batch so they can be retried" />
                                     </StackPanel>
 
                                     <Button

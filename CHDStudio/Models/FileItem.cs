@@ -15,6 +15,7 @@ internal class FileItem : INotifyPropertyChanged
     private long _fileSize;
     private string _fullPath = string.Empty;
     private bool _isSelected = true;
+    private string _status = string.Empty;
 
     /// <summary>
     ///     Gets or sets whether this file is selected for processing.
@@ -88,6 +89,22 @@ internal class FileItem : INotifyPropertyChanged
             if (string.Equals(_displaySize, value, StringComparison.Ordinal)) return;
 
             _displaySize = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    ///     Gets or sets the outcome shown in the file list for the current or last batch
+    ///     (for example <c>Pending</c>, <c>Converting</c>, <c>OK</c> or <c>Failed</c>).
+    /// </summary>
+    public string Status
+    {
+        get => _status;
+        set
+        {
+            if (string.Equals(_status, value, StringComparison.Ordinal)) return;
+
+            _status = value;
             OnPropertyChanged();
         }
     }
