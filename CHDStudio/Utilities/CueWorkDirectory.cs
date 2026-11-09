@@ -187,7 +187,7 @@ internal static class CueWorkDirectory
                     await WavAudioNormalizer
                         .NormalizeAsync(
                             reference.ResolvedFullPath,
-                            Path.Combine(workDir, workName),
+                            Path.Join(workDir, workName),
                             onLog,
                             token
                         )
@@ -201,7 +201,7 @@ internal static class CueWorkDirectory
                     await mp3Decoder
                         .DecodeAsync(
                             reference.ResolvedFullPath,
-                            Path.Combine(workDir, workName),
+                            Path.Join(workDir, workName),
                             onLog,
                             token
                         )
@@ -209,7 +209,7 @@ internal static class CueWorkDirectory
                 }
                 else
                 {
-                    var destination = Path.Combine(workDir, workName);
+                    var destination = Path.Join(workDir, workName);
                     await CopyWithRetryAsync(reference.ResolvedFullPath, destination, token)
                         .ConfigureAwait(false);
                     if (overDeclaredWaves.Contains(reference.ResolvedFullPath))
@@ -367,7 +367,7 @@ internal static class CueWorkDirectory
 
             foreach (var (source, workName) in repairNames)
             {
-                var destination = Path.Combine(workDir, workName);
+                var destination = Path.Join(workDir, workName);
                 onLog?.Invoke($"Preparing {Path.GetFileName(source)} for conversion...");
                 if (nonStandardWaves.Contains(source))
                 {
@@ -421,13 +421,9 @@ internal static class CueWorkDirectory
     /// <returns>The full paths of the over-declared, WAVE-only files.</returns>
     private static HashSet<string> FindOverDeclaredWaves(IReadOnlyList<CueFileReference> references)
     {
-        var overDeclared = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in GetWaveOnlyPaths(references))
-        {
-            if (WavHeaderSanitizer.IsOverDeclared(path)) overDeclared.Add(path);
-        }
-
-        return overDeclared;
+        return GetWaveOnlyPaths(references)
+            .Where(WavHeaderSanitizer.IsOverDeclared)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -439,13 +435,9 @@ internal static class CueWorkDirectory
     /// <returns>The full paths of the non-standard, WAVE-only files.</returns>
     private static HashSet<string> FindNonStandardWaves(IReadOnlyList<CueFileReference> references)
     {
-        var nonStandard = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in GetWaveOnlyPaths(references))
-        {
-            if (WavAudioNormalizer.NeedsNormalization(path)) nonStandard.Add(path);
-        }
-
-        return nonStandard;
+        return GetWaveOnlyPaths(references)
+            .Where(WavAudioNormalizer.NeedsNormalization)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>Returns the resolved WAVE files that are not also referenced as data tracks.</summary>
@@ -520,7 +512,7 @@ internal static class CueWorkDirectory
         var name = string.IsNullOrEmpty(extension)
             ? "game.cue"
             : "game" + extension.ToLowerInvariant();
-        return Path.Combine(workDir, name);
+        return Path.Join(workDir, name);
     }
 
     /// <summary>

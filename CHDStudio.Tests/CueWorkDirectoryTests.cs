@@ -736,7 +736,7 @@ public class CueWorkDirectoryTests : IDisposable
         // must contain a 44100 Hz stereo 16-bit PCM copy and the cue must point at it.
         CreateFile("track1.bin", "bin-content");
         var wavPath = WritePcmWavWithFormat(
-            Path.Combine(_tempDir, "audio.wav"),
+            Path.Join(_tempDir, "audio.wav"),
             sampleRate: 22050,
             channels: 1,
             bitsPerSample: 16,
@@ -761,7 +761,7 @@ public class CueWorkDirectoryTests : IDisposable
             Assert.Contains("FILE \"track01.wav\" WAVE", workCue, StringComparison.Ordinal);
             Assert.DoesNotContain("audio.wav", workCue, StringComparison.OrdinalIgnoreCase);
 
-            var normalizedWave = Path.Combine(workDir, "track01.wav");
+            var normalizedWave = Path.Join(workDir, "track01.wav");
             Assert.True(File.Exists(normalizedWave));
 
             await using var reader = new WaveFileReader(normalizedWave);
@@ -781,7 +781,10 @@ public class CueWorkDirectoryTests : IDisposable
                 {
                     Directory.Delete(workDir, true);
                 }
-                catch
+                catch (Exception ex)
+                    when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                        or NotSupportedException
+                    )
                 {
                     /* ignore */
                 }
@@ -797,7 +800,7 @@ public class CueWorkDirectoryTests : IDisposable
         const string koreanName = "진설 사무라이 스피리츠 무사도열전.bin";
         CreateFile(koreanName, "bin-content");
         WritePcmWavWithFormat(
-            Path.Combine(_tempDir, "audio.wav"),
+            Path.Join(_tempDir, "audio.wav"),
             sampleRate: 22050,
             channels: 1,
             bitsPerSample: 16,
@@ -825,7 +828,7 @@ public class CueWorkDirectoryTests : IDisposable
                     .ToList()
             );
 
-            await using var reader = new WaveFileReader(Path.Combine(workDir, "track02.wav"));
+            await using var reader = new WaveFileReader(Path.Join(workDir, "track02.wav"));
             Assert.Equal(44100, reader.WaveFormat.SampleRate);
             Assert.Equal(2, reader.WaveFormat.Channels);
             Assert.Equal(16, reader.WaveFormat.BitsPerSample);
@@ -838,7 +841,10 @@ public class CueWorkDirectoryTests : IDisposable
                 {
                     Directory.Delete(workDir, true);
                 }
-                catch
+                catch (Exception ex)
+                    when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                        or NotSupportedException
+                    )
                 {
                     /* ignore */
                 }
