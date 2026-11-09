@@ -81,6 +81,9 @@ internal class BugReportService
         // An Alcohol descriptor without its data file (incomplete set, renamed file).
         "the .mdf data file was not found",
         "MP3 audio track could not be decoded",
+        // A WAVE track the normalizer cannot convert (corrupt or an unsupported codec) is user
+        // data; the message names the file and the decoder's reason.
+        "Could not normalize",
         "is not divisible by",
         // A truncated ECM stream is a user-data problem; the decoder already tells the user to
         // re-download the file.

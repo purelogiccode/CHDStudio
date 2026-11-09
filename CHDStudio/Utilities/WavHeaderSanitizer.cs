@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace CHDStudio.Utilities;
@@ -93,6 +94,72 @@ internal static class WavHeaderSanitizer
                 return false;
 
             dataOffset = offset;
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Reads the WAVE format fields the encoders care about. Returns false when the file is not a
+    ///     readable RIFF/WAVE with a complete "fmt " chunk.
+    /// </summary>
+    /// <param name="wavPath">Path of the WAVE file to inspect.</param>
+    /// <param name="format">Receives the parsed format fields.</param>
+    /// <returns><see langword="true" /> when the format chunk was read; otherwise <see langword="false" />.</returns>
+    internal static bool TryGetFormat(string wavPath, out WavFormatInfo format)
+    {
+        format = default;
+
+        try
+        {
+            using var stream = new FileStream(
+                wavPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite
+            );
+            var fileLength = stream.Length;
+            if (fileLength < RiffHeaderBytes) return false;
+
+            long offset = 0;
+            if (
+                !TryReadFourCc(stream, offset, out var riff)
+                || !string.Equals(riff, "RIFF", StringComparison.Ordinal)
+            )
+            {
+                return false;
+            }
+
+            offset += 4;
+            if (!TryReadU32(stream, ref offset, out _)) return false;
+            if (
+                !TryReadFourCc(stream, offset, out var wave)
+                || !string.Equals(wave, "WAVE", StringComparison.Ordinal)
+            )
+            {
+                return false;
+            }
+
+            offset += 4;
+
+            if (!TryFindChunk(stream, ref offset, fileLength, "fmt ", out var fmtSize)) return false;
+            if (fmtSize < MinimumFmtChunkBytes) return false;
+
+            if (!TryReadU16(stream, ref offset, out var audioFormat)) return false;
+            if (!TryReadU16(stream, ref offset, out var channels)) return false;
+            if (!TryReadU32(stream, ref offset, out var sampleRate)) return false;
+            if (!TryReadU32(stream, ref offset, out _)) return false;
+            if (!TryReadU16(stream, ref offset, out _)) return false;
+            if (!TryReadU16(stream, ref offset, out var bitsPerSample)) return false;
+
+            format = new WavFormatInfo(audioFormat, channels, sampleRate, bitsPerSample);
             return true;
         }
         catch (IOException)
@@ -246,6 +313,28 @@ internal static class WavHeaderSanitizer
     }
 
     /// <summary>
+    ///     Reads a little-endian 16-bit value at <paramref name="offset" />, advancing the offset.
+    /// </summary>
+    /// <param name="stream">Open stream to read from.</param>
+    /// <param name="offset">Offset to read at; advanced by two on success.</param>
+    /// <param name="value">Receives the decoded value.</param>
+    /// <returns><see langword="true" /> when two bytes were read; otherwise <see langword="false" />.</returns>
+    private static bool TryReadU16(Stream stream, ref long offset, out ushort value)
+    {
+        Span<byte> buffer = stackalloc byte[2];
+        stream.Position = offset;
+        if (stream.Read(buffer) != 2)
+        {
+            value = 0;
+            return false;
+        }
+
+        value = BinaryPrimitives.ReadUInt16LittleEndian(buffer);
+        offset += 2;
+        return true;
+    }
+
+    /// <summary>
     ///     Writes a little-endian 32-bit value at <paramref name="offset" />.
     /// </summary>
     /// <param name="stream">Open stream to write to.</param>
@@ -258,4 +347,22 @@ internal static class WavHeaderSanitizer
         stream.Position = offset;
         stream.Write(buffer);
     }
+}
+
+/// <summary>WAVE format fields the encoders require.</summary>
+/// <param name="AudioFormat">WAVE format tag (1 = PCM).</param>
+/// <param name="Channels">Channel count.</param>
+/// <param name="SampleRate">Samples per second.</param>
+/// <param name="BitsPerSample">Bits per sample.</param>
+[StructLayout(LayoutKind.Auto)]
+internal readonly record struct WavFormatInfo(
+    ushort AudioFormat,
+    ushort Channels,
+    uint SampleRate,
+    ushort BitsPerSample
+)
+{
+    /// <summary>True when the track already matches chdman's cue WAVE requirements.</summary>
+    internal bool IsChdmanCompatible =>
+        AudioFormat == 1 && Channels == 2 && SampleRate == 44100 && BitsPerSample == 16;
 }

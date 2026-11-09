@@ -331,6 +331,7 @@ public class BugReportServiceTests
         " Virtua Tennis 2 (USA).mds cannot be converted: the .mdf data file was not found next to the .mds descriptor."
     )]
     [InlineData("MP3 audio track could not be decoded")]
+    [InlineData("Could not normalize track02.wav: The file is corrupt; ffmpeg fallback also failed: Invalid data found when processing input")]
     [InlineData("is not divisible by")]
     [InlineData(
         "Zero Divide [SLUS_001.83].mdf.ecm: the decoded image is not a whole number of 2352-byte CD sectors or 2048-byte data sectors, so the .ecm file is probably damaged."

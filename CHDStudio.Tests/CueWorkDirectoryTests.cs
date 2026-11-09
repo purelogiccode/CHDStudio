@@ -729,6 +729,124 @@ public class CueWorkDirectoryTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsyncNormalizesNonStandardWaveTrackInWorkDir()
+    {
+        // A 22.05 kHz mono WAVE track is valid audio but neither encoder accepts it: chdman says
+        // "unsupported samplerate" and CHDSharp says "only 44100 is supported". The work directory
+        // must contain a 44100 Hz stereo 16-bit PCM copy and the cue must point at it.
+        CreateFile("track1.bin", "bin-content");
+        var wavPath = WritePcmWavWithFormat(
+            Path.Combine(_tempDir, "audio.wav"),
+            sampleRate: 22050,
+            channels: 1,
+            bitsPerSample: 16,
+            sampleFrames: 22050
+        );
+        var originalWavBytes = await File.ReadAllBytesAsync(wavPath);
+        var cuePath = CreateFile(
+            "game.cue",
+            "FILE \"track1.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"audio.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+
+            var workCue = await File.ReadAllTextAsync(result.WorkCuePath!, Encoding.UTF8);
+            Assert.Contains("FILE \"track01.wav\" WAVE", workCue, StringComparison.Ordinal);
+            Assert.DoesNotContain("audio.wav", workCue, StringComparison.OrdinalIgnoreCase);
+
+            var normalizedWave = Path.Combine(workDir, "track01.wav");
+            Assert.True(File.Exists(normalizedWave));
+
+            await using var reader = new WaveFileReader(normalizedWave);
+            Assert.Equal(44100, reader.WaveFormat.SampleRate);
+            Assert.Equal(2, reader.WaveFormat.Channels);
+            Assert.Equal(16, reader.WaveFormat.BitsPerSample);
+            Assert.True(reader.Length > 0, "expected normalized audio samples");
+
+            // The user's original file is untouched.
+            Assert.Equal(originalWavBytes, await File.ReadAllBytesAsync(wavPath));
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsyncNormalizesNonStandardWaveWithNonAsciiNames()
+    {
+        // Non-ASCII names force the full copy-based work directory; the WAVE must be normalized
+        // there too, because that is the file chdman is pointed at.
+        const string koreanName = "진설 사무라이 스피리츠 무사도열전.bin";
+        CreateFile(koreanName, "bin-content");
+        WritePcmWavWithFormat(
+            Path.Combine(_tempDir, "audio.wav"),
+            sampleRate: 22050,
+            channels: 1,
+            bitsPerSample: 16,
+            sampleFrames: 22050
+        );
+        var cuePath = CreateFile(
+            "game.cue",
+            $"FILE \"{koreanName}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+            + "FILE \"audio.wav\" WAVE\r\n  TRACK 02 AUDIO\r\n    INDEX 01 00:00:00",
+            new UTF8Encoding(false)
+        );
+
+        var (result, workDir) = await PrepareAsync(cuePath);
+
+        try
+        {
+            Assert.NotNull(workDir);
+            Assert.NotNull(result.WorkCuePath);
+            Assert.Equal(
+                ["game.cue", "track01.bin", "track02.wav"],
+                Directory
+                    .GetFiles(workDir)
+                    .Select(Path.GetFileName)
+                    .OrderBy(static f => f, StringComparer.Ordinal)
+                    .ToList()
+            );
+
+            await using var reader = new WaveFileReader(Path.Combine(workDir, "track02.wav"));
+            Assert.Equal(44100, reader.WaveFormat.SampleRate);
+            Assert.Equal(2, reader.WaveFormat.Channels);
+            Assert.Equal(16, reader.WaveFormat.BitsPerSample);
+        }
+        finally
+        {
+            if (workDir is not null)
+            {
+                try
+                {
+                    Directory.Delete(workDir, true);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsyncOverDeclaredWaveRepairsOnlyTheWaveInWorkDir()
     {
         // The Policenauts Saturn patch ships WAVE tracks whose data chunk declares one CD frame
@@ -963,6 +1081,46 @@ public class CueWorkDirectoryTests : IDisposable
         writer.Write((ushort)16);
         writer.Write("data"u8.ToArray());
         writer.Write(declaredBytes);
+        for (var i = 0; i < dataBytes; i++) writer.Write((byte)(i % 251));
+        return path;
+    }
+
+    /// <summary>
+    ///     Writes a PCM WAVE with an arbitrary sample rate, channel count and bit depth, so tests can
+    ///     exercise non-standard audio tracks.
+    /// </summary>
+    /// <param name="path">Destination path.</param>
+    /// <param name="sampleRate">Samples per second.</param>
+    /// <param name="channels">Channel count.</param>
+    /// <param name="bitsPerSample">Bits per sample.</param>
+    /// <param name="sampleFrames">Number of sample frames to write.</param>
+    /// <returns>The full path of the written file.</returns>
+    private static string WritePcmWavWithFormat(
+        string path,
+        int sampleRate,
+        short channels,
+        short bitsPerSample,
+        int sampleFrames
+    )
+    {
+        var blockAlign = (short)(channels * (bitsPerSample / 8));
+        var dataBytes = sampleFrames * blockAlign;
+
+        using var stream = File.Create(path);
+        using var writer = new BinaryWriter(stream);
+        writer.Write("RIFF"u8.ToArray());
+        writer.Write(36 + dataBytes);
+        writer.Write("WAVE"u8.ToArray());
+        writer.Write("fmt "u8.ToArray());
+        writer.Write(16);
+        writer.Write((ushort)1);
+        writer.Write((ushort)channels);
+        writer.Write(sampleRate);
+        writer.Write(sampleRate * blockAlign);
+        writer.Write((ushort)blockAlign);
+        writer.Write((ushort)bitsPerSample);
+        writer.Write("data"u8.ToArray());
+        writer.Write(dataBytes);
         for (var i = 0; i < dataBytes; i++) writer.Write((byte)(i % 251));
         return path;
     }

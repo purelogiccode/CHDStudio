@@ -50,6 +50,13 @@ internal static class CueWorkDirectory
         // They are repaired in a private copy below.
         var overDeclaredWaves = FindOverDeclaredWaves(result.References);
 
+        // Non-standard WAVE tracks (22.05 kHz, mono, 8/24-bit or float) are rejected by both
+        // encoders with "unsupported samplerate" / "only 44100 is supported". They are re-encoded
+        // in the work directory exactly like MP3 tracks.
+        var nonStandardWaves = FindNonStandardWaves(result.References);
+        var wavesToRewrite = new HashSet<string>(overDeclaredWaves, StringComparer.Ordinal);
+        wavesToRewrite.UnionWith(nonStandardWaves);
+
         var isUtf8 = string.Equals(
             result.SourceEncoding.WebName,
             "utf-8",
@@ -81,18 +88,19 @@ internal static class CueWorkDirectory
             || hasMp3Tracks
             || namesNeedAscii
             || pathTooLong
-            || overDeclaredWaves.Count > 0;
+            || wavesToRewrite.Count > 0;
         if (!needsWorkDir) return new CueWorkDirectoryResult(null, null, []);
 
-        // Repair-only fast path: when the set is otherwise chdman-safe, put the work directory on
-        // the cue's own volume and reference everything except the damaged WAVE tracks relatively,
+        // Rework-only fast path: when the set is otherwise chdman-safe, put the work directory on
+        // the cue's own volume and reference everything except the affected WAVE tracks relatively,
         // so only the (small) WAVE copies need to be written instead of the entire image set.
-        if (overDeclaredWaves.Count > 0 && !hasMp3Tracks && !namesNeedAscii && !pathTooLong)
+        if (wavesToRewrite.Count > 0 && !hasMp3Tracks && !namesNeedAscii && !pathTooLong)
         {
-            var repair = await TryPrepareWaveRepairWorkDirAsync(
+            var repair = await TryPrepareWaveWorkDirAsync(
                     cuePath,
                     result.References,
-                    overDeclaredWaves,
+                    wavesToRewrite,
+                    nonStandardWaves,
                     tempDirPrefix,
                     onLog,
                     token
@@ -119,7 +127,7 @@ internal static class CueWorkDirectory
                 && !hasMp3Tracks
                 && !namesNeedAscii
                 && !pathTooLong
-                && overDeclaredWaves.Count == 0
+                && wavesToRewrite.Count == 0
             )
             {
                 var inPlaceWorkCue = await TryWriteInPlaceWorkCueAsync(cuePath, workDir, token)
@@ -137,7 +145,12 @@ internal static class CueWorkDirectory
             {
                 var reference = result.References[i];
                 string workName;
-                if (
+                if (nonStandardWaves.Contains(reference.ResolvedFullPath))
+                {
+                    workName = $"track{i + 1:D2}.wav";
+                    workTypes[reference.FullPath] = "WAVE";
+                }
+                else if (
                     mp3Decoder is not null
                     && string.Equals(reference.TrackType, "MP3", StringComparison.Ordinal)
                 )
@@ -169,7 +182,18 @@ internal static class CueWorkDirectory
                 onLog?.Invoke(
                     $"Preparing {Path.GetFileName(reference.ResolvedFullPath)} for conversion..."
                 );
-                if (
+                if (nonStandardWaves.Contains(reference.ResolvedFullPath))
+                {
+                    await WavAudioNormalizer
+                        .NormalizeAsync(
+                            reference.ResolvedFullPath,
+                            Path.Combine(workDir, workName),
+                            onLog,
+                            token
+                        )
+                        .ConfigureAwait(false);
+                }
+                else if (
                     mp3Decoder is not null
                     && string.Equals(reference.TrackType, "MP3", StringComparison.Ordinal)
                 )
@@ -280,27 +304,28 @@ internal static class CueWorkDirectory
     }
 
     /// <summary>
-    ///     Attempts a repair-only work set for a cue whose only defect is one or more WAVE tracks
-    ///     whose headers declare more audio than their files contain: the work directory is created
-    ///     on the cue's own volume and the canonical cue references every other referenced file
-    ///     relatively, so only the damaged WAVE tracks are copied (and clamped), not the whole
-    ///     image set.
+    ///     Attempts a rework-only work set for a cue whose only defect is one or more WAVE tracks
+    ///     that need a header repair or format normalization: the work directory is created on the
+    ///     cue's own volume and the canonical cue references every other referenced file relatively,
+    ///     so only the affected WAVE tracks are copied or re-encoded, not the whole image set.
     /// </summary>
     /// <param name="cuePath">Path of the .cue or .toc descriptor.</param>
     /// <param name="references">Every FILE line, with its resolved on-disk name.</param>
-    /// <param name="overDeclaredWaves">Full paths of the WAVE tracks whose headers over-declare.</param>
+    /// <param name="wavesToRewrite">Full paths of the WAVE tracks that need repair or normalization.</param>
+    /// <param name="nonStandardWaves">Full paths of the WAVE tracks that need format normalization.</param>
     /// <param name="tempDirPrefix">Prefix used for the work directory name.</param>
     /// <param name="onLog">Optional logging callback.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>
-    ///     The repaired work cue and its work directory, or null when the set cannot be prepared this
+    ///     The prepared work cue and its work directory, or null when the set cannot be prepared this
     ///     way (no writable location on the cue's volume, or a referenced file on another volume);
     ///     the caller then falls back to the full copy-based work directory.
     /// </returns>
-    private static async Task<(string WorkCuePath, string WorkDir)?> TryPrepareWaveRepairWorkDirAsync(
+    private static async Task<(string WorkCuePath, string WorkDir)?> TryPrepareWaveWorkDirAsync(
         string cuePath,
         IReadOnlyList<CueFileReference> references,
-        HashSet<string> overDeclaredWaves,
+        HashSet<string> wavesToRewrite,
+        HashSet<string> nonStandardWaves,
         string tempDirPrefix,
         Action<string>? onLog,
         CancellationToken token
@@ -312,12 +337,12 @@ internal static class CueWorkDirectory
         var succeeded = false;
         try
         {
-            // One repaired copy per damaged file; several tracks may share the same WAVE file.
+            // One reworked copy per affected file; several tracks may share the same WAVE file.
             var repairNames = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var reference in references)
             {
                 if (!reference.IsResolved) return null;
-                if (!overDeclaredWaves.Contains(reference.ResolvedFullPath)) continue;
+                if (!wavesToRewrite.Contains(reference.ResolvedFullPath)) continue;
                 if (repairNames.ContainsKey(reference.ResolvedFullPath)) continue;
 
                 repairNames[reference.ResolvedFullPath] = $"track{repairNames.Count + 1:D2}.wav";
@@ -325,7 +350,7 @@ internal static class CueWorkDirectory
 
             if (repairNames.Count == 0) return null;
 
-            // Everything except the repaired WAVE tracks stays where it is and must be reachable
+            // Everything except the reworked WAVE tracks stays where it is and must be reachable
             // from the work directory by a relative path: chdman joins FILE names to the cue's own
             // directory and cannot follow an absolute path.
             foreach (var reference in references)
@@ -344,8 +369,17 @@ internal static class CueWorkDirectory
             {
                 var destination = Path.Combine(workDir, workName);
                 onLog?.Invoke($"Preparing {Path.GetFileName(source)} for conversion...");
-                await CopyWithRetryAsync(source, destination, token).ConfigureAwait(false);
-                RepairWaveHeader(destination, source, onLog);
+                if (nonStandardWaves.Contains(source))
+                {
+                    await WavAudioNormalizer
+                        .NormalizeAsync(source, destination, onLog, token)
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await CopyWithRetryAsync(source, destination, token).ConfigureAwait(false);
+                    RepairWaveHeader(destination, source, onLog);
+                }
             }
 
             var workCue = GetWorkDescriptorPath(workDir, cuePath);
@@ -387,6 +421,38 @@ internal static class CueWorkDirectory
     /// <returns>The full paths of the over-declared, WAVE-only files.</returns>
     private static HashSet<string> FindOverDeclaredWaves(IReadOnlyList<CueFileReference> references)
     {
+        var overDeclared = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in GetWaveOnlyPaths(references))
+        {
+            if (WavHeaderSanitizer.IsOverDeclared(path)) overDeclared.Add(path);
+        }
+
+        return overDeclared;
+    }
+
+    /// <summary>
+    ///     Finds the resolved WAVE tracks whose format is not 44100 Hz stereo 16-bit PCM. Such
+    ///     tracks are rejected by both encoders and have to be re-encoded before conversion. A file
+    ///     that is also referenced as a data track is excluded for the same reason as above.
+    /// </summary>
+    /// <param name="references">Every FILE line, with its resolved on-disk name.</param>
+    /// <returns>The full paths of the non-standard, WAVE-only files.</returns>
+    private static HashSet<string> FindNonStandardWaves(IReadOnlyList<CueFileReference> references)
+    {
+        var nonStandard = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in GetWaveOnlyPaths(references))
+        {
+            if (WavAudioNormalizer.NeedsNormalization(path)) nonStandard.Add(path);
+        }
+
+        return nonStandard;
+    }
+
+    /// <summary>Returns the resolved WAVE files that are not also referenced as data tracks.</summary>
+    /// <param name="references">Every FILE line, with its resolved on-disk name.</param>
+    /// <returns>Full paths of the WAVE-only files.</returns>
+    private static HashSet<string> GetWaveOnlyPaths(IReadOnlyList<CueFileReference> references)
+    {
         var wavePaths = new HashSet<string>(StringComparer.Ordinal);
         var nonWavePaths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var reference in references)
@@ -399,14 +465,7 @@ internal static class CueWorkDirectory
         }
 
         wavePaths.ExceptWith(nonWavePaths);
-
-        var overDeclared = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in wavePaths)
-        {
-            if (WavHeaderSanitizer.IsOverDeclared(path)) overDeclared.Add(path);
-        }
-
-        return overDeclared;
+        return wavePaths;
     }
 
     /// <summary>

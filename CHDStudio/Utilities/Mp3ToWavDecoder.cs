@@ -105,7 +105,7 @@ internal sealed class Mp3ToWavDecoder : IMp3Decoder
                     else
 #endif
                     {
-                        await DecodeWithFfmpegAsync(mp3Path, wavPath, token).ConfigureAwait(false);
+                        await ConvertToChdmanWavAsync(mp3Path, wavPath, token).ConfigureAwait(false);
                     }
 
                     if (WavHasAudioData(wavPath))
@@ -210,15 +210,17 @@ internal sealed class Mp3ToWavDecoder : IMp3Decoder
 #endif
 
     /// <summary>
-    ///     Decodes the MP3 with an external ffmpeg executable found on PATH. Used on Linux and
-    ///     macOS, where Media Foundation and NAudio's ACM-backed MP3 reader are unavailable.
+    ///     Converts any audio file to the 44100 Hz stereo 16-bit PCM WAV the encoders require,
+    ///     using an external ffmpeg executable found on PATH. Used for MP3 tracks on Linux and
+    ///     macOS (where Media Foundation is unavailable) and for non-standard WAVE tracks when the
+    ///     platform decoder cannot handle them.
     /// </summary>
-    /// <param name="mp3Path">Path of the MP3 file to decode.</param>
-    /// <param name="wavPath">Destination path for the decoded 44100 Hz stereo 16-bit PCM WAV file.</param>
+    /// <param name="inputPath">Path of the audio file to convert.</param>
+    /// <param name="wavPath">Destination path for the converted 44100 Hz stereo 16-bit PCM WAV file.</param>
     /// <param name="token">Cancellation token; the ffmpeg child is killed when it fires.</param>
     /// <returns>A task that completes when ffmpeg has finished.</returns>
-    private static async Task DecodeWithFfmpegAsync(
-        string mp3Path,
+    internal static async Task ConvertToChdmanWavAsync(
+        string inputPath,
         string wavPath,
         CancellationToken token
     )
@@ -226,7 +228,7 @@ internal sealed class Mp3ToWavDecoder : IMp3Decoder
         var ffmpegPath =
             FindExecutableOnPath("ffmpeg")
             ?? throw new InvalidOperationException(
-                "ffmpeg was not found on PATH; install it to decode MP3 tracks on this platform."
+                "ffmpeg was not found on PATH; install it to process audio tracks on this platform."
             );
 
         using var process = new Process();
@@ -242,7 +244,7 @@ internal sealed class Mp3ToWavDecoder : IMp3Decoder
                 "-loglevel",
                 "error",
                 "-i",
-                mp3Path,
+                inputPath,
                 "-ar",
                 "44100",
                 "-ac",
