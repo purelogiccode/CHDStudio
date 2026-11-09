@@ -124,7 +124,7 @@ internal static class ConversionReport
     {
         try
         {
-            var reportPath = Path.Combine(outputFolder, FailureReportFileName);
+            var reportPath = Path.Join(outputFolder, FailureReportFileName);
             if (File.Exists(reportPath)) File.Delete(reportPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -151,7 +151,7 @@ internal static class ConversionReport
     {
         if (failedFiles.Count == 0) return null;
 
-        var reportPath = Path.Combine(outputFolder, FailureReportFileName);
+        var reportPath = Path.Join(outputFolder, FailureReportFileName);
         var lines = new List<string>
         {
             "CHD Studio - failed conversions",

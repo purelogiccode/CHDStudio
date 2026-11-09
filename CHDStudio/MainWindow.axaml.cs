@@ -1833,6 +1833,9 @@ internal partial class MainWindow : Window, IDisposable
                 _wasCancelled = true;
             }
             catch (Exception ex)
+                when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                    or NotSupportedException or SecurityException
+                )
             {
                 LogError(ex.Message, ex);
             }
@@ -1840,10 +1843,13 @@ internal partial class MainWindow : Window, IDisposable
             {
                 // A cancelled or aborted batch can leave the file that was in flight marked
                 // "Converting"; it did not finish, so return it to the retryable state.
-                foreach (var item in _conversionFiles)
+                foreach (
+                    var item in _conversionFiles.Where(static item =>
+                        string.Equals(item.Status, "Converting", StringComparison.Ordinal)
+                    )
+                )
                 {
-                    if (string.Equals(item.Status, "Converting", StringComparison.Ordinal))
-                        item.Status = "Pending";
+                    item.Status = "Pending";
                 }
 
                 if (_conversionFailedInputs.Count > 0)

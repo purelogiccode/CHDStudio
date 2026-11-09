@@ -11,7 +11,7 @@ public class ConversionReportTests : IDisposable
 
     public ConversionReportTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"ConversionReportTests_{Guid.NewGuid():N}");
+        _tempDir = Path.Join(Path.GetTempPath(), $"ConversionReportTests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
     }
 
@@ -49,9 +49,9 @@ public class ConversionReportTests : IDisposable
     [Fact]
     public async Task GetSourceBytesAsync_CueCountsItsReferencedBin()
     {
-        var binPath = Path.Combine(_tempDir, "game.bin");
+        var binPath = Path.Join(_tempDir, "game.bin");
         await File.WriteAllBytesAsync(binPath, new byte[2048]);
-        var cuePath = Path.Combine(_tempDir, "game.cue");
+        var cuePath = Path.Join(_tempDir, "game.cue");
         await File.WriteAllTextAsync(
             cuePath,
             "FILE \"game.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
@@ -68,15 +68,15 @@ public class ConversionReportTests : IDisposable
     [Fact]
     public async Task GetSourceBytesByInputAsync_ReturnsEachInputsOwnSize()
     {
-        var firstBin = Path.Combine(_tempDir, "first.bin");
+        var firstBin = Path.Join(_tempDir, "first.bin");
         await File.WriteAllBytesAsync(firstBin, new byte[1024]);
-        var firstCue = Path.Combine(_tempDir, "first.cue");
+        var firstCue = Path.Join(_tempDir, "first.cue");
         await File.WriteAllTextAsync(
             firstCue,
             "FILE \"first.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
         );
 
-        var secondIso = Path.Combine(_tempDir, "second.iso");
+        var secondIso = Path.Join(_tempDir, "second.iso");
         await File.WriteAllBytesAsync(secondIso, new byte[2048]);
 
         var bytes = await ConversionReport.GetSourceBytesByInputAsync(
@@ -91,7 +91,7 @@ public class ConversionReportTests : IDisposable
     [Fact]
     public async Task GetSourceBytesAsync_UnreadableDescriptorStillCountsItself()
     {
-        var cuePath = Path.Combine(_tempDir, "missing.cue");
+        var cuePath = Path.Join(_tempDir, "missing.cue");
         await File.WriteAllTextAsync(
             cuePath,
             "FILE \"does-not-exist.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
@@ -108,8 +108,8 @@ public class ConversionReportTests : IDisposable
     [Fact]
     public async Task WriteFailureReportAsync_WritesEveryFailedInput()
     {
-        var first = Path.Combine(_tempDir, "first.cue");
-        var second = Path.Combine(_tempDir, "second.iso");
+        var first = Path.Join(_tempDir, "first.cue");
+        var second = Path.Join(_tempDir, "second.iso");
 
         var reportPath = await ConversionReport.WriteFailureReportAsync(
             _tempDir,
@@ -119,7 +119,7 @@ public class ConversionReportTests : IDisposable
         );
 
         Assert.NotNull(reportPath);
-        Assert.Equal(Path.Combine(_tempDir, ConversionReport.FailureReportFileName), reportPath);
+        Assert.Equal(Path.Join(_tempDir, ConversionReport.FailureReportFileName), reportPath);
         var lines = await File.ReadAllLinesAsync(reportPath);
         Assert.Contains("Failed: 2", lines, StringComparer.Ordinal);
         Assert.Contains(first, lines, StringComparer.Ordinal);
@@ -129,7 +129,7 @@ public class ConversionReportTests : IDisposable
     [Fact]
     public void DeleteFailureReport_RemovesAnEarlierReport()
     {
-        var reportPath = Path.Combine(_tempDir, ConversionReport.FailureReportFileName);
+        var reportPath = Path.Join(_tempDir, ConversionReport.FailureReportFileName);
         File.WriteAllText(reportPath, "old");
 
         ConversionReport.DeleteFailureReport(_tempDir);
@@ -149,7 +149,7 @@ public class ConversionReportTests : IDisposable
 
         Assert.Null(reportPath);
         Assert.False(
-            File.Exists(Path.Combine(_tempDir, ConversionReport.FailureReportFileName))
+            File.Exists(Path.Join(_tempDir, ConversionReport.FailureReportFileName))
         );
     }
 }
