@@ -5,6 +5,24 @@ nav_order: 16
 
 # What's New
 
+## 3.13.5 (2026-11-08)
+
+### Non-standard WAV audio tracks
+
+*   **CUE/WAVE tracks that are not 44.1 kHz stereo 16-bit PCM now convert.** Both encoders reject other WAVE formats: chdman reports an unsupported sample rate and the built-in CHDSharp encoder says `Unsupported samplerate - only 44100 is supported`. The app now detects such tracks before encoding and writes a 44.1 kHz stereo 16-bit PCM copy in a private work directory. This covers 22.05 kHz, mono, 8/24-bit and float rips, including Sega CD sets and other non-CD-standard sources. Windows uses NAudio; Linux/macOS use ffmpeg from PATH.
+*   **Only the affected track is reworked.** The cue rework fast path stages the work directory on the cue's volume and references the disc image in place, so a multi-hundred-MB image is not copied just to normalize one audio track. When a same-volume directory is unavailable or the names require the full copy path, the full work directory normalizes the track there. The user's original files are never modified.
+*   **A failed normalization is treated as user data.** A corrupt or unsupported WAVE track is logged with the decoder's reason and no longer creates a bug report.
+
+### Code quality
+
+*   Remaining CodeQL code-scanning alerts resolved; code scanning reports zero open alerts.
+*   Meziantou.Analyzer updated to 3.0.322.
+
+### Verification
+
+*   **Test suite:** 1,299 tests pass (1,270 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.13.4 (2026-11-08)
 
 ### Conversion reporting and failed-file retry (issue #15)
