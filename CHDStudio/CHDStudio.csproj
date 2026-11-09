@@ -38,7 +38,7 @@
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
         <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
         <PackageReference Include="CHDSharp" Version="1.6.3" />
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.321">
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.322">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
