@@ -13,7 +13,7 @@ This page describes the solution structure, the runtime startup sequence, and th
 
 ```
 CSharp_CHDStudio.sln
-├── CHDStudio/                     (Avalonia app, net10.0;net10.0-windows)
+├── CHDStudio/                     (Avalonia app, net11.0;net11.0-windows)
 │   ├── App.axaml(.cs)                     → startup, Serilog, exception handlers
 │   ├── AppConfig.cs                       → central configuration
 │   ├── MainWindow.axaml(.cs)              → UI + all batch logic
@@ -59,11 +59,11 @@ CSharp_CHDStudio.sln
 │           ├── EcmImageDecoder.cs         → ECM block-stream decoder
 │           └── EcmDecodeResult.cs
 ├── CHDStudio.Tests/               (xUnit; Fixtures/ holds ecm-sample.ecm, rar-multipart/, MdsV2/ and laserdisc-small.avi)
-├── MDSSharp/                                (Alcohol 120% .mds/.mdf parsing; net8.0;net9.0;net10.0)
-├── CCDSharp/                                (CloneCD .ccd/.img/.sub parsing; net10.0;net8.0)
-├── CSOSharp/                                (CSO/CISO decompression; net10.0;net8.0)
-├── PBPSharp/                                (PBP/SFO parsing; net10.0;net8.0)
-├── ISZSharp/                                (UltraISO ISZ decompression; net8.0;net9.0;net10.0)
+├── MDSSharp/                                (Alcohol 120% .mds/.mdf parsing; net8.0;net9.0;net10.0;net11.0)
+├── CCDSharp/                                (CloneCD .ccd/.img/.sub parsing; net8.0;net9.0;net10.0;net11.0)
+├── CSOSharp/                                (CSO/CISO decompression; net8.0;net9.0;net10.0;net11.0)
+├── PBPSharp/                                (PBP/SFO parsing; net8.0;net9.0;net10.0;net11.0)
+├── ISZSharp/                                (UltraISO ISZ decompression; net8.0;net9.0;net10.0;net11.0)
 └── References/                              (third-party sources — not part of the build)
 ```
 
@@ -84,7 +84,7 @@ CSharp_CHDStudio.sln
 ```
 
 - The app references `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` as project references.
-- All five libraries are packable and expose internals to `CHDStudio.Tests` via `InternalsVisibleTo`; `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` all multi-target `net8.0;net9.0;net10.0`.
+- All five libraries are packable and expose internals to `CHDStudio.Tests` via `InternalsVisibleTo`; `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` all multi-target `net8.0;net9.0;net10.0;net11.0`.
 - `CHDStudio.Tests` references the app (internals visible) plus `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp`; `CcdParserTests`/`CcdModelTests` cover the CloneCD parser and writer (see [Testing](11-testing.md)).
 
 > **Why ISZ and Alcohol support moved into libraries.** `ISZSharp` and `MDSSharp` were split out of the app's utilities into standalone packable projects (they are self-contained formats with redistributable value), while ECM decoding remains in-app because it is tightly coupled to the cue staging flow. The test project references both new libraries directly.

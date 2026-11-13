@@ -7,7 +7,7 @@
 # Artifacts: one release_<version>_<rid>.zip per runtime identifier, for
 # Windows (win-x64, win-arm64), Linux (linux-x64, linux-arm64) and macOS
 # (osx-x64, osx-arm64). The app is framework-dependent (users install the
-# .NET 10 Desktop Runtime on Windows, the .NET 10 runtime on Linux/macOS)
+# .NET 11 Desktop Runtime on Windows, the .NET 11 runtime on Linux/macOS)
 # and published as a single file; see scripts/ci/package-release.ps1.
 name: Release
 
@@ -77,7 +77,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       - name: Restore
         run: dotnet restore CSharp_CHDStudio.sln
@@ -102,17 +102,17 @@ jobs:
       matrix:
         include:
           - rid: win-x64
-            tfm: net10.0-windows
+            tfm: net11.0-windows
           - rid: win-arm64
-            tfm: net10.0-windows
+            tfm: net11.0-windows
           - rid: linux-x64
-            tfm: net10.0
+            tfm: net11.0
           - rid: linux-arm64
-            tfm: net10.0
+            tfm: net11.0
           - rid: osx-x64
-            tfm: net10.0
+            tfm: net11.0
           - rid: osx-arm64
-            tfm: net10.0
+            tfm: net11.0
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -122,7 +122,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       - name: Publish single-file (framework-dependent)
         run: >

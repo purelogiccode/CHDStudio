@@ -5,7 +5,7 @@ nav_order: 12
 
 # 11. Testing
 
-The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net10.0-windows`), with **1,299 tests across 64 test classes**: 1,270 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
+The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net11.0-windows`), with **1,299 tests across 64 test classes**: 1,270 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
 
 > **Expected result on a machine without the local sample folders:** the 1,270 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
 
@@ -17,7 +17,7 @@ dotnet test CSharp_CHDStudio.sln -c Release
 dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj --no-build
 ```
 
-Requirements: the tests are run on Windows (the app project is `net10.0-windows`). Some tests need the app's output directory to contain `chdman.exe` (it is copied by the build).
+Requirements: the tests are run on Windows (the app project is `net11.0-windows`). Some tests need the app's output directory to contain `chdman.exe` (it is copied by the build).
 
 ## 11.2 How Tests Are Structured
 

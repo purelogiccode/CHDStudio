@@ -36,7 +36,7 @@ This documentation covers the project from both a user and a developer perspecti
 |------|-------|
 | **Application name** | `CHDStudio` |
 | **Latest version** | 3.13.5 |
-| **Target framework** | .NET 10.0 (`net10.0;net10.0-windows`), Avalonia |
+| **Target framework** | .NET 11.0 (`net11.0;net11.0-windows`), Avalonia |
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
 | **License** | GPL v3.0 |
 | **Primary encoder** | `chdman` (MAME Project, 0.289), bundled as `chdman.exe` / `chdman_arm64.exe` on Windows; built-in CHDSharp on Linux/macOS |
@@ -53,7 +53,7 @@ This documentation covers the project from both a user and a developer perspecti
 ```
 CHDStudio/
 ├── MDSSharp/                       # Alcohol 120% (.mds/.mdf) parsing library
-├── CHDStudio/            # Avalonia application (net10.0;net10.0-windows)
+├── CHDStudio/            # Avalonia application (net11.0;net11.0-windows)
 │   ├── MainWindow.axaml(.cs)       # Main UI + conversion/extraction/verification logic
 │   ├── App.axaml(.cs)              # Startup, Serilog, exception handlers
 │   ├── AppConfig.cs                # Central configuration constants

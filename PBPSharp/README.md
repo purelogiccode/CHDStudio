@@ -5,7 +5,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/purelogiccode/CHDStudio/badge)](https://securityscorecards.dev/viewer/?uri=github.com/purelogiccode/CHDStudio)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](https://github.com/purelogiccode/CHDStudio/blob/master/SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/purelogiccode/CHDStudio)
-[![.NET 8 | 9 | 10](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512bd4.svg)](https://dotnet.microsoft.com/download)
+[![.NET 8 | 9 | 10 | 11](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0%20%7C%2011.0-512bd4.svg)](https://dotnet.microsoft.com/download)
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d7.svg)](https://github.com/purelogiccode/CHDStudio)
 [![GitHub last commit](https://img.shields.io/github/last-commit/purelogiccode/CHDStudio)](https://github.com/purelogiccode/CHDStudio/commits/master)
 [![GitHub stars](https://img.shields.io/github/stars/purelogiccode/CHDStudio.svg)](https://github.com/purelogiccode/CHDStudio/stargazers)
@@ -28,7 +28,7 @@
 [![Release downloads](https://img.shields.io/github/downloads/purelogiccode/CHDStudio/total?label=release%20downloads)](https://github.com/purelogiccode/CHDStudio/releases)
 [![Release date](https://img.shields.io/github/release-date/purelogiccode/CHDStudio?label=released)](https://github.com/purelogiccode/CHDStudio/releases)
 [![C#](https://img.shields.io/badge/C%23-100%25-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/dotnet/csharp/)
-[![NuGet TFMs](https://img.shields.io/badge/NuGet-net8.0%20%7C%20net9.0%20%7C%20net10.0-004880?logo=nuget&logoColor=white)](https://www.nuget.org/packages/PBPSharp)
+[![NuGet TFMs](https://img.shields.io/badge/NuGet-net8.0%20%7C%20net9.0%20%7C%20net10.0%20%7C%20net11.0-004880?logo=nuget&logoColor=white)](https://www.nuget.org/packages/PBPSharp)
 [![Format](https://img.shields.io/badge/format-PBP%20%2F%20EBOOT-6f42c1)](https://www.nuget.org/packages/PBPSharp)
 [![Disc](https://img.shields.io/badge/disc-PlayStation%201%20%2F%20PSP-003791)](https://www.nuget.org/packages/PBPSharp)
 
@@ -84,8 +84,8 @@ The library is the PBP extraction engine used by [CHD Studio](https://github.com
 
 | Requirement | Value |
 |---|---|
-| Target frameworks | `net8.0`, `net9.0`, `net10.0` |
-| Runtime | .NET 8, .NET 9 or .NET 10 |
+| Target frameworks | `net8.0`, `net9.0`, `net10.0`, `net11.0` |
+| Runtime | .NET 8, .NET 9, .NET 10 or .NET 11 |
 | Platforms | Windows, Linux, macOS (pure managed code) |
 | Dependencies | [SharpZipLib](https://www.nuget.org/packages/SharpZipLib) 1.4.2 |
 

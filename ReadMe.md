@@ -1,5 +1,5 @@
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d7.svg)](https://github.com/purelogiccode/CHDStudio)
-[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-512bd4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![.NET 11.0](https://img.shields.io/badge/.NET-11.0-512bd4.svg)](https://dotnet.microsoft.com/download/dotnet/11.0)
 [![CI](https://img.shields.io/github/actions/workflow/status/purelogiccode/CHDStudio/ci.yml?label=CI)](https://github.com/purelogiccode/CHDStudio/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml/badge.svg)](https://github.com/purelogiccode/CHDStudio/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/purelogiccode/CHDStudio/badge)](https://securityscorecards.dev/viewer/?uri=github.com/purelogiccode/CHDStudio)
@@ -159,7 +159,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 ## 💻 Requirements
 
 *   **Operating System**: Windows 10 / 11 (x64 or ARM64), Linux (x64 or ARM64) and macOS (Intel or Apple silicon); release zips are published for all six runtime identifiers
-*   **Runtime**: [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows; the .NET 10.0 runtime on Linux and macOS
+*   **Runtime**: [.NET 11.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) on Windows; the .NET 11.0 runtime on Linux and macOS
 *   **Bundled Dependencies**:
     *   `chdman.exe` / `chdman_arm64.exe` (MAME Project — primary encoder on Windows, extraction fallback)
     *   `7za.exe` / `7za_arm64.exe` (Windows) or `7zz` (official 7-Zip 26.03, Linux/macOS) — 7-Zip fallback extraction
@@ -186,7 +186,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.5_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 10 runtime is **not** embedded in the executable.
+Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.5_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 11 runtime is **not** embedded in the executable.
 
 Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 

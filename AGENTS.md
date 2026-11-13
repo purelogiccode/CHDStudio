@@ -15,7 +15,7 @@ project.
 ### The application project
 
 - `CHDStudio` is the base app project: it multi-targets
-  `net10.0` (Linux/macOS) and `net10.0-windows` (Windows), builds
+  `net11.0` (Linux/macOS) and `net11.0-windows` (Windows), builds
   `CHDStudio.exe`, and links no files from outside its folder. The
   Windows TFM adds NAudio (Media Foundation/ACM MP3 decoding); the neutral TFM
   decodes MP3 via `ffmpeg` on PATH.
@@ -34,9 +34,9 @@ project.
 
 ## Toolchain
 
-- .NET SDK 10 - declared in `global.json` (`rollForward: latestMajor`). Never
-  lower the Windows target below `net10.0-windows`; the Windows UI and NAudio
-  need it.
+- .NET SDK 11 - declared in `global.json` (`rollForward: latestMajor`). C# 15 is
+  enabled through `LangVersion`. Never lower the Windows target below
+  `net11.0-windows`; the Windows UI and NAudio need it.
 - Node.js 24 - used only for the zero-dependency helper scripts in
   `scripts/ci/`. Do not add npm packages or a `package.json`.
 - Avalonia 12.1 (desktop, Fluent theme, DataGrid); the neutral TFM must keep
@@ -55,24 +55,35 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "Category!=Integration"
 
 # Framework-dependent single-file publish (one per architecture)
-dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0-windows -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/win-x64
-dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0-windows -r win-arm64 --self-contained false -p:PublishSingleFile=true -o publish/win-arm64
+dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/win-x64
+dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-arm64 --self-contained false -p:PublishSingleFile=true -o publish/win-arm64
 
 # Release zip (same command CI runs)
 ./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.7.0 -PublishDir publish/win-x64 -OutputDir dist
 
 # Run on Windows (multi-targeted, so pick the Windows TFM)
-dotnet run --project CHDStudio/CHDStudio.csproj -f net10.0-windows
+dotnet run --project CHDStudio/CHDStudio.csproj -f net11.0-windows
 
 # Framework-dependent single-file publishes for Linux/macOS (neutral TFM)
-dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r linux-x64 --self-contained false -p:PublishSingleFile=true -o publish/linux-x64
-dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --self-contained false -p:PublishSingleFile=true -o publish/osx-arm64
+dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0 -r linux-x64 --self-contained false -p:PublishSingleFile=true -o publish/linux-x64
+dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0 -r osx-arm64 --self-contained false -p:PublishSingleFile=true -o publish/osx-arm64
 ```
+
+## Pre-commit checks
+
+**Always run `jb inspectcode` before every commit.** Fix every warning and error
+it reports; notes are allowed:
+
+```powershell
+jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
+```
+
+Do not commit while InspectCode reports warnings or errors.
 
 ## Release engineering (do not break)
 
 - **The app is framework-dependent. It must NOT embed the .NET runtime.** Users
-  install the .NET 10 Desktop Runtime on Windows and the .NET 10 runtime on
+  install the .NET 11 Desktop Runtime on Windows and the .NET 11 runtime on
   Linux/macOS. Always publish with
   `--self-contained false -p:PublishSingleFile=true`. The output is a single
   `CHDStudio.exe` (Windows) or `CHDStudio` (Linux/macOS) plus the platform's
@@ -85,7 +96,9 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
   library `.xml` IntelliSense files and the native `.pdb` debug symbols (never
   used at runtime), and adds `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. Do
   not put both architectures in one zip. CHD creation works without any bundled
-  tool thanks to the built-in CHDSharp encoder.
+  tool thanks to the built-in CHDSharp encoder. Every bundled-tool item keeps
+  `ExcludeFromSingleFile=true`; without it the .NET 11 single-file publish drops
+  `7za`/`chdman`/`7zz` from the output and the release zip fails verification.
 - **Zip naming is fixed:** `release_<version>_<rid>.zip`, e.g.
   `release_3.9.0_win-x64.zip`. One zip per runtime identifier - `win-x64`,
   `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64` - and all
@@ -120,7 +133,7 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
    dotnet build CSharp_CHDStudio.sln -c Release
    dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
    node scripts/ci/version.mjs
-   jb inspectcode CSharp_CHDStudio.sln -o=InspectCode.log
+   jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
    ```
    InspectCode must report zero warnings and zero errors before tagging.
 4. **Publish all six framework-dependent single-file bundles**, never
@@ -130,12 +143,12 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
    $ErrorActionPreference = 'Stop'
    $version = "3.11.0"
    $rids = [ordered]@{
-       'win-x64'     = 'net10.0-windows'
-       'win-arm64'   = 'net10.0-windows'
-       'linux-x64'   = 'net10.0'
-       'linux-arm64' = 'net10.0'
-       'osx-x64'     = 'net10.0'
-       'osx-arm64'   = 'net10.0'
+       'win-x64'     = 'net11.0-windows'
+       'win-arm64'   = 'net11.0-windows'
+       'linux-x64'   = 'net11.0'
+       'linux-arm64' = 'net11.0'
+       'osx-x64'     = 'net11.0'
+       'osx-arm64'   = 'net11.0'
    }
    $outRoot = "dist/$version"
    New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
@@ -224,8 +237,8 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net10.0 -r osx-arm64 --s
 - `docs/` is the only documentation source. Keep the Pages front matter and the
   wiki `_Sidebar.md` in sync; never edit the wiki UI.
 - `CHDStudio/bin/Release/` is append-only. Copy in, never delete.
-- Run `jb inspectcode` before tagging; the release gate is zero warnings and
-  zero errors (notes are allowed).
+- Run `jb inspectcode` before every commit and before tagging; the gate is zero
+  warnings and zero errors (notes are allowed).
 - Run the full test suite before tagging; CI runs the unit filter only.
 
 
@@ -245,8 +258,8 @@ workflows, and never commit or echo the API key. It is read from the
   `MDSSharp/MDSSharp.csproj` and `ISZSharp/ISZSharp.csproj`): bump
   `<Version>`, `<AssemblyVersion>` and `<FileVersion>` together. A pushed
   version is immutable - to change anything, bump and push again.
-- **Target frameworks** are `net8.0;net9.0;net10.0` so both packages serve
-  .NET 8, 9 and 10 consumers. `GenerateDocumentationFile` must stay on so each
+- **Target frameworks** are `net8.0;net9.0;net10.0;net11.0` so the packages serve
+  .NET 8, 9, 10 and 11 consumers. `GenerateDocumentationFile` must stay on so each
   TFM ships its `.xml` next to the assembly.
 - **Metadata** must keep `PackageProjectUrl` and `RepositoryUrl` pointed at
   <https://github.com/purelogiccode/CHDStudio>.
@@ -276,7 +289,7 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 dotnet pack PBPSharp/PBPSharp.csproj -c Release -o <out-dir> -p:EnablePackageValidation=true
 
 # 3. inspect the nupkg: README.md, icon.png, and lib/<tfm>/<name>.dll + .xml
-#    for net8.0, net9.0 and net10.0
+#    for net8.0, net9.0, net10.0 and net11.0
 
 # 4. push with the user environment key (never hard-code it)
 dotnet nuget push <out-dir>/PBPSharp.<version>.nupkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json
@@ -286,7 +299,7 @@ Invoke-RestMethod https://api.nuget.org/v3-flatcontainer/pbpsharp/index.json   #
 ```
 
 Before pushing, smoke-test the packed `.nupkg` in a throwaway consumer project
-targeting `net8.0;net9.0;net10.0` (restore from a local package source and open
+targeting `net8.0;net9.0;net10.0;net11.0` (restore from a local package source and open
 a real file on each runtime).
 
 ## CI workflows

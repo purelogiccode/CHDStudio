@@ -36,24 +36,24 @@ Avalonia libraries and the matching bundled tools.
 
 | RID | TFM | Tools in the zip |
 |---|---|---|
-| `win-x64` | `net10.0-windows` | `chdman.exe`, `7za.exe` |
-| `win-arm64` | `net10.0-windows` | `chdman_arm64.exe`, `7za_arm64.exe` |
-| `linux-x64` | `net10.0` | `7zz`, `7-Zip-License.txt` |
-| `linux-arm64` | `net10.0` | `7zz`, `7-Zip-License.txt` |
-| `osx-x64` | `net10.0` | `7zz`, `7-Zip-License.txt` |
-| `osx-arm64` | `net10.0` | `7zz`, `7-Zip-License.txt` |
+| `win-x64` | `net11.0-windows` | `chdman.exe`, `7za.exe` |
+| `win-arm64` | `net11.0-windows` | `chdman_arm64.exe`, `7za_arm64.exe` |
+| `linux-x64` | `net11.0` | `7zz`, `7-Zip-License.txt` |
+| `linux-arm64` | `net11.0` | `7zz`, `7-Zip-License.txt` |
+| `osx-x64` | `net11.0` | `7zz`, `7-Zip-License.txt` |
+| `osx-arm64` | `net11.0` | `7zz`, `7-Zip-License.txt` |
 
 From the repository root:
 
 ```powershell
 $version = "3.13.5"
 $rids = @(
-    @{ Rid = 'win-x64';     Tfm = 'net10.0-windows' },
-    @{ Rid = 'win-arm64';   Tfm = 'net10.0-windows' },
-    @{ Rid = 'linux-x64';   Tfm = 'net10.0' },
-    @{ Rid = 'linux-arm64'; Tfm = 'net10.0' },
-    @{ Rid = 'osx-x64';     Tfm = 'net10.0' },
-    @{ Rid = 'osx-arm64';   Tfm = 'net10.0' }
+    @{ Rid = 'win-x64';     Tfm = 'net11.0-windows' },
+    @{ Rid = 'win-arm64';   Tfm = 'net11.0-windows' },
+    @{ Rid = 'linux-x64';   Tfm = 'net11.0' },
+    @{ Rid = 'linux-arm64'; Tfm = 'net11.0' },
+    @{ Rid = 'osx-x64';     Tfm = 'net11.0' },
+    @{ Rid = 'osx-arm64';   Tfm = 'net11.0' }
 )
 
 foreach ($item in $rids) {
