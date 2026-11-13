@@ -1322,6 +1322,34 @@ public class ArchiveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExtractArchiveAsyncUnstartableToolReturnsItsPathAndReason()
+    {
+        // A bundled 7zz extracted without the execute bit (or a file that is not a real
+        // executable) used to surface as a bare Win32Exception in the bug report. The fallback
+        // must name the tool and explain what to do instead.
+        var fakeTool = Path.Combine(
+            _tempDir,
+            OperatingSystem.IsWindows() ? "fake7za.exe" : "fake7za"
+        );
+        File.WriteAllText(fakeTool, "not an executable");
+        var service = new ArchiveService(fakeTool, true);
+        var corruptPath = Path.Combine(_tempDir, "corrupt-unstartable.7z");
+        File.WriteAllText(corruptPath, "not a 7z archive");
+        var tempDir = Path.Combine(_tempDir, "extract");
+
+        var result = await service.ExtractArchiveAsync(
+            corruptPath,
+            tempDir,
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.False(result.Success);
+        Assert.Contains("Could not start", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains(fakeTool, result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExtractArchiveAsyncCorrupt7ZWithout7ZaReturnsFailure()
     {
         var service = new ArchiveService("7za.exe", false);

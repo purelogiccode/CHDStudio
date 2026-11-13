@@ -260,7 +260,7 @@ Locates the volumes of a multi-part RAR. SharpCompress can only decode a set whe
 
 ## 8.10 ISZ Support (`ISZSharp`)
 
-Decompresses UltraISO `.isz` images. Lives in the standalone `ISZSharp` library (multi-targeted `net8.0;net9.0;net10.0`, MIT-licensed, packable, with a README and icon like the other libraries) and is written against EZB Systems' ISZ File Format Specification 1.00 plus the real-file behaviours libMirage's ISZ filter and isz-tool agree on.
+Decompresses UltraISO `.isz` images. Lives in the standalone `ISZSharp` library (multi-targeted `net8.0;net9.0;net10.0;net11.0`, MIT-licensed, packable, with a README and icon like the other libraries) and is written against EZB Systems' ISZ File Format Specification 1.00 plus the real-file behaviours libMirage's ISZ filter and isz-tool agree on.
 
 | Type | Role |
 |------|------|
@@ -306,7 +306,7 @@ The format: after the 4-byte signature comes a sequence of blocks, each introduc
 
 ## 8.12 Alcohol 120% Support (`MDSSharp`)
 
-Lives in the standalone `MDSSharp` library (multi-targeted `net8.0;net9.0;net10.0`, MIT-licensed, packable) together with `SplitImageJoiner`.
+Lives in the standalone `MDSSharp` library (multi-targeted `net8.0;net9.0;net10.0;net11.0`, MIT-licensed, packable) together with `SplitImageJoiner`.
 
 | Type | Role |
 |------|------|

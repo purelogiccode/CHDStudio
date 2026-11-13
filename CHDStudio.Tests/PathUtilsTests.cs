@@ -609,4 +609,66 @@ public class PathUtilsTests
     }
 
     #endregion
+
+    #region Tool executability
+
+    [Fact]
+    public void TryEnsureExecutable_MissingFileReturnsFalse()
+    {
+        // Discovery uses the result to skip to the next candidate instead of returning a path that
+        // Process.Start cannot run.
+        var missing = Path.Combine(Path.GetTempPath(), $"missing_tool_{Guid.NewGuid():N}");
+        Assert.False(PathUtils.TryEnsureExecutable(missing));
+    }
+
+    [Fact]
+    public void TryEnsureExecutable_AddsExecuteBitsWhenTheyWereDropped()
+    {
+        // Some archive managers extract the release zip without Unix modes, which leaves the
+        // bundled 7zz at 0644 and makes Process.Start fail with "Permission denied".
+        var tool = Path.Combine(Path.GetTempPath(), $"tool_{Guid.NewGuid():N}");
+        File.WriteAllText(tool, "#!/bin/sh\nexit 0\n");
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(tool, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                Assert.Equal(0, (int)(File.GetUnixFileMode(tool) & UnixFileMode.UserExecute));
+            }
+
+            Assert.True(PathUtils.TryEnsureExecutable(tool));
+
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.NotEqual(
+                    0,
+                    (int)(
+                        File.GetUnixFileMode(tool)
+                        & (
+                            UnixFileMode.UserExecute
+                            | UnixFileMode.GroupExecute
+                            | UnixFileMode.OtherExecute
+                        )
+                    )
+                );
+            }
+        }
+        finally
+        {
+            Cleanup(null, tool);
+        }
+    }
+
+    [Fact]
+    public void OutputDirectoryUnavailableExceptionNamesTheFolderAndReason()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "protected-output");
+        var exception = new OutputDirectoryUnavailableException(directory, "access was denied");
+
+        Assert.Contains(directory, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("access was denied", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("output folder", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
 }

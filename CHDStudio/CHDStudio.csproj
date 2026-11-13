@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <!-- net10.0-windows adds the Windows-only NAudio Media Foundation / ACM MP3 decoders on
+        <!-- net11.0-windows adds the Windows-only NAudio Media Foundation / ACM MP3 decoders on
              Windows; the neutral TFM (Linux, macOS) uses ffmpeg instead. -->
-        <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+        <TargetFrameworks>net11.0;net11.0-windows</TargetFrameworks>
+        <LangVersion>15.0</LangVersion>
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -32,13 +33,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Avalonia" Version="12.1.5" />
-        <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
-        <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
-        <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
+        <PackageReference Include="Avalonia" Version="12.1.6" />
+        <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+        <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
         <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
         <PackageReference Include="CHDSharp" Version="1.6.3" />
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.322">
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.339">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -49,22 +50,26 @@
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-        <PackageReference Include="SharpCompress" Version="0.50.8" />
+        <PackageReference Include="SharpCompress" Version="0.50.9" />
         <PackageReference Include="VideoGameFileSystemParser" Version="1.4.0" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <ItemGroup Condition="'$(TargetFramework)' == 'net11.0-windows'">
         <None Update="7za.exe">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="7za_arm64.exe">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="chdman.exe">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="chdman_arm64.exe">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <PackageReference Include="NAudio" Version="3.3.0" />
     </ItemGroup>
@@ -75,30 +80,36 @@
         <None Update="tools\7zz_linux_x64">
             <Link>7zz</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="tools\7-Zip-License.txt">
             <Link>7-Zip-License.txt</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
     </ItemGroup>
     <ItemGroup Condition="'$(BundledToolRid)' == 'linux-arm64'">
         <None Update="tools\7zz_linux_arm64">
             <Link>7zz</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="tools\7-Zip-License.txt">
             <Link>7-Zip-License.txt</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
     </ItemGroup>
     <ItemGroup Condition="'$(BundledToolRid)' == 'osx-x64' Or '$(BundledToolRid)' == 'osx-arm64'">
         <None Update="tools\7zz_osx">
             <Link>7zz</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
         <None Update="tools\7-Zip-License.txt">
             <Link>7-Zip-License.txt</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </None>
     </ItemGroup>
 

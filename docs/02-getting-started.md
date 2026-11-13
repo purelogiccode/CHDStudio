@@ -9,7 +9,7 @@ nav_order: 3
 
 ### Runtime (end users)
 - **OS**: Windows 10 / 11, Linux and macOS (x64 or ARM64); release zips are published for `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64`
-- **Runtime**: [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows; the .NET 10.0 runtime on Linux and macOS
+- **Runtime**: [.NET 11.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) on Windows; the .NET 11.0 runtime on Linux and macOS
 - **Bundled executables** (shipped with the app, must stay next to `CHDStudio.exe`):
   - Windows: `chdman.exe` / `chdman_arm64.exe` (0.289) — MAME CHD tool (primary encoder and extraction fallback); `7za.exe` / `7za_arm64.exe` — 7-Zip fallback extractor
   - Linux/macOS: `7zz` (official 7-Zip 26.03 console build, copied from `tools/` at publish time) — 7-Zip fallback extractor
@@ -30,7 +30,7 @@ nav_order: 3
 3. **Important** (Windows): keep all `.exe` files (including ARM64 variants) in the same directory as `CHDStudio.exe` — tool discovery probes the app's base directory first, then `PATH` (`MainWindow.axaml.cs`). On Linux and macOS, `7zz` ships next to the app and other tools are discovered on `PATH`; the built-in CHDSharp encoder needs nothing on disk.
 4. Launch `CHDStudio.exe` on Windows or `CHDStudio` on Linux/macOS.
 
-Every release zip is named `release_<version>_<rid>.zip` and contains the framework-dependent single-file app, its native libraries, the matching `chdman`/7-Zip tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. The .NET 10 runtime is not embedded, so install the runtime listed above. Extract the **whole** archive into one folder: copying only `CHDStudio.exe` leaves the native rendering libraries behind and the app will refuse to start with a missing-library message.
+Every release zip is named `release_<version>_<rid>.zip` and contains the framework-dependent single-file app, its native libraries, the matching `chdman`/7-Zip tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. The .NET 11 runtime is not embedded, so install the runtime listed above. Extract the **whole** archive into one folder: copying only `CHDStudio.exe` leaves the native rendering libraries behind and the app will refuse to start with a missing-library message.
 
 ---
 
@@ -55,13 +55,13 @@ The solution contains seven projects:
 
 | Project | Kind | Target framework |
 |---------|------|------------------|
-| `CHDStudio` | Avalonia application (WinExe) | `net10.0;net10.0-windows` |
-| `CHDStudio.Tests` | xUnit test suite | `net10.0-windows` |
-| `MDSSharp` | class library (Alcohol 120% .mds/.mdf parsing) | `net8.0;net9.0;net10.0` |
-| `CCDSharp` | class library (CloneCD parsing) | `net8.0;net9.0;net10.0` |
-| `CSOSharp` | class library (CSO decompression) | `net8.0;net9.0;net10.0` |
-| `PBPSharp` | class library (PBP/SFO parsing) | `net8.0;net9.0;net10.0` |
-| `ISZSharp` | class library (ISZ decompression) | `net8.0;net9.0;net10.0` |
+| `CHDStudio` | Avalonia application (WinExe) | `net11.0;net11.0-windows` |
+| `CHDStudio.Tests` | xUnit test suite | `net11.0-windows` |
+| `MDSSharp` | class library (Alcohol 120% .mds/.mdf parsing) | `net8.0;net9.0;net10.0;net11.0` |
+| `CCDSharp` | class library (CloneCD parsing) | `net8.0;net9.0;net10.0;net11.0` |
+| `CSOSharp` | class library (CSO decompression) | `net8.0;net9.0;net10.0;net11.0` |
+| `PBPSharp` | class library (PBP/SFO parsing) | `net8.0;net9.0;net10.0;net11.0` |
+| `ISZSharp` | class library (ISZ decompression) | `net8.0;net9.0;net10.0;net11.0` |
 
 > **Note**: on Windows, `chdman.exe` and `7za.exe` are copied to the output directory by the build (`CHDStudio.csproj`); on Linux and macOS the matching `tools/7zz*` binary (official 7-Zip 26.03) is copied as `7zz`, while a `chdman` on `PATH` is only used for extraction fallback and never for encoding. The libraries are referenced as project references, not NuGet packages, except `CHDSharp` (NuGet 1.6.3) and other packages listed below.
 

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Security;
@@ -25,6 +26,7 @@ internal class ArchiveService
     private static readonly ILogger Logger = Log.ForContext<ArchiveService>();
     private readonly bool _isSevenZipAvailable;
     private readonly string _sevenZipExePath;
+    private readonly string _sevenZipName;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ArchiveService" /> class.
@@ -35,6 +37,9 @@ internal class ArchiveService
     {
         _sevenZipExePath = sevenZipExePath;
         _isSevenZipAvailable = isSevenZipAvailable;
+        _sevenZipName = Path.GetFileName(sevenZipExePath) is { Length: > 0 } name
+            ? name
+            : "7za.exe";
     }
 
     /// <summary>
@@ -584,7 +589,7 @@ internal class ArchiveService
         {
             return (
                 false,
-                "the bundled 7za.exe is missing, so the split archive cannot be extracted. Extract the set manually and add the extracted image."
+                $"the bundled {_sevenZipName} is missing or not executable, so the split archive cannot be extracted. Extract the set manually and add the extracted image."
             );
         }
 
@@ -659,7 +664,7 @@ internal class ArchiveService
         catch (Exception ex) when (_isSevenZipAvailable && ex is not OperationCanceledException)
         {
             onLog(
-                $"Built-in zip extractor failed for {archiveFileName} ({ex.Message}). Falling back to 7za.exe..."
+                $"Built-in zip extractor failed for {archiveFileName} ({ex.Message}). Falling back to {_sevenZipName}..."
             );
             progress?.Report(new ArchiveProgress(0, 0, 0, 0));
             await ExtractWith7ZaAsync(archivePath, outputDirectory, onLog, token)
@@ -857,7 +862,7 @@ internal class ArchiveService
             if (_isSevenZipAvailable)
             {
                 onLog(
-                    $"SharpCompress extraction failed ({ex.Message}). Trying 7za.exe fallback..."
+                    $"SharpCompress extraction failed ({ex.Message}). Trying {_sevenZipName} fallback..."
                 );
                 await ExtractWith7ZaAsync(archivePath, outputDirectory, onLog, token)
                     .ConfigureAwait(false);
@@ -883,7 +888,7 @@ internal class ArchiveService
         CancellationToken token
     )
     {
-        onLog($"Extracting with 7za.exe: {Path.GetFileName(archivePath)}");
+        onLog($"Extracting with {_sevenZipName}: {Path.GetFileName(archivePath)}");
 
         using var process = new Process();
         var outputBuilder = new StringBuilder();
@@ -926,7 +931,25 @@ internal class ArchiveService
                     }
                 }
             };
-            process.Start();
+            try
+            {
+                process.Start();
+            }
+            catch (Win32Exception ex)
+            {
+                // The common Unix failure is a bundled tool whose extractor dropped the execute
+                // bit; without this translation the user only sees "Permission denied" with no
+                // hint that one chmod fixes it.
+                var hint =
+                    !OperatingSystem.IsWindows() && ex.NativeErrorCode == 13
+                        ? $" The file is not executable; run 'chmod +x \"{_sevenZipExePath}\"' or install 7-Zip."
+                        : string.Empty;
+                throw new InvalidOperationException(
+                    $"Could not start '{_sevenZipExePath}'.{hint} ({ex.Message})",
+                    ex
+                );
+            }
+
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             await process.WaitForExitAsync(token).ConfigureAwait(false);
@@ -946,16 +969,16 @@ internal class ArchiveService
                 )
                 {
                     throw new InvalidDataException(
-                        $"7za.exe: archive is invalid or corrupt ({Path.GetFileName(archivePath)}). Output: {outputText}"
+                        $"{_sevenZipName}: archive is invalid or corrupt ({Path.GetFileName(archivePath)}). Output: {outputText}"
                     );
                 }
 
                 throw new InvalidOperationException(
-                    $"7za.exe extraction failed with exit code {process.ExitCode}. Output: {outputText}"
+                    $"{_sevenZipName} extraction failed with exit code {process.ExitCode}. Output: {outputText}"
                 );
             }
 
-            onLog($"Successfully extracted {Path.GetFileName(archivePath)} with 7za.exe");
+            onLog($"Successfully extracted {Path.GetFileName(archivePath)} with {_sevenZipName}");
         }
         catch (OperationCanceledException)
         {

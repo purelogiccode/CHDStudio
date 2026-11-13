@@ -401,8 +401,10 @@ internal partial class MainWindow : Window, IDisposable
     ///     Returns the first candidate name that exists in <paramref name="baseDirectory" />, together
     ///     with its name and availability. The candidate list is ordered best-first (the OS-native
     ///     build on ARM64 machines), so a partial or mixed deployment still finds an executable the
-    ///     machine can run. When nothing exists, the preferred name is returned so missing-dependency
-    ///     messages point at the file that should be there.
+    ///     machine can run. On Unix the execute bit is repaired when an extractor dropped it, and a
+    ///     tool that still cannot be made executable is skipped. When nothing usable exists, the
+    ///     preferred name is returned so missing-dependency messages point at the file that should be
+    ///     there.
     /// </summary>
     private static (string Path, string Name, bool Available) ResolveToolExecutable(
         string baseDirectory,
@@ -412,7 +414,8 @@ internal partial class MainWindow : Window, IDisposable
         foreach (var name in candidateNames)
         {
             var path = Path.Combine(baseDirectory, name);
-            if (File.Exists(path)) return (path, name, true);
+            if (File.Exists(path) && PathUtils.TryEnsureExecutable(path))
+                return (path, name, true);
         }
 
         // On Linux and macOS the tools are normally installed system-wide (MAME's chdman,
@@ -420,7 +423,7 @@ internal partial class MainWindow : Window, IDisposable
         foreach (var name in candidateNames)
         {
             var path = FindOnPath(name);
-            if (path != null) return (path, name, true);
+            if (path != null && PathUtils.TryEnsureExecutable(path)) return (path, name, true);
         }
 
         var preferred = candidateNames[0];
@@ -5990,7 +5993,9 @@ internal partial class MainWindow : Window, IDisposable
             : Path.Join(outputFolder, relativePath);
         if (!PathUtils.TryCreateDirectory(targetDir, out var targetDirError))
         {
-            LogError($" Output folder is not available: {targetDir} ({targetDirError}).");
+            LogError(
+                $" Output folder is not available: {targetDir} ({targetDirError}). Choose another output folder or check that it is writable."
+            );
             return false;
         }
 
@@ -6160,6 +6165,12 @@ internal partial class MainWindow : Window, IDisposable
                         {
                             throw;
                         }
+                        catch (OutputDirectoryUnavailableException)
+                        {
+                            // A folder the extraction could not create says nothing about the CHD,
+                            // so keep the actionable filesystem message free of header noise.
+                            throw;
+                        }
                         catch (Exception ex)
                         {
                             // Attach the CHD header fields that identify the image while it is
@@ -6210,22 +6221,37 @@ internal partial class MainWindow : Window, IDisposable
                 // CHDSharp failure is reported only when chdman cannot extract it either - a
                 // successful fallback means the extraction worked and is not an app bug. The
                 // reason still goes to the user's log at informational level.
+                var outputUnavailable = ex is OutputDirectoryUnavailableException;
                 var reason = GetChdExtractionErrorMessage(ex.Message);
-                LogMessage(
-                    $" Built-in reader could not extract '{Path.GetFileName(chdFile)}': {reason} Trying chdman..."
-                );
 
-                if (
-                    reason.Contains("Chderrinvaliddata", StringComparison.OrdinalIgnoreCase)
-                    || reason.Contains(
-                        "CD track metadata is missing or damaged",
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
+                if (outputUnavailable)
+                {
+                    // The built-in reader never reached the image: the destination could not be
+                    // prepared (permissions, read-only volume, Controlled folder access). chdman
+                    // writes directly into the target folder, so it may still succeed where a
+                    // staging subdirectory could not be created.
+                    LogWarning(
+                        $" Could not create the extraction folder for '{Path.GetFileName(chdFile)}': {ex.Message} Trying chdman..."
+                    );
+                }
+                else
                 {
                     LogMessage(
-                        "       This CHD is damaged: its CD track metadata cannot be parsed. Re-create it from the original cue/bin; a valid CHD from the same source extracts normally."
+                        $" Built-in reader could not extract '{Path.GetFileName(chdFile)}': {reason} Trying chdman..."
                     );
+
+                    if (
+                        reason.Contains("Chderrinvaliddata", StringComparison.OrdinalIgnoreCase)
+                        || reason.Contains(
+                            "CD track metadata is missing or damaged",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        LogMessage(
+                            "       This CHD is damaged: its CD track metadata cannot be parsed. Re-create it from the original cue/bin; a valid CHD from the same source extracts normally."
+                        );
+                    }
                 }
 
                 try
@@ -6244,14 +6270,16 @@ internal partial class MainWindow : Window, IDisposable
                     if (chdmanExtracted)
                     {
                         LogMessage(
-                            $" Extracted '{Path.GetFileName(chdFile)}' using chdman fallback (the built-in reader could not decode this CHD)."
+                            outputUnavailable
+                                ? $" Extracted '{Path.GetFileName(chdFile)}' using chdman fallback (the built-in reader could not create its staging folder)."
+                                : $" Extracted '{Path.GetFileName(chdFile)}' using chdman fallback (the built-in reader could not decode this CHD)."
                         );
                         success = true;
                     }
-                    else if (IsChdWriteFailure(reason))
+                    else if (outputUnavailable || IsChdWriteFailure(reason))
                     {
-                        // The built-in reader reached the data but could not write it (and
-                        // chdman could not either). That is a full, disconnected, read-only or
+                        // The built-in reader could not prepare or write the output (and chdman
+                        // could not either). That is a full, disconnected, read-only or
                         // access-denied output volume, not an app defect, so it must not be
                         // filed as a bug report.
                         LogWarning(
@@ -6373,9 +6401,7 @@ internal partial class MainWindow : Window, IDisposable
         );
         if (!PathUtils.TryCreateDirectory(tempExtractDir, out var tempExtractDirError))
         {
-            throw new IOException(
-                $"the output folder is not available ({tempExtractDirError})"
-            );
+            throw new OutputDirectoryUnavailableException(targetDir, tempExtractDirError);
         }
 
         var allMoved = false;
@@ -6428,8 +6454,9 @@ internal partial class MainWindow : Window, IDisposable
                 destinationDir = PathUtils.ReserveFreeSubdirectory(targetDir, baseFileName);
                 if (!PathUtils.TryCreateDirectory(destinationDir, out var destinationDirError))
                 {
-                    throw new IOException(
-                        $"the output folder is not available ({destinationDirError})"
+                    throw new OutputDirectoryUnavailableException(
+                        destinationDir,
+                        destinationDirError
                     );
                 }
 

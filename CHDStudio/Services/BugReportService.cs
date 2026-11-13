@@ -1,7 +1,4 @@
 using System.Globalization;
-// ReSharper disable once RedundantUsingDirective
-using System.Net.Http;
-using System.Net.Http.Json;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -170,6 +167,10 @@ internal class BugReportService
         // read-only or access-denied). CHDSharp reports this as Chderrwriteerror; the app
         // classifies it as an environment condition.
         "Could not write the extracted files",
+        // The staging directory for a CHD extraction could not be created in the chosen output
+        // folder (permissions, read-only volume, Controlled folder access). The message names
+        // the folder and the remedy, so it is an environment condition, not an app defect.
+        "Could not create the extraction folder",
         // Explicit permission guidance for a conversion whose output folder rejects writes.
         "failed due to a permission error",
         // Direct-stream extraction over a network share can hit a transient SMB hiccup
