@@ -8,7 +8,7 @@ nav_order: 3
 ## 2.1 Requirements
 
 ### Runtime (end users)
-- **OS**: Windows 10 / 11, Linux and macOS (x64 or ARM64); release zips are published for `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64`
+- **OS**: Windows 10 / 11, Linux and macOS (x64 or ARM64); release bundles are published for `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64`
 - **Runtime**: [.NET 11.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) on Windows; the .NET 11.0 runtime on Linux and macOS
 - **Bundled executables** (shipped with the app, must stay next to `CHDStudio.exe`):
   - Windows: `chdman.exe` / `chdman_arm64.exe` (0.289) — MAME CHD tool (primary encoder and extraction fallback); `7za.exe` / `7za_arm64.exe` — 7-Zip fallback extractor
@@ -17,7 +17,7 @@ nav_order: 3
 - **Nothing else to install** — CSO, ISZ, ECM, Alcohol `.mds`/`.mdf` and split volume sets are all handled inside the application, so x64 and ARM64 get the same feature set.
 
 ### Build (developers)
-- .NET SDK **10.0.x** (`global.json` pins `10.0.0` with `rollForward: latestMajor`)
+- .NET SDK **11.0.x** (`global.json` pins `11.0.0` with `rollForward: latestMajor`)
 - No Windows SDK required — Avalonia 12.1 and the Windows-only NAudio package are restored via NuGet, and the project sets `EnableWindowsTargeting` for the Windows TFM
 - No other global tools required
 
@@ -25,12 +25,12 @@ nav_order: 3
 
 ## 2.2 Installation (End Users)
 
-1. Download the latest binary from the [Releases page](https://github.com/purelogiccode/CHDStudio/releases), picking the zip for your platform and architecture (`win-x64`/`win-arm64`, `linux-x64`/`linux-arm64`, `osx-x64`/`osx-arm64`).
-2. Extract the contents to a permanent folder (do **not** run from a temp/Downloads folder if you want update behavior to be predictable).
+1. Download the latest bundle from the [Releases page](https://github.com/purelogiccode/CHDStudio/releases), picking your platform and architecture: the `.zip` for Windows (`win-x64`/`win-arm64`), the `.tar.gz` for Linux (`linux-x64`/`linux-arm64`), or the `.dmg` for macOS (`osx-x64`/`osx-arm64`).
+2. Extract the archive (Windows/Linux) or mount the disk image (macOS) and move the contents to a permanent folder (do **not** run from a temp/Downloads folder if you want update behavior to be predictable).
 3. **Important** (Windows): keep all `.exe` files (including ARM64 variants) in the same directory as `CHDStudio.exe` — tool discovery probes the app's base directory first, then `PATH` (`MainWindow.axaml.cs`). On Linux and macOS, `7zz` ships next to the app and other tools are discovered on `PATH`; the built-in CHDSharp encoder needs nothing on disk.
 4. Launch `CHDStudio.exe` on Windows or `CHDStudio` on Linux/macOS.
 
-Every release zip is named `release_<version>_<rid>.zip` and contains the framework-dependent single-file app, its native libraries, the matching `chdman`/7-Zip tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. The .NET 11 runtime is not embedded, so install the runtime listed above. Extract the **whole** archive into one folder: copying only `CHDStudio.exe` leaves the native rendering libraries behind and the app will refuse to start with a missing-library message.
+Release bundles are named `release_<version>_<rid>.zip` (Windows), `release_<version>_<rid>.tar.gz` (Linux) and `release_<version>_<rid>.dmg` (macOS). They contain the framework-dependent single-file app, its native libraries, the matching `chdman`/7-Zip tools, `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`. The Linux and macOS bundles place these files in a `CHDStudio/` folder; the Windows zip is flat. The .NET 11 runtime is not embedded, so install the runtime listed above. Keep the **whole** bundle together in one folder: copying only `CHDStudio.exe` leaves the native rendering libraries behind and the app will refuse to start with a missing-library message.
 
 ---
 
@@ -70,15 +70,15 @@ The solution contains seven projects:
 | Package | Version | Purpose |
 |---------|---------|---------|
 | CHDSharp | 1.6.3 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
-| Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.1.x | Cross-platform Fluent Design UI framework and controls |
-| SharpCompress | 0.50.x | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
+| Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.1.6 | Cross-platform Fluent Design UI framework and controls |
+| SharpCompress | 0.50.9 | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
 | NAudio | 3.3.0 | MP3 decoding via Media Foundation |
 | Serilog | 4.4.0 | Structured logging |
 | Serilog.Sinks.File | 7.0.0 | Rolling file logs |
 | Serilog.Sinks.Debug | 3.0.0 | Debugger sink |
 | SharpZipLib | 1.4.2 | Reference-compatible inflater for PBP PSAR blocks (via PBPSharp) |
-| Meziantou.Analyzer | 3.0.x | Roslyn analyzers (build-time only) |
-| Roslynator.Analyzers | 5.0.0 | Roslyn analyzers (build-time only) |
+| Meziantou.Analyzer | 3.0.339 | Roslyn analyzers (build-time only) |
+| Roslynator.Analyzers | 5.0.1 | Roslyn analyzers (build-time only) |
 
 ---
 

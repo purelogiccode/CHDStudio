@@ -158,7 +158,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 
 ## 💻 Requirements
 
-*   **Operating System**: Windows 10 / 11 (x64 or ARM64), Linux (x64 or ARM64) and macOS (Intel or Apple silicon); release zips are published for all six runtime identifiers
+*   **Operating System**: Windows 10 / 11 (x64 or ARM64), Linux (x64 or ARM64) and macOS (Intel or Apple silicon); release bundles are published for all six runtime identifiers
 *   **Runtime**: [.NET 11.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) on Windows; the .NET 11.0 runtime on Linux and macOS
 *   **Bundled Dependencies**:
     *   `chdman.exe` / `chdman_arm64.exe` (MAME Project — primary encoder on Windows, extraction fallback)
@@ -166,14 +166,14 @@ Generated cue sheets reference the disc image where it already lies rather than 
 *   **Built-in Encoder**: [CHDSharp](https://www.nuget.org/packages/CHDSharp) (CHDSharpLib 1.6.3) runs in-process on every platform — the automatic fallback behind chdman on Windows and the primary encoder on Linux/macOS.
 *   **No Other Dependencies**: every format above is handled inside the application. There is nothing else to download, and both x64 and ARM64 get the same feature set.
 *   **Library Dependencies**:
-    * [Avalonia](https://avaloniaui.net/) (v12.1.5) - Cross-platform Fluent Design UI framework and controls
+    * [Avalonia](https://avaloniaui.net/) (v12.1.6) - Cross-platform Fluent Design UI framework and controls
     * [CHDSharp](https://www.nuget.org/packages/CHDSharp) (v1.6.3) - Pure C# CHD reading, verification, extraction, and in-process creation (chdman byte-identical output)
     * [CSOSharp](https://www.nuget.org/packages/CSOSharp) (v1.0.2) - Pure C# CSO/CISO decompression (deflate + LZ4)
     * [PBPSharp](https://www.nuget.org/packages/PBPSharp) (v1.1.8) - Pure C# PBP extraction and SFO parsing
     * [CCDSharp](https://www.nuget.org/packages/CCDSharp) (v1.0.3) — Pure C# CloneCD (.ccd/.img/.sub) parsing and conversion
     * [MDSSharp](https://www.nuget.org/packages/MDSSharp) (v1.2.3) — Pure C# Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing, v2 decryption and cue preparation
     * [ISZSharp](https://www.nuget.org/packages/ISZSharp) (v1.0.3) — Pure C# UltraISO ISZ decompression
-    * [SharpCompress](https://github.com/adamhathcock/sharpcompress) (v0.50.8) - Archive extraction, and bzip2 decompression for ISZ images
+    * [SharpCompress](https://github.com/adamhathcock/sharpcompress) (v0.50.9) - Archive extraction, and bzip2 decompression for ISZ images
     * [NAudio](https://github.com/naudio/NAudio) (v3.3.0) - MP3 audio track decoding on Windows (Media Foundation); Linux and macOS use `ffmpeg` from `PATH`
     * [Serilog](https://serilog.net/) (v4.4.0) — Structured diagnostic logging
 
@@ -181,17 +181,17 @@ Generated cue sheets reference the disc image where it already lies rather than 
 
 ## 📥 Installation
 
-1.  Download the latest binary from the [Releases](https://github.com/purelogiccode/CHDStudio/releases) page, picking the zip for your platform: `win-x64` or `win-arm64` on Windows, `linux-x64` or `linux-arm64` on Linux, `osx-x64` or `osx-arm64` on macOS.
-2.  Extract the contents to a permanent folder.
-3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app; nothing else is required because the CHDSharp encoder is built in.
+1.  Download the latest bundle from the [Releases](https://github.com/purelogiccode/CHDStudio/releases) page: the `.zip` for Windows (`win-x64` or `win-arm64`), the `.tar.gz` for Linux (`linux-x64` or `linux-arm64`), or the `.dmg` for macOS (`osx-x64` or `osx-arm64`).
+2.  Extract the archive or mount the disk image and move the contents to a permanent folder.
+3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app inside the `CHDStudio` folder; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release zip is named `release_<version>_<rid>.zip` (for example `release_3.13.5_win-x64.zip`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 11 runtime is **not** embedded in the executable.
+Each release bundle is named `release_<version>_<rid>.<ext>` (for example `release_3.14.0_win-x64.zip`, `release_3.14.0_linux-x64.tar.gz` or `release_3.14.0_osx-arm64.dmg`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 11 runtime is **not** embedded in the executable.
 
-Every release zip is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
+Every release bundle is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 
 ```sh
-gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio
+gh attestation verify release_<version>_<rid>.<ext> --repo purelogiccode/CHDStudio
 ```
 
 ---

@@ -27,12 +27,12 @@ for the full scope, response timeline and safe-harbor terms.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `CI` | push/PR to `master`, manual | Restores, builds, runs the 1153 unit tests with coverage, builds the neutral TFM on Linux and macOS, and verifies the version script |
+| `CI` | push/PR to `master`, manual | Restores, builds, runs the 1,275 unit tests with coverage, builds the neutral TFM on Linux and macOS, and verifies the version script |
 | `CodeQL` | push/PR to `master`, weekly, manual | CodeQL `security-and-quality` analysis for C# and the GitHub Actions workflows |
 | `Dependency Review` | pull request to `master` | Fails a PR that adds a high or critical vulnerable dependency |
 | `Scorecard` | push to `master`, weekly, branch-protection changes, manual | OpenSSF Scorecard supply-chain checks; publishes results and uploads SARIF |
 | `Docs` | push/PR to `master`, manual | Builds the Pages site, verifies `WhatsNew.md` is in sync, deploys Pages and syncs the wiki |
-| `Release` | `release_*` tag, manual with tag | Validates the version, runs the full test suite, publishes all six RIDs, attests each zip, publishes the GitHub release and verifies all six assets |
+| `Release` | `release_*` tag, manual with tag | Validates the version, runs the full test suite, publishes all six RIDs, packages the native `.zip`/`.tar.gz`/`.dmg` bundles, attests each one, publishes the GitHub release and verifies all six assets |
 
 GitHub Code Quality runs a separate dynamic `CodeQL - Code Quality` analysis for
 C# and the Node helper scripts.
@@ -60,11 +60,11 @@ C# and the Node helper scripts.
 
 ## 15.4 Release provenance
 
-Every release zip is built by the `Release` workflow and receives a signed
+Every release bundle is built by the `Release` workflow and receives a signed
 build-provenance attestation. Verify a downloaded asset with the GitHub CLI:
 
 ```sh
-gh attestation verify release_<version>_<rid>.zip --repo purelogiccode/CHDStudio
+gh attestation verify release_<version>_<rid>.<ext> --repo purelogiccode/CHDStudio
 ```
 
 The local `CHDStudio/bin/Release/` archive is built separately and is not
@@ -72,8 +72,8 @@ byte-identical to CI's assets, so verify the downloaded GitHub release asset,
 not the local archive copy.
 
 The release workflow also checks that `release_<version>_win-x64.zip`,
-`win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64` are all
-attached before the job finishes.
+`win-arm64`, `linux-x64.tar.gz`, `linux-arm64.tar.gz`, `osx-x64.dmg` and
+`osx-arm64.dmg` are all attached before the job finishes.
 
 ## 15.5 Running the checks locally
 
@@ -86,7 +86,7 @@ node scripts/ci/version.mjs
 jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
 ```
 
-The full suite currently passes **1,299 tests** (1,270 unit tests plus 29
+The full suite currently passes **1,304 tests** (1,275 unit tests plus 29
 integration tests; the integration tests need the maintainer's local sample
 folders). CI runs the unit tests only with `--filter "Category!=Integration"`.
 InspectCode reports
@@ -95,9 +95,9 @@ release blockers.
 
 ## 15.6 Release archive
 
-Local release zips are archived in `CHDStudio/bin/Release/`. That folder is
-append-only: copy the new six zips in and never delete older files. The zips
-contain `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the framework-dependent
-single-file application, the platform native libraries and only that RID's
-tools. The .NET runtime is never embedded. See
+Local release bundles are archived in `CHDStudio/bin/Release/`. That folder is
+append-only: copy the new six bundles in and never delete older files. The
+bundles contain `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the
+framework-dependent single-file application, the platform native libraries and
+only that RID's tools. The .NET runtime is never embedded. See
 [Release & Deployment](14-release-and-deployment.md) for the full routine.

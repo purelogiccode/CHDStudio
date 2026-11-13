@@ -1,14 +1,17 @@
-# Builds the release zips and attaches them to a GitHub release.
+# Builds the platform release bundles and attaches them to a GitHub release.
 #
 # Cut a release by pushing a tag that matches the version in
 # CHDStudio/CHDStudio.csproj, e.g.:
-#   git tag release_3.9.0 && git push origin release_3.9.0
+#   git tag release_3.14.0 && git push origin release_3.14.0
 #
-# Artifacts: one release_<version>_<rid>.zip per runtime identifier, for
-# Windows (win-x64, win-arm64), Linux (linux-x64, linux-arm64) and macOS
-# (osx-x64, osx-arm64). The app is framework-dependent (users install the
-# .NET 11 Desktop Runtime on Windows, the .NET 11 runtime on Linux/macOS)
-# and published as a single file; see scripts/ci/package-release.ps1.
+# Artifacts:
+#   * release_<version>_win-<arch>.zip   (Windows)
+#   * release_<version>_linux-<arch>.tar.gz (Linux, with a CHDStudio/ folder)
+#   * release_<version>_osx-<arch>.dmg   (macOS, with a CHDStudio/ folder)
+# for win-x64, win-arm64, linux-x64, linux-arm64, osx-x64 and osx-arm64.
+# The app is framework-dependent (users install the .NET 11 Desktop Runtime on
+# Windows, the .NET 11 runtime on Linux/macOS) and published as a single file;
+# see scripts/ci/package-release.ps1.
 name: Release
 
 on:
@@ -17,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, e.g. release_3.9.0
+        description: Existing tag to release, e.g. release_3.14.0
         required: true
         type: string
 
@@ -91,7 +94,7 @@ jobs:
   package:
     name: Package ${{ matrix.rid }}
     needs: [meta, test]
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -103,16 +106,29 @@ jobs:
         include:
           - rid: win-x64
             tfm: net11.0-windows
+            os: windows-latest
+            ext: .zip
           - rid: win-arm64
             tfm: net11.0-windows
+            os: windows-latest
+            ext: .zip
           - rid: linux-x64
             tfm: net11.0
+            os: ubuntu-latest
+            ext: .tar.gz
           - rid: linux-arm64
             tfm: net11.0
+            os: ubuntu-latest
+            ext: .tar.gz
           - rid: osx-x64
             tfm: net11.0
+            os: macos-latest
+            ext: .dmg
           - rid: osx-arm64
             tfm: net11.0
+            os: macos-latest
+            ext: .dmg
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -134,7 +150,7 @@ jobs:
           -p:PublishSingleFile=true
           -o publish/${{ matrix.rid }}
 
-      - name: Build release zip
+      - name: Build release bundle
         shell: pwsh
         run: >
           ./scripts/ci/package-release.ps1
@@ -143,37 +159,60 @@ jobs:
           -PublishDir 'publish/${{ matrix.rid }}'
           -OutputDir 'dist'
 
-      - name: Verify non-Windows zip execute bits
-        if: startsWith(matrix.rid, 'linux-') || startsWith(matrix.rid, 'osx-')
+      - name: Verify Windows bundle
+        if: startsWith(matrix.rid, 'win-')
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zipPath = "dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip"
-          $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
-          try {
-              foreach ($name in @('CHDStudio', '7zz')) {
-                  $entry = $zip.GetEntry($name)
-                  if (-not $entry) { throw "Release zip is missing $name" }
-                  $mode = ($entry.ExternalAttributes -shr 16) -band 0xFFFF
-                  if ($mode -ne 0x81ED) {
-                      throw "$name has Unix mode 0$([Convert]::ToString($mode, 8)), expected 0100755"
-                  }
-              }
+          Expand-Archive -LiteralPath "dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip" -DestinationPath verify
+          $required = @('CHDStudio.exe', 'LICENSE.txt', 'ReadMe.md', 'WhatsNew.md', 'chdman.exe', '7za.exe')
+          if ('${{ matrix.rid }}' -eq 'win-arm64') {
+              $required = @('CHDStudio.exe', 'LICENSE.txt', 'ReadMe.md', 'WhatsNew.md', 'chdman_arm64.exe', '7za_arm64.exe')
           }
-          finally {
-              $zip.Dispose()
+          foreach ($name in $required) {
+              if (-not (Test-Path -LiteralPath "verify/$name")) { throw "Release bundle is missing $name" }
           }
 
-      - name: Attest release zip provenance
+      - name: Verify Linux bundle
+        if: startsWith(matrix.rid, 'linux-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.tar.gz"
+          mkdir -p verify
+          tar -xzf "$asset" -C verify
+          for name in CHDStudio 7zz; do
+            test -x "verify/CHDStudio/$name"
+          done
+          for name in LICENSE.txt ReadMe.md WhatsNew.md 7-Zip-License.txt libHarfBuzzSharp.so libSkiaSharp.so; do
+            test -f "verify/CHDStudio/$name"
+          done
+
+      - name: Verify macOS bundle
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.dmg"
+          mount_point="$(mktemp -d)"
+          trap 'hdiutil detach "$mount_point" -quiet || true' EXIT
+          hdiutil attach "$asset" -nobrowse -readonly -mountpoint "$mount_point" -quiet
+          for name in CHDStudio 7zz; do
+            test -x "$mount_point/CHDStudio/$name"
+          done
+          for name in LICENSE.txt ReadMe.md WhatsNew.md 7-Zip-License.txt libAvaloniaNative.dylib libHarfBuzzSharp.dylib libSkiaSharp.dylib; do
+            test -f "$mount_point/CHDStudio/$name"
+          done
+
+      - name: Attest release bundle provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
-          subject-path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip
+          subject-path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}${{ matrix.ext }}
 
-      - name: Upload release zip
+      - name: Upload release bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-${{ matrix.rid }}
-          path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.zip
+          path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}${{ matrix.ext }}
           if-no-files-found: error
 
   publish:
@@ -202,6 +241,12 @@ jobs:
         run: |
           set -euo pipefail
           ls -l release
+          shopt -s nullglob
+          assets=(release/*.zip release/*.tar.gz release/*.dmg)
+          if [[ ${#assets[@]} -ne 6 ]]; then
+            echo "::error::Expected six release bundles, found ${#assets[@]}."
+            exit 1
+          fi
           prerelease=()
           if [[ "$VERSION" == *-* ]]; then
             prerelease=(--prerelease)
@@ -212,14 +257,14 @@ jobs:
               --title "$VERSION" \
               --notes-file release/release-notes.md \
               "${prerelease[@]}"
-            gh release upload "$TAG" release/*.zip --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
           else
             gh release create "$TAG" \
               --verify-tag \
               --title "$VERSION" \
               --notes-file release/release-notes.md \
               "${prerelease[@]}" \
-              release/*.zip
+              "${assets[@]}"
           fi
 
       - name: Verify all six release assets
@@ -229,11 +274,19 @@ jobs:
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
           set -euo pipefail
+          declare -A ext=(
+            [win-x64]=.zip
+            [win-arm64]=.zip
+            [linux-x64]=.tar.gz
+            [linux-arm64]=.tar.gz
+            [osx-x64]=.dmg
+            [osx-arm64]=.dmg
+          )
           for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
-            name="release_${VERSION}_${rid}.zip"
+            name="release_${VERSION}_${rid}${ext[$rid]}"
             if ! gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$name"; then
               echo "::error::Release $TAG is missing $name"
               exit 1
             fi
           done
-          echo "All six release zips are attached to $TAG."
+          echo "All six release bundles are attached to $TAG."

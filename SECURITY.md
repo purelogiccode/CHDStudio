@@ -42,7 +42,7 @@ Please include:
 
 In scope:
 
-- the CHD Studio desktop application and its installer/release zips;
+- the CHD Studio desktop application and its installer/release bundles;
 - the `PBPSharp`, `CSOSharp`, `CCDSharp`, `MDSSharp` and `ISZSharp` libraries;
 - the repository's build, test and release workflows.
 

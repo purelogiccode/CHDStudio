@@ -5,6 +5,31 @@ nav_order: 16
 
 # What's New
 
+## 3.14.0 (2026-11-13)
+
+### .NET 11 and current dependencies
+
+*   **The app and tests now target .NET 11.** `CHDStudio` builds for `net11.0` and `net11.0-windows`, the test suite for `net11.0-windows`, and the five libraries add `net11.0` to their existing `net8.0`/`net9.0`/`net10.0` targets. Users install the .NET 11 Desktop Runtime on Windows and the .NET 11 runtime on Linux/macOS; the app remains framework-dependent and single-file.
+*   **Dependencies refreshed.** Avalonia 12.1.6, SharpCompress 0.50.9, Meziantou.Analyzer 3.0.339 and Microsoft.NET.Test.Sdk 18.12.0. C# 15 is enabled through `LangVersion`. The CI and release workflows, documentation and package tables were updated to match.
+*   **Bundled tools stay outside the single-file executable.** The tool content files carry `ExcludeFromSingleFile` so the .NET 11 publish keeps `chdman`/`7za`/`7zz` next to the app instead of dropping them from the release bundle.
+
+### Platform-native release bundles
+
+*   **Linux releases are now `.tar.gz`.** `release_<version>_linux-x64.tar.gz` and `linux-arm64` contain a single `CHDStudio/` folder; the archive stores real Unix modes, so `CHDStudio` and `7zz` are executable immediately after extraction.
+*   **macOS releases are now `.dmg`.** `release_<version>_osx-x64.dmg` and `osx-arm64` mount a `CHD Studio <version>` volume containing the `CHDStudio/` folder, ready to drag to Applications or another permanent folder. The DMG is created with `hdiutil` on macOS.
+*   **Windows releases remain `.zip`.** `release_<version>_win-x64.zip` and `win-arm64` keep the flat layout. The release workflow now packages each RID on its native runner and verifies the contents (and execute bits) of all three formats.
+
+### Fixes from retrieved bug reports
+
+*   **Linux tool permission errors (#69847).** A bundled `7zz` whose extractor dropped the execute bit is repaired at startup (`chmod +x`), a tool that still cannot run is skipped in favour of a `PATH` candidate, and an unstartable tool now names its path and the remedy instead of surfacing a bare `Win32Exception`.
+*   **Extraction folder access denied (#69841, #69842, #69843).** An output folder that cannot be created is now reported as a folder/permission problem with the folder and the remedy, instead of appending CHD header fields and suggesting the CHD is corrupt. The condition is excluded from bug reports.
+*   **MDSSharp load failure no longer aborts the batch (#69844).** The source-size pre-flight treats an assembly-load failure as non-fatal, counts the input itself and lets the conversion path report a genuine MDS problem.
+
+### Verification
+
+*   **Test suite:** 1,304 tests pass (1,275 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.13.5 (2026-11-08)
 
 ### Non-standard WAV audio tracks

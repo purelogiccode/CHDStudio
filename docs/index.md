@@ -35,9 +35,9 @@ This documentation covers the project from both a user and a developer perspecti
 | Fact | Value |
 |------|-------|
 | **Application name** | `CHDStudio` |
-| **Latest version** | 3.13.5 |
+| **Latest version** | 3.14.0 |
 | **Target framework** | .NET 11.0 (`net11.0;net11.0-windows`), Avalonia |
-| **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release zips for all six runtime identifiers) |
+| **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release bundles for all six runtime identifiers) |
 | **License** | GPL v3.0 |
 | **Primary encoder** | `chdman` (MAME Project, 0.289), bundled as `chdman.exe` / `chdman_arm64.exe` on Windows; built-in CHDSharp on Linux/macOS |
 | **Fallback encoder** | Built-in `CHDSharp` encoder (CHDSharpLib NuGet 1.6.3, in-process) - always available, chdman byte-identical output |

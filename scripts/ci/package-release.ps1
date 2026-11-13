@@ -1,25 +1,33 @@
 <#
 .SYNOPSIS
-    Builds a release zip for one runtime identifier.
+    Builds one release bundle for a runtime identifier.
 
 .DESCRIPTION
     Stages a published CHDStudio output folder, drops the binaries that
     belong to the other architecture, the library .xml IntelliSense files and the
     native .pdb debug symbols, adds LICENSE.txt, ReadMe.md and WhatsNew.md, and
-    zips the result as release_<version>_<rid>.zip. The app itself is published
-    framework-dependent and single-file, so the .NET runtime is never bundled.
+    creates the platform's bundle:
+
+      * release_<version>_win-<arch>.zip
+      * release_<version>_linux-<arch>.tar.gz (with a CHDStudio/ top-level folder)
+      * release_<version>_osx-<arch>.dmg (with a CHDStudio/ folder in the image)
+
+    The app itself is published framework-dependent and single-file, so the .NET
+    runtime is never bundled. Linux bundles must be built on Linux and macOS
+    bundles on macOS: tar.gz preserves the Unix execute bits natively and the
+    .dmg is created with hdiutil.
 
 .PARAMETER Rid
     win-x64, win-arm64, linux-x64, linux-arm64, osx-x64 or osx-arm64.
 
 .PARAMETER Version
-    Application version, e.g. 3.9.0.
+    Application version, e.g. 3.14.0.
 
 .PARAMETER PublishDir
     Output folder of dotnet publish for the given Rid.
 
 .PARAMETER OutputDir
-    Folder that receives release_<version>_<rid>.zip.
+    Folder that receives the release bundle.
 #>
 [CmdletBinding()]
 param(
@@ -48,26 +56,46 @@ $outputDir = (Resolve-Path -LiteralPath $OutputDir).Path
 
 $isWindowsRid = $Rid.StartsWith('win-')
 $isMacRid = $Rid.StartsWith('osx-')
-
-if ($Rid -eq 'win-x64') {
-    $toolFiles = @('7za.exe', 'chdman.exe')
-    $otherArchFiles = @('7za_arm64.exe', 'chdman_arm64.exe')
-}
-elseif ($Rid -eq 'win-arm64') {
-    $toolFiles = @('7za_arm64.exe', 'chdman_arm64.exe')
-    $otherArchFiles = @('7za.exe', 'chdman.exe')
-}
-else {
-    # Linux and macOS use the official 7-Zip console build copied as "7zz".
-    $toolFiles = @('7zz', '7-Zip-License.txt')
-    $otherArchFiles = @()
-}
+$isWindowsHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [Runtime.InteropServices.OSPlatform]::Windows
+)
+$isLinuxHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [Runtime.InteropServices.OSPlatform]::Linux
+)
+$isMacHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [Runtime.InteropServices.OSPlatform]::OSX
+)
 
 if ($isWindowsRid) {
+    if (-not $isWindowsHost) {
+        throw "Windows bundles must be packaged on Windows."
+    }
+
+    $extension = '.zip'
+    $toolFiles = if ($Rid -eq 'win-x64') {
+        @('7za.exe', 'chdman.exe')
+    }
+    else {
+        @('7za_arm64.exe', 'chdman_arm64.exe')
+    }
+    $otherArchFiles = if ($Rid -eq 'win-x64') {
+        @('7za_arm64.exe', 'chdman_arm64.exe')
+    }
+    else {
+        @('7za.exe', 'chdman.exe')
+    }
     $executable = 'CHDStudio.exe'
     $nativeFiles = @('av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll')
 }
 elseif ($isMacRid) {
+    if (-not $isMacHost) {
+        throw "macOS bundles must be packaged on macOS (hdiutil is required for the .dmg)."
+    }
+
+    $extension = '.dmg'
+    # Linux and macOS use the official 7-Zip console build copied as "7zz".
+    $toolFiles = @('7zz', '7-Zip-License.txt')
+    $otherArchFiles = @()
     $executable = 'CHDStudio'
     $nativeFiles = @(
         'libAvaloniaNative.dylib',
@@ -76,11 +104,19 @@ elseif ($isMacRid) {
     )
 }
 else {
+    if (-not $isLinuxHost) {
+        throw "Linux bundles must be packaged on Linux so tar.gz preserves the Unix execute bits."
+    }
+
+    $extension = '.tar.gz'
+    $toolFiles = @('7zz', '7-Zip-License.txt')
+    $otherArchFiles = @()
     $executable = 'CHDStudio'
     $nativeFiles = @('libHarfBuzzSharp.so', 'libSkiaSharp.so')
 }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("chdstudio-stage-" + [Guid]::NewGuid().ToString('N'))
+$bundleRoot = Join-Path ([IO.Path]::GetTempPath()) ("chdstudio-bundle-" + [Guid]::NewGuid().ToString('N'))
 try {
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     Copy-Item -Path (Join-Path $publishDir '*') -Destination $stage -Recurse -Force
@@ -117,37 +153,74 @@ try {
         throw "Release stage is missing required file(s): $($missing -join ', ')"
     }
 
-    $zipPath = Join-Path $outputDir "release_${Version}_${Rid}.zip"
-    if (Test-Path -LiteralPath $zipPath) {
-        Remove-Item -LiteralPath $zipPath -Force
+    $bundlePath = Join-Path $outputDir "release_${Version}_${Rid}${extension}"
+    if (Test-Path -LiteralPath $bundlePath) {
+        Remove-Item -LiteralPath $bundlePath -Force
     }
 
-    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-    [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zipPath, [IO.Compression.CompressionLevel]::Optimal, $false)
+    if ($isWindowsRid) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+        [IO.Compression.ZipFile]::CreateFromDirectory(
+            $stage,
+            $bundlePath,
+            [IO.Compression.CompressionLevel]::Optimal,
+            $false
+        )
+    }
+    else {
+        # Linux/macOS bundles carry a single top-level "CHDStudio" folder, so extracting
+        # the archive or mounting the image does not scatter files into the current folder.
+        $bundleDir = Join-Path $bundleRoot 'CHDStudio'
+        New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
+        Copy-Item -Path (Join-Path $stage '*') -Destination $bundleDir -Recurse -Force
 
-    # The package job runs on Windows for every RID, and ZipFile writes no Unix mode bits.
-    # Without them, unzip on Linux/macOS creates CHDStudio and 7zz as 0644 (not executable),
-    # so the downloaded app cannot start until the user runs chmod +x. Stamp the standard
-    # 0755 mode on the executables and 0644 on the data files in the non-Windows bundles.
-    if (-not $isWindowsRid) {
-        $zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
-        try {
-            foreach ($entry in $zip.Entries) {
-                $mode = if ($entry.FullName -in @($executable, '7zz')) { 0x81ED } else { 0x81A4 }
-                $entry.ExternalAttributes = [int]($mode -shl 16)
+        # The archive formats store real Unix modes rather than the zip ExternalAttributes
+        # workaround. Normalize every entry first (0755 for the top-level folder, 0644 for
+        # files), then set the two executables to 0755, so a checkout or publish output with
+        # different source modes cannot leak 0777 entries into the bundle.
+        & chmod 755 $bundleDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "chmod failed for the bundle folder (exit code $LASTEXITCODE)."
+        }
+        Get-ChildItem -LiteralPath $bundleDir -File | ForEach-Object {
+            & chmod 644 $_.FullName
+            if ($LASTEXITCODE -ne 0) {
+                throw "chmod failed for $($_.Name) (exit code $LASTEXITCODE)."
             }
         }
-        finally {
-            $zip.Dispose()
+        foreach ($name in @($executable, '7zz')) {
+            & chmod 755 (Join-Path $bundleDir $name)
+            if ($LASTEXITCODE -ne 0) {
+                throw "chmod failed for $name (exit code $LASTEXITCODE)."
+            }
+        }
+
+        if ($isMacRid) {
+            & hdiutil create `
+                -volname "CHD Studio $Version" `
+                -srcfolder $bundleRoot `
+                -ov `
+                -format UDZO `
+                $bundlePath
+            if ($LASTEXITCODE -ne 0) {
+                throw "hdiutil failed to create $bundlePath (exit code $LASTEXITCODE)."
+            }
+        }
+        else {
+            & tar -czf $bundlePath -C $bundleRoot 'CHDStudio'
+            if ($LASTEXITCODE -ne 0) {
+                throw "tar failed to create $bundlePath (exit code $LASTEXITCODE)."
+            }
         }
     }
 
-    Write-Host "Created $zipPath"
+    Write-Host "Created $bundlePath"
     Get-ChildItem -LiteralPath $stage -File | Sort-Object Name | ForEach-Object {
         Write-Host ("  {0,-24} {1,8:N2} MB" -f $_.Name, ($_.Length / 1MB))
     }
-    Write-Host ("SHA256: " + (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash)
+    Write-Host ("SHA256: " + (Get-FileHash -LiteralPath $bundlePath -Algorithm SHA256).Hash)
 }
 finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $bundleRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
