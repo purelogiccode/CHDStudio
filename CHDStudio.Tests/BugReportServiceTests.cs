@@ -443,6 +443,10 @@ public class BugReportServiceTests
     [InlineData(
         " Could not write the extracted files for 'Zusar Vasar (JP).chd': Extraction failed; track 3: Chderrwriteerror The output drive could not be written: it may be full, disconnected, read-only, or access may be denied."
     )]
+    // The staging folder for an extraction could not be created in the chosen output folder.
+    [InlineData(
+        " Could not create the extraction folder for 'TengaiII_KO_Native_v54.chd': The output folder \"C:\\Users\\player\\Downloads\" cannot be written (access was denied)."
+    )]
     // Conversion-time permission guidance for a write-protected output folder.
     [InlineData(
         " Conversion of 'Need for Speed - Hot Pursuit 2 (Europe, Australia) (En,Fr,De,Es,It,Sv) (v2.00).iso' failed due to a permission error. The output folder may be write-protected or require administrator rights."

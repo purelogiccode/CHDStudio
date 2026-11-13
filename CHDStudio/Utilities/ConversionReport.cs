@@ -2,6 +2,7 @@ using System.Globalization;
 using CCDSharp;
 using CHDStudio.Models;
 using MDSSharp;
+using Serilog;
 
 namespace CHDStudio.Utilities;
 
@@ -18,6 +19,8 @@ internal static class ConversionReport
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
+
+    private static readonly ILogger Logger = Log.ForContext(typeof(ConversionReport));
 
     /// <summary>
     ///     Returns the bytes a batch's inputs occupy on disk, including the data files referenced
@@ -308,7 +311,25 @@ internal static class ConversionReport
     /// <param name="sourceFiles">Set that receives every source path.</param>
     private static void AddFile(string file, HashSet<string> sourceFiles)
     {
-        var volumes = SplitImageJoiner.TryGetVolumeSet(file);
+        List<string>? volumes;
+        try
+        {
+            volumes = SplitImageJoiner.TryGetVolumeSet(file);
+        }
+        catch (Exception ex)
+            when (ex is FileNotFoundException or FileLoadException or TypeLoadException
+                or BadImageFormatException
+            )
+        {
+            // The size pre-flight only feeds the savings summary, and MDSSharp owns
+            // SplitImageJoiner. A deployment where that assembly cannot be resolved must not
+            // abort the whole batch before the first conversion; count the input itself and
+            // let the conversion path report the real problem if the input needs MDSSharp.
+            Logger.Information(ex, "Could not inspect {File} for split-image volumes", file);
+            sourceFiles.Add(file);
+            return;
+        }
+
         if (volumes is null)
         {
             sourceFiles.Add(file);

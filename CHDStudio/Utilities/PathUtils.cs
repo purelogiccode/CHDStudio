@@ -46,6 +46,48 @@ internal static class PathUtils
     }
 
     /// <summary>
+    ///     Makes a tool file executable on Unix, adding the execute bits when an extractor dropped
+    ///     them. The release zips carry mode 0755 on the bundled tools, but some archive managers
+    ///     (and copies through filesystems without Unix modes) produce 0644; starting such a file
+    ///     fails with "Permission denied" before the tool can run. Windows needs no equivalent, so
+    ///     this is a no-op there.
+    /// </summary>
+    /// <param name="path">Full path of the tool file.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the file exists and has an execute bit (or was given one);
+    ///     <see langword="false" /> when the file is missing or its mode cannot be read or changed,
+    ///     so discovery can try the next candidate.
+    /// </returns>
+    internal static bool TryEnsureExecutable(string path)
+    {
+        if (!File.Exists(path)) return false;
+        if (OperatingSystem.IsWindows()) return true;
+
+        try
+        {
+            var mode = File.GetUnixFileMode(path);
+            var executeBits =
+                UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+            if ((mode & executeBits) != UnixFileMode.None) return true;
+
+            File.SetUnixFileMode(path, mode | executeBits);
+            Logger.Information("Added execute permission to tool {Path}", path);
+            return true;
+        }
+        catch (Exception ex)
+            when (ex
+                is IOException
+                    or UnauthorizedAccessException
+                    or ArgumentException
+                    or NotSupportedException
+            )
+        {
+            Logger.Information(ex, "Could not make tool {Path} executable", path);
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     Creates a unique temporary directory whose full path is pure ASCII and well below
     ///     MAX_PATH, for staging files that cannot be handed to chdman directly because their own
     ///     path contains non-ASCII characters or is too long. The system temp directory is preferred,
