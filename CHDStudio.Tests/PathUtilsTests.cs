@@ -617,7 +617,7 @@ public class PathUtilsTests
     {
         // Discovery uses the result to skip to the next candidate instead of returning a path that
         // Process.Start cannot run.
-        var missing = Path.Combine(Path.GetTempPath(), $"missing_tool_{Guid.NewGuid():N}");
+        var missing = Path.Join(Path.GetTempPath(), $"missing_tool_{Guid.NewGuid():N}");
         Assert.False(PathUtils.TryEnsureExecutable(missing));
     }
 
@@ -626,7 +626,7 @@ public class PathUtilsTests
     {
         // Some archive managers extract the release zip without Unix modes, which leaves the
         // bundled 7zz at 0644 and makes Process.Start fail with "Permission denied".
-        var tool = Path.Combine(Path.GetTempPath(), $"tool_{Guid.NewGuid():N}");
+        var tool = Path.Join(Path.GetTempPath(), $"tool_{Guid.NewGuid():N}");
         File.WriteAllText(tool, "#!/bin/sh\nexit 0\n");
         try
         {
@@ -662,7 +662,7 @@ public class PathUtilsTests
     [Fact]
     public void OutputDirectoryUnavailableExceptionNamesTheFolderAndReason()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "protected-output");
+        var directory = Path.Join(Path.GetTempPath(), "protected-output");
         var exception = new OutputDirectoryUnavailableException(directory, "access was denied");
 
         Assert.Contains(directory, exception.Message, StringComparison.Ordinal);

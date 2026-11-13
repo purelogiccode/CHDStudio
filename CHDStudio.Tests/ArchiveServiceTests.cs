@@ -1327,15 +1327,15 @@ public class ArchiveServiceTests : IDisposable
         // A bundled 7zz extracted without the execute bit (or a file that is not a real
         // executable) used to surface as a bare Win32Exception in the bug report. The fallback
         // must name the tool and explain what to do instead.
-        var fakeTool = Path.Combine(
+        var fakeTool = Path.Join(
             _tempDir,
             OperatingSystem.IsWindows() ? "fake7za.exe" : "fake7za"
         );
         File.WriteAllText(fakeTool, "not an executable");
         var service = new ArchiveService(fakeTool, true);
-        var corruptPath = Path.Combine(_tempDir, "corrupt-unstartable.7z");
+        var corruptPath = Path.Join(_tempDir, "corrupt-unstartable.7z");
         File.WriteAllText(corruptPath, "not a 7z archive");
-        var tempDir = Path.Combine(_tempDir, "extract");
+        var tempDir = Path.Join(_tempDir, "extract");
 
         var result = await service.ExtractArchiveAsync(
             corruptPath,

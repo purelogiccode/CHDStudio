@@ -413,7 +413,7 @@ internal partial class MainWindow : Window, IDisposable
     {
         foreach (var name in candidateNames)
         {
-            var path = Path.Combine(baseDirectory, name);
+            var path = Path.Join(baseDirectory, name);
             if (File.Exists(path) && PathUtils.TryEnsureExecutable(path))
                 return (path, name, true);
         }
