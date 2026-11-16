@@ -37,7 +37,7 @@
 
     <ItemGroup>
         <PackageReference Include="SharpCompress" Version="0.50.9" />
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.339">
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.341">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
