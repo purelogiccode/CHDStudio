@@ -67,7 +67,7 @@ The library is the Alcohol 120% conversion engine used by [CHD Studio](https://g
 - **Subchannel stripping** — rewrites 2448-byte (2352 data + 96 subchannel) and 2368-byte (2352 + 16) images down to the 2352-byte sectors `chdman` reads.
 - **Pregap handling** — when the descriptor records pregaps that the data file does not contain, rebuilds them as zeros so the CUE can place `INDEX 00` without shifting later tracks.
 - **CUE sheet generation** — writes a single-file CUE with `TRACK`/`INDEX 00`/`INDEX 01` entries, formatted as `MM:SS:FF` and encoded UTF-8 **without a BOM** for `chdman`.
-- **Medium-aware output** — DVD media goes to the encoder as a cooked image; CD media with 2048-byte sectors gets a `MODE1/2048` cue; Mode 2 sectors map by the low nibble of the mode byte, as libmirage's reverse engineering established.
+- **Medium-aware output** — DVD media goes to the encoder as a cooked image; CD media with 2048-byte sectors gets a `MODE1/2048` or `MODE2/2048` cue depending on the track mode; 2324-byte Form 2 sectors get a `MODE2/2324` cue; Mode 2 sectors map by the low nibble of the mode byte, as libmirage's reverse engineering established.
 - **No native dependencies** — pure managed code, cross-platform.
 
 ## Requirements
@@ -293,7 +293,7 @@ Turns a parsed image into something `chdman` can read.
 | Type | Description |
 |---|---|
 | `MdsMedium` | Medium type: `Cd`, `CdR`, `CdRw`, `Dvd`, `DvdMinusR`, or `Unknown`. |
-| `MdsDisc` | Parsed image: `SessionCount`, `Tracks`, `MdsPath`, `MdfPath`, `MediumType`, `DataFilePaths`, `HasEncryptedTrackData`, `HasCompressedTrackData`, `IsMdxContainer`, plus constants (`RawSectorSize` 2352, `RawPlusSubchannelSize` 2448, `RawPlusShortSubchannelSize` 2368, `Mode2XaSectorSize` 2336, `CookedSectorSize` 2048) and computed `SectorSize`, `IsDvdImage`, `IsCookedCd`, `IsDvdMedia`, `IsCdMedia`, `NeedsSubchannelStrip`, `IsPlainRawCd`, `AllTracksDescribable`, `HasPregapInfo`, `Summary`. |
+| `MdsDisc` | Parsed image: `SessionCount`, `Tracks`, `MdsPath`, `MdfPath`, `MediumType`, `DataFilePaths`, `HasEncryptedTrackData`, `HasCompressedTrackData`, `IsMdxContainer`, plus constants (`RawSectorSize` 2352, `RawPlusSubchannelSize` 2448, `RawPlusShortSubchannelSize` 2368, `Mode2XaSectorSize` 2336, `Mode2Form2SectorSize` 2324, `CookedSectorSize` 2048) and computed `SectorSize`, `IsDvdImage`, `IsCookedCd`, `IsDvdMedia`, `IsCdMedia`, `NeedsSubchannelStrip`, `IsPlainRawCd`, `AllTracksDescribable`, `HasPregapInfo`, `Summary`. |
 | `MdsTrack` | One track: `Number`, `ModeByte`, `SectorSize`, `StartLba`, `PregapSectors`, `LengthSectors`, `StoredDataSectors` (MDS v2 footer count; `LengthSectors` = pregap missing, `LengthSectors` + `PregapSectors` = pregap stored), `SubchannelMode`, `AdrCtl`, plus computed `IsAudio`, `CueTrackType`, `Description`. |
 | `MdsInputPreparer.Result` | Preparation outcome: `CuePath`, `DvdImagePath`, `FailureReason`, `Success`. |
 
@@ -303,9 +303,9 @@ Turns a parsed image into something `chdman` can read.
 - **MDS v2 / MDX descriptors** — the Daemon Tools variant (`MEDIA DESCRIPTOR` + version 2). The descriptor is decrypted and decompressed transparently, and its 32-byte session, 80-byte track and 32-byte footer blocks are parsed, including UTF-16 file names. Compressed tracks are decoded from their compression tables (stored, run-length and deflate groups); encrypted tracks are decrypted with AES-256 LRW (password-less/TAGES or a supplied password); single-file `.mdx` containers keep their descriptor and data in one file, which is read directly.
 - **Per-track pregaps** — each footer's `track_data_length` is the sectors actually stored, so `StoredDataSectors` tells whether a track's pregap is in the data file (`LengthSectors` = missing, `LengthSectors` + `PregapSectors` = stored, the layout libMirage validates). Preparation materializes only the missing, representable pregaps as zeros, so a v2 image that stores one track's pregap and omits another's still gets every `INDEX 00`/`INDEX 01` at the right LBA. The first track's pregap before LBA 0 is never materialized.
 - **Medium types** — CD, CD-R, CD-RW (0x00–0x02) and DVD, DVD-R (0x10, 0x12); other values fall back to inspecting the sector sizes.
-- **Track modes** — audio, Mode 1 and the Mode 2 forms, selected by the low nibble of the mode byte and mapped to `AUDIO`, `MODE1/2352`/`MODE1/2048` and `MODE2/2352`/`MODE2/2336`.
+- **Track modes** — audio, Mode 1 and the Mode 2 forms, selected by the low nibble of the mode byte and mapped to `AUDIO`, `MODE1/2352`/`MODE1/2048`, `MODE2/2352`/`MODE2/2336`, `MODE2/2048` (Form 1) and `MODE2/2324` (Form 2).
 - **Data files** — one or more files named by the descriptor (single-byte or UTF-16 names, `*.mdf` wildcards), split `.i00`/`.i01` sets, split `.001`/`.002` sets.
-- **Sector sizes** — 2352 (raw CD), 2448 (raw + 96 subchannel), 2368 (raw + 16 subchannel), 2336 (cooked Mode 2) and 2048 (cooked CD/DVD data).
+- **Sector sizes** — 2352 (raw CD), 2448 (raw + 96 subchannel), 2368 (raw + 16 subchannel), 2336 (cooked Mode 2), 2324 (cooked Mode 2 Form 2) and 2048 (cooked CD/DVD data).
 - **Pregaps** — `INDEX 00` is written when the data file carries the pregap sectors; descriptors whose pregaps are absent have them rebuilt as zeros first.
 
 ## How it works
@@ -317,7 +317,9 @@ The medium type and the stored sector layout determine what has to happen before
 | Medium (sector size) | Layout | Action |
 |---|---|---|
 | DVD (2048) | Cooked image | No cue needed; the data file is reported for DVD conversion. |
-| CD (2048) | Cooked Mode 1 data | Write a `MODE1/2048` cue referencing the data file. |
+| CD (2048, Mode 1) | Cooked Mode 1 data | Write a `MODE1/2048` cue referencing the data file. |
+| CD (2048, Mode 2 Form 1) | Cooked Form 1 data | Write a `MODE2/2048` cue referencing the data file. |
+| CD (2324) | Cooked Mode 2 Form 2 data | Write a `MODE2/2324` cue referencing the data file. |
 | CD (2352) | Raw sectors | Write a cue referencing the data file in place. |
 | CD (2448) | 2352 data + 96 subchannel | Strip to 2352 bytes, then write a cue for the stripped file. |
 | CD (2368) | 2352 data + 16 subchannel | Strip to 2352 bytes, then write a cue for the stripped file. |
@@ -345,6 +347,13 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release
 ```
 
 ## Version history
+
+### 1.3.0
+
+- Cooked Mode 2 Form 1 tracks (2048-byte sectors) are now described with a `MODE2/2048` cue instead of being rejected as an unsupported mode.
+- Cooked Mode 2 Form 2 tracks (2324-byte sectors) are now described with a `MODE2/2324` cue, and 2324-byte images are accepted by the preparation path.
+- `MdsDisc` gained the `Mode2Form2SectorSize` constant (2324).
+- Everything is additive: existing Mode 1 and raw/Mode 2 layouts produce the same cues as before.
 
 ### 1.2.3
 
