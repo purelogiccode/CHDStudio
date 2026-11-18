@@ -5,6 +5,24 @@ nav_order: 16
 
 # What's New
 
+## 3.14.1 (2026-11-18)
+
+### Bug fixes
+
+*   **CD FLAC frames no longer overflow their buffer (#69922).** Recompressing a CD CHD that stores one frame per hunk could fail with `FLAC frame too large: 2419 bytes (buffer 2416)` when a valid Fixed subframe needed slightly more metadata than the 64 bytes reserved per frame. The CD-FLAC and laserdisc A/V audio encoders now reserve 512 bytes of headroom per FLAC frame.
+*   **Empty CLI output paths report a usage error (#69897).** `CHDSharp extractcd -o ""` now prints the missing-argument message and help text instead of throwing an `ArgumentException` from `Directory.CreateDirectory`.
+*   **MDS Mode 2 Form 1 and Form 2 tracks convert (#69872).** Cooked 2048-byte Mode 2 Form 1 tracks are described as `MODE2/2048` and 2324-byte Form 2 tracks as `MODE2/2324`, both understood by chdman. These descriptors no longer fail with `UNKNOWN(0x04)`.
+*   **Recovery for an unreadable CHDSharp hunk map (#69920).** If both compressed CHDSharp attempts produce output whose map cannot be read, the converter now retries once with an uncompressed encode through the separate raw-map writer instead of failing the file. The log warns that this last-resort output is much larger.
+
+### Dependencies
+
+*   **CHDSharp 1.7.1** brings the two encoder fixes above into the in-process library. SharpCompress 0.50.10, Meziantou.Analyzer 3.0.341 and coverlet.collector 10.1.1 are also current. The code-scanning `Path.Join` cleanups from the previous maintenance commits are included.
+
+### Verification
+
+*   **Test suite:** 1,314 tests pass (1,285 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+
 ## 3.14.0 (2026-11-13)
 
 ### .NET 11 and current dependencies

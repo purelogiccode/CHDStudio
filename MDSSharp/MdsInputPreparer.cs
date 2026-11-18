@@ -112,7 +112,7 @@ public static class MdsInputPreparer
         if (disc.IsCookedCd)
         {
             onLog?.Invoke(
-                $" {Path.GetFileName(disc.MdsPath)} describes {MdsDisc.CookedSectorSize}-byte CD sectors; writing a MODE1/2048 cue."
+                $" {Path.GetFileName(disc.MdsPath)} describes {MdsDisc.CookedSectorSize}-byte CD sectors; writing a cue for the cooked tracks."
             );
             var cookedReference = await ReferenceOrCopyAsync(dataFilePath, workDir, onLog, token)
                 .ConfigureAwait(false);
@@ -128,11 +128,12 @@ public static class MdsInputPreparer
             or MdsDisc.RawPlusSubchannelSize
             or MdsDisc.RawPlusShortSubchannelSize
             or MdsDisc.Mode2XaSectorSize
+            or MdsDisc.Mode2Form2SectorSize
             )
         )
         {
             return Result.Failed(
-                $"the descriptor reports {disc.SectorSize} bytes per sector, which is neither a raw CD ({MdsDisc.RawSectorSize}), a subchannel-bearing CD ({MdsDisc.RawPlusSubchannelSize}), a Mode 2 cooked CD ({MdsDisc.Mode2XaSectorSize}) nor a DVD image ({MdsDisc.CookedSectorSize})"
+                $"the descriptor reports {disc.SectorSize} bytes per sector, which is neither a raw CD ({MdsDisc.RawSectorSize}), a subchannel-bearing CD ({MdsDisc.RawPlusSubchannelSize}), a Mode 2 cooked CD ({MdsDisc.Mode2XaSectorSize}), a Mode 2 Form 2 CD ({MdsDisc.Mode2Form2SectorSize}) nor a DVD image ({MdsDisc.CookedSectorSize})"
             );
         }
 

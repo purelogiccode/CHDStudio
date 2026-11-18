@@ -31,6 +31,9 @@ public sealed record MdsDisc(
     /// <summary>Cooked Mode 2 sector without its sync, header and EDC fields.</summary>
     public const int Mode2XaSectorSize = 2336;
 
+    /// <summary>Cooked Mode 2 Form 2 user-data sector (2324 bytes).</summary>
+    public const int Mode2Form2SectorSize = 2324;
+
     /// <summary>The medium type the descriptor declares, or <see cref="MdsMedium.Unknown" />.</summary>
     public MdsMedium MediumType { get; init; } = MdsMedium.Unknown;
 
@@ -78,7 +81,10 @@ public sealed record MdsDisc(
     public bool IsDvdImage =>
         IsDvdMedia || (MediumType == MdsMedium.Unknown && SectorSize == CookedSectorSize);
 
-    /// <summary>True when a CD image stores cooked 2048-byte sectors and needs a MODE1/2048 cue.</summary>
+    /// <summary>
+    ///     True when a CD image stores cooked 2048-byte sectors; the cue type follows each
+    ///     track's mode (MODE1/2048 or MODE2/2048).
+    /// </summary>
     public bool IsCookedCd => IsCdMedia && SectorSize == CookedSectorSize;
 
     /// <summary>True when every sector carries trailing subchannel bytes that chdman will not read.</summary>

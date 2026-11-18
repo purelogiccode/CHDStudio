@@ -24,6 +24,7 @@ using CHDStudio.Utilities.Ecm;
 using CCDSharp;
 using CCDSharp.Models;
 using CHDSharp;
+using CHDSharp.Encoder;
 using CHDSharp.Models;
 using MDSSharp;
 using PBPSharp;
@@ -6136,7 +6137,7 @@ internal partial class MainWindow : Window, IDisposable
                             {
                                 // A/V (laserdisc) CHDs have no CD/DVD/HDD metadata; the built-in
                                 // encoder extracts them straight to AVI.
-                                CHDSharp.Encoder.ChdEncoder.ExtractLaserDisc(
+                                ChdEncoder.ExtractLaserDisc(
                                     chdFile,
                                     outputFile,
                                     parentPath,
@@ -7904,6 +7905,85 @@ internal partial class MainWindow : Window, IDisposable
                     retryReason = retryEx.Message;
                 }
 
+                // An unreadable hunk map is produced by the map writer/reader path, not by the
+                // selected data codec, so switching codecs (above) cannot fix it. A last-resort
+                // uncompressed encode uses the completely separate raw-map writer and often
+                // succeeds; the file is much larger, but a valid CHD is better than none.
+                var recoveredUncompressed = false;
+                if (
+                    retryReason is not null
+                    && !_createDeltaChd
+                    && !string.Equals(command, "createld", StringComparison.Ordinal)
+                    && firstReason.Contains(
+                        "Header/map read failed",
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    LogWarning(
+                        $" CHDSHARP: both compressed attempts produced an unreadable hunk map for '{Path.GetFileName(originalInputFile)}'; retrying without compression (the result will be much larger)."
+                    );
+                    TryBestEffortDelete(outputFile);
+
+                    try
+                    {
+                        await Task.Run(
+                            () =>
+                                ChdSharpEncoderService.Encode(
+                                    command,
+                                    inputFile,
+                                    outputFile,
+                                    isRaw,
+                                    cores,
+                                    fallbackTimeoutCts.Token,
+                                    progress.ReportHunk,
+                                    conservativeCodecs: false,
+                                    codecTags: [CodecTags.None],
+                                    parentPath: null
+                                ),
+                            fallbackTimeoutCts.Token
+                        );
+
+                        ChdSharpLoggerFactory.TakeLastWarning();
+                        var uncompressedCheck = ValidateStagedChd(
+                            outputFile,
+                            null,
+                            fallbackTimeoutCts.Token
+                        );
+                        if (uncompressedCheck.IsSuccess)
+                        {
+                            recoveredUncompressed = true;
+                            retryReason = null;
+                        }
+                        else
+                        {
+                            var uncompressedDetail = ChdSharpLoggerFactory.TakeLastWarning();
+                            retryReason = string.IsNullOrWhiteSpace(uncompressedDetail)
+                                ? uncompressedCheck.Error.GetMessage()
+                                : $"{uncompressedCheck.Error.GetMessage()} ({uncompressedDetail})";
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        TryBestEffortDelete(outputFile);
+                        if (!token.IsCancellationRequested && timeoutMinutes is not null)
+                        {
+                            chdSharpFailure = "the encoder timed out";
+                            LogMessage(
+                                $"TIMEOUT: Conversion of '{Path.GetFileName(originalInputFile)}' exceeded {timeoutMinutes.Value} minute(s). Marking as failed."
+                            );
+                        }
+
+                        return false;
+                    }
+                    catch (Exception uncompressedEx)
+                        when (!IsCancellationException(uncompressedEx))
+                    {
+                        retryReason = uncompressedEx.Message;
+                        TryBestEffortDelete(outputFile);
+                    }
+                }
+
                 if (retryReason is not null)
                 {
                     chdSharpFailure =
@@ -7915,7 +7995,11 @@ internal partial class MainWindow : Window, IDisposable
                     return false;
                 }
 
-                LogMessage(" CHDSHARP: the retry produced a valid CHD.");
+                LogMessage(
+                    recoveredUncompressed
+                        ? " CHDSHARP: the uncompressed retry produced a valid CHD (the file is much larger than usual)."
+                        : " CHDSHARP: the retry produced a valid CHD."
+                );
             }
 
             // The same duplicate guard as the chdman path applies: keep the first product

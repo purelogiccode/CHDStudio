@@ -2,7 +2,7 @@
 #
 # Cut a release by pushing a tag that matches the version in
 # CHDStudio/CHDStudio.csproj, e.g.:
-#   git tag release_3.14.0 && git push origin release_3.14.0
+#   git tag release_3.14.1 && git push origin release_3.14.1
 #
 # Artifacts:
 #   * release_<version>_win-<arch>.zip   (Windows)
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, e.g. release_3.14.0
+        description: Existing tag to release, e.g. release_3.14.1
         required: true
         type: string
 

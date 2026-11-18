@@ -17,6 +17,8 @@ public sealed record MdsTrack(int Number, byte ModeByte, int SectorSize, long St
     private const string CueMode1Cooked = "MODE1/2048";
     private const string CueMode2Raw = "MODE2/2352";
     private const string CueMode2Xa = "MODE2/2336";
+    private const string CueMode2Form1Cooked = "MODE2/2048";
+    private const string CueMode2Form2 = "MODE2/2324";
 
     // Only the low nibble of the mode byte selects the mode; the high nibble has no effect.
     private const int ModeMode2 = 0x00;
@@ -74,8 +76,9 @@ public sealed record MdsTrack(int Number, byte ModeByte, int SectorSize, long St
                 : IsRawSectorSize
                     ? CueMode1Raw
                     : null,
-            ModeMode2 or ModeMode2Form1 or ModeMode2Form2 or ModeMode2Alternate
-                or ModeMode2Alternate2 => Mode2CueType,
+            ModeMode2 or ModeMode2Alternate or ModeMode2Alternate2 => Mode2CueType,
+            ModeMode2Form1 => Mode2Form1CueType,
+            ModeMode2Form2 => Mode2Form2CueType,
             _ => null
         };
 
@@ -105,12 +108,44 @@ public sealed record MdsTrack(int Number, byte ModeByte, int SectorSize, long St
             or MdsDisc.RawPlusShortSubchannelSize;
 
     /// <summary>
-    ///     The cue type for a Mode 2 family track: raw sectors are described as MODE2/2352, cooked
-    ///     Mode 2 Form 1 data as MODE2/2336, and the 2048-byte cooked layout has no cue equivalent.
+    ///     The cue type for a generic Mode 2 track (0x00/0x03/0x07): raw sectors are described as
+    ///     MODE2/2352 and the 2336-byte cooked layout as MODE2/2336. Any other stored size is not
+    ///     a layout a cue can describe honestly.
     /// </summary>
     private string? Mode2CueType =>
         SectorSize switch
         {
+            MdsDisc.RawSectorSize
+                or MdsDisc.RawPlusSubchannelSize
+                or MdsDisc.RawPlusShortSubchannelSize => CueMode2Raw,
+            MdsDisc.Mode2XaSectorSize => CueMode2Xa,
+            _ => null
+        };
+
+    /// <summary>
+    ///     The cue type for a Mode 2 Form 1 track (0x04). chdman accepts the cooked user-data
+    ///     layout as MODE2/2048, which keeps the Mode 2 sector type instead of silently turning
+    ///     the track into MODE1 data. Raw and 2336-byte forms use the matching Mode 2 layouts.
+    /// </summary>
+    private string? Mode2Form1CueType =>
+        SectorSize switch
+        {
+            MdsDisc.CookedSectorSize => CueMode2Form1Cooked,
+            MdsDisc.RawSectorSize
+                or MdsDisc.RawPlusSubchannelSize
+                or MdsDisc.RawPlusShortSubchannelSize => CueMode2Raw,
+            MdsDisc.Mode2XaSectorSize => CueMode2Xa,
+            _ => null
+        };
+
+    /// <summary>
+    ///     The cue type for a Mode 2 Form 2 track (0x05): the 2324-byte user-data layout is
+    ///     MODE2/2324; raw and 2336-byte forms use the matching Mode 2 layouts.
+    /// </summary>
+    private string? Mode2Form2CueType =>
+        SectorSize switch
+        {
+            MdsDisc.Mode2Form2SectorSize => CueMode2Form2,
             MdsDisc.RawSectorSize
                 or MdsDisc.RawPlusSubchannelSize
                 or MdsDisc.RawPlusShortSubchannelSize => CueMode2Raw,

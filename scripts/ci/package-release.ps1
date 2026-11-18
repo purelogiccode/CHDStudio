@@ -21,7 +21,7 @@
     win-x64, win-arm64, linux-x64, linux-arm64, osx-x64 or osx-arm64.
 
 .PARAMETER Version
-    Application version, e.g. 3.14.0.
+    Application version, e.g. 3.14.1.
 
 .PARAMETER PublishDir
     Output folder of dotnet publish for the given Rid.

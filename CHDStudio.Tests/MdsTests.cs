@@ -788,6 +788,77 @@ public class MdsTests : IDisposable
         Assert.Equal(expected, MdsParser.Parse(mds).Tracks[0].CueTrackType);
     }
 
+    [Theory]
+    [InlineData((byte)0x04, 2048, "MODE2/2048")]
+    [InlineData((byte)0x0C, 2048, "MODE2/2048")]
+    [InlineData((byte)0x04, 2336, "MODE2/2336")]
+    [InlineData((byte)0x04, 2352, "MODE2/2352")]
+    [InlineData((byte)0x05, 2324, "MODE2/2324")]
+    [InlineData((byte)0x0D, 2324, "MODE2/2324")]
+    [InlineData((byte)0x05, 2336, "MODE2/2336")]
+    [InlineData((byte)0x05, 2352, "MODE2/2352")]
+    public void Mode2FormTracksUseCueTypesChdmanUnderstands(
+        byte mode,
+        ushort sectorSize,
+        string expected
+    )
+    {
+        // 0x04 is Mode 2 Form 1 (2048-byte user data) and 0x05 is Form 2 (2324 bytes).
+        // chdman accepts MODE2/2048 and MODE2/2324, so these cooked layouts are convertible
+        // instead of being rejected as "track modes this build cannot express in a cue".
+        var mds = WriteMds("mode2form.mds", 0x00, new TrackSpec(mode, 1, sectorSize, 0));
+
+        Assert.Equal(expected, MdsParser.Parse(mds).Tracks[0].CueTrackType);
+    }
+
+    [Fact]
+    public async Task CookedMode2Form1CdIsCuedAsMode2At2048Bytes()
+    {
+        var mds = WriteMds("CookedMode2.mds", 0x00, new TrackSpec(0x04, 1, 2048, 0));
+        WriteMdf("CookedMode2.mdf", 2048, 4);
+        var workDir = Path.Combine(_tempDir, "workmode2");
+        Directory.CreateDirectory(workDir);
+
+        var disc = MdsParser.Parse(mds);
+        Assert.True(disc.IsCookedCd);
+        Assert.True(disc.AllTracksDescribable);
+
+        var result = await MdsInputPreparer.PrepareAsync(
+            disc,
+            workDir,
+            _log.Add,
+            CancellationToken.None
+        );
+
+        Assert.True(result.Success, result.FailureReason);
+        var cue = await File.ReadAllTextAsync(result.CuePath!);
+        Assert.Contains("TRACK 01 MODE2/2048", cue, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Mode2Form2CdIsCuedAsMode2At2324Bytes()
+    {
+        var mds = WriteMds("Form2.mds", 0x00, new TrackSpec(0x05, 1, 2324, 0));
+        WriteMdf("Form2.mdf", 2324, 4);
+        var workDir = Path.Combine(_tempDir, "workform2");
+        Directory.CreateDirectory(workDir);
+
+        var disc = MdsParser.Parse(mds);
+        Assert.False(disc.IsCookedCd);
+        Assert.True(disc.AllTracksDescribable);
+
+        var result = await MdsInputPreparer.PrepareAsync(
+            disc,
+            workDir,
+            _log.Add,
+            CancellationToken.None
+        );
+
+        Assert.True(result.Success, result.FailureReason);
+        var cue = await File.ReadAllTextAsync(result.CuePath!);
+        Assert.Contains("TRACK 01 MODE2/2324", cue, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task CookedCdIsCuedAsMode1At2048Bytes()
     {

@@ -11,8 +11,8 @@
         <AssemblyName>CHDStudio</AssemblyName>
         <RootNamespace>CHDStudio</RootNamespace>
         <ApplicationIcon>icon\chd.ico</ApplicationIcon>
-        <AssemblyVersion>3.14.0</AssemblyVersion>
-        <FileVersion>3.14.0</FileVersion>
+        <AssemblyVersion>3.14.1</AssemblyVersion>
+        <FileVersion>3.14.1</FileVersion>
         <IsPackable>false</IsPackable>
         <NeutralLanguage>en</NeutralLanguage>
         <DebugType>embedded</DebugType>
@@ -38,8 +38,8 @@
         <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
         <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-        <PackageReference Include="CHDSharp" Version="1.6.3" />
-        <PackageReference Include="Meziantou.Analyzer" Version="3.0.339">
+        <PackageReference Include="CHDSharp" Version="1.7.1" />
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.341">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -50,7 +50,7 @@
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-        <PackageReference Include="SharpCompress" Version="0.50.9" />
+        <PackageReference Include="SharpCompress" Version="0.50.10" />
         <PackageReference Include="VideoGameFileSystemParser" Version="1.4.0" />
     </ItemGroup>
 
