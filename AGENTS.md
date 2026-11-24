@@ -59,7 +59,7 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-x
 dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-arm64 --self-contained false -p:PublishSingleFile=true -o publish/win-arm64
 
 # Release bundle (run on the bundle's OS; CI does this per RID)
-./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.15.0 -PublishDir publish/win-x64 -OutputDir dist
+./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.16.0 -PublishDir publish/win-x64 -OutputDir dist
 
 # Run on Windows (multi-targeted, so pick the Windows TFM)
 dotnet run --project CHDStudio/CHDStudio.csproj -f net11.0-windows
@@ -82,13 +82,17 @@ Do not commit while InspectCode reports warnings or errors.
 
 ## Release engineering (do not break)
 
-- **The app is framework-dependent. It must NOT embed the .NET runtime.** Users
-  install the .NET 11 Desktop Runtime on Windows and the .NET 11 runtime on
-  Linux/macOS. Always publish with
-  `--self-contained false -p:PublishSingleFile=true`. The output is a single
-  `CHDStudio.exe` (Windows) or `CHDStudio` (Linux/macOS) plus the platform's
-  native Avalonia libraries and bundled tools, which are content files and stay
-  outside the bundle.
+- **The primary app bundles are framework-dependent. They must NOT embed the
+  .NET runtime.** Users install the .NET 11 Desktop Runtime on Windows and the
+  .NET 11 runtime on Linux/macOS. Always publish the `.zip`/`.tar.gz`/`.dmg`
+  with `--self-contained false -p:PublishSingleFile=true`. The output is a
+  single `CHDStudio.exe` (Windows) or `CHDStudio` (Linux/macOS) plus the
+  platform's native Avalonia libraries and bundled tools, which are content
+  files and stay outside the bundle. **Exception:** the Linux `.AppImage` and
+  `.flatpak` are self-contained (they include the .NET runtime) so they can run
+  without a separately installed host runtime; build them with
+  `--self-contained true -p:PublishSingleFile=true`. Do not use the
+  self-contained setting for any other bundle.
 - **Release bundles contain exactly one architecture's tools.** For `win-x64`:
   `7za.exe`, `chdman.exe`. For `win-arm64`: the `*_arm64.exe` variants. Linux
   and macOS get the official `7zz` console build plus `7-Zip-License.txt`.
@@ -102,15 +106,21 @@ Do not commit while InspectCode reports warnings or errors.
   verification.
 - **Bundle naming and formats are fixed:** Windows
   `release_<version>_<rid>.zip`, Linux `release_<version>_<rid>.tar.gz` (with a
-  top-level `CHDStudio/` folder), macOS `release_<version>_<rid>.dmg` (with a
-  `CHDStudio/` folder in the mounted volume). One bundle per runtime identifier
-  - `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64` and
-  `osx-arm64` - and all six are attached to the GitHub release.
+  top-level `CHDStudio/` folder), Linux portable
+  `release_<version>_linux-<arch>.AppImage` and
+  `release_<version>_linux-<arch>.flatpak`, macOS
+  `release_<version>_<rid>.dmg` (with a `CHDStudio/` folder in the mounted
+  volume). One bundle per runtime identifier - `win-x64`, `win-arm64`,
+  `linux-x64`, `linux-arm64`, `osx-x64` and `osx-arm64` - plus the two Linux
+  extras per architecture, and all ten are attached to the GitHub release.
 - **Linux/macOS bundles carry real Unix execute bits.** They must be packaged
-  on their native operating systems: Linux `.tar.gz` on Linux (tar preserves
-  the modes) and macOS `.dmg` with `hdiutil` on macOS. `package-release.ps1` sets
-  `0755` on `CHDStudio` and `7zz` (and `0644` on the remaining files); the
-  `Release` workflow verifies the extracted archives and mounted images.
+  on their native operating systems: Linux `.tar.gz`, `.AppImage` and
+  `.flatpak` on Linux (the ARM64 variants on a native `ubuntu-24.04-arm`
+  runner) and macOS `.dmg` with `hdiutil` on macOS. `package-release.ps1` sets
+  `0755` on `CHDStudio` and `7zz` (and `0644` on the remaining files);
+  `package-linux-extra.sh` builds the AppImage/Flatpak payloads and sets the
+  same modes. The `Release` workflow verifies the extracted archives, mounted
+  images and both Linux extras, including a real Xvfb launch.
 - **Version lives in two csproj files** (`CHDStudio` and
   `CHDStudio.Tests`, `AssemblyVersion`/`FileVersion`) plus a matching
   section in `WhatsNew.md`. `scripts/ci/version.mjs` enforces all three. A
@@ -119,11 +129,12 @@ Do not commit while InspectCode reports warnings or errors.
   section to the top of `WhatsNew.md`, commit to `master`, then
   `git tag release_<version> && git push origin release_<version>`. The
   `Release` workflow tests, publishes all six RIDs, packages the native
-  `.zip`/`.tar.gz`/`.dmg` bundles, and creates the GitHub release (title =
-  version, body = the `WhatsNew.md` section). Re-running the workflow refreshes
+  `.zip`/`.tar.gz`/`.dmg` bundles plus the x64/ARM64 `.AppImage` and `.flatpak`
+  extras, and creates the GitHub release (title = version, body = the
+  `WhatsNew.md` section). Re-running the workflow refreshes
   the notes and uploads assets with `--clobber`.
 
-### Standard release routine (used for 3.15.0)
+### Standard release routine (used for 3.16.0)
 
 1. **Review the changes since the previous tag** and fix regressions before
    changing versions. Run the full suite, not only the CI filter.
@@ -144,31 +155,32 @@ Do not commit while InspectCode reports warnings or errors.
 4. **Commit and push `master`**, then tag and push the tag:
    ```powershell
    git add -A
-   git commit -m "release: prepare 3.15.0"
-   git tag release_3.15.0
+   git commit -m "release: prepare 3.16.0"
+   git tag release_3.16.0
    git push origin master
-   git push origin release_3.15.0
+   git push origin release_3.16.0
    ```
-   The tag must exactly match the csproj version and the `## 3.15.0` heading in
+   The tag must exactly match the csproj version and the `## 3.16.0` heading in
    `WhatsNew.md`. The `Protect master` ruleset lets repository admins bypass the
    PR requirement for this maintenance push; the release tag itself is not
    blocked.
-5. **Let the `Release` workflow build the six bundles on native runners.** It
-   publishes all six framework-dependent single-file outputs and packages
-   Windows `.zip` on `windows-latest`, Linux `.tar.gz` on `ubuntu-latest` and
-   macOS `.dmg` on `macos-latest`; it verifies the required files and Unix
-   execute bits, creates a signed build-provenance attestation for each bundle,
-   creates or updates the GitHub release, and verifies that all six bundle
-   assets are attached. Do not create a second handwritten release for the same
-   tag.
+5. **Let the `Release` workflow build the ten bundles on native runners.** It
+   publishes all six framework-dependent single-file outputs and builds the
+   four self-contained Linux extras; it packages Windows `.zip` on
+   `windows-latest`, Linux `.tar.gz`/`.AppImage`/`.flatpak` on
+   `ubuntu-24.04`/`ubuntu-24.04-arm`, and macOS `.dmg` on `macos-latest`; it
+   verifies the required files and Unix execute bits, creates a signed
+   build-provenance attestation for each bundle, creates or updates the GitHub
+   release, and verifies that all ten bundle assets are attached. Do not create
+   a second handwritten release for the same tag.
 
    For a local Windows zip preview:
    ```powershell
    dotnet publish CHDStudio/CHDStudio.csproj -c Release `
        -f net11.0-windows -r win-x64 --self-contained false `
-       -p:PublishSingleFile=true -o publish/3.15.0/win-x64
-   ./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.15.0 `
-       -PublishDir publish/3.15.0/win-x64 -OutputDir dist/3.15.0
+       -p:PublishSingleFile=true -o publish/3.16.0/win-x64
+   ./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.16.0 `
+       -PublishDir publish/3.16.0/win-x64 -OutputDir dist/3.16.0
    ```
    Linux `.tar.gz` and macOS `.dmg` must be packaged on those operating systems;
    `package-release.ps1` refuses to build them elsewhere. If a publish fails
@@ -179,7 +191,7 @@ Do not commit while InspectCode reports warnings or errors.
    append-only local release archive; never remove older bundles, posters, or
    any other file in it. Record the before/after file count.
    ```powershell
-   gh release download release_3.15.0 --dir CHDStudio/bin/Release --clobber
+   gh release download release_3.16.0 --dir CHDStudio/bin/Release --clobber
    ```
 7. **Let the `Docs` workflow deploy documentation**: it builds Jekyll from
    `docs/`, verifies `docs/WhatsNew.md` is identical to the root file, deploys
@@ -188,31 +200,33 @@ Do not commit while InspectCode reports warnings or errors.
    secret. Confirm Pages is using `build_type: workflow`.
 8. **Verify after CI**:
    ```powershell
-   gh release view release_3.15.0
+   gh release view release_3.16.0
    $attestDir = Join-Path $env:TEMP 'chdstudio-attest'
    New-Item -ItemType Directory -Force -Path $attestDir | Out-Null
-   gh release download release_3.15.0 `
-       --pattern release_3.15.0_win-x64.zip --dir $attestDir --clobber
-   gh attestation verify (Join-Path $attestDir 'release_3.15.0_win-x64.zip') `
+   gh release download release_3.16.0 `
+       --pattern release_3.16.0_win-x64.zip --dir $attestDir --clobber
+   gh attestation verify (Join-Path $attestDir 'release_3.16.0_win-x64.zip') `
        --repo purelogiccode/CHDStudio
    gh run list --limit 10
    ```
-   The release must be the latest, non-prerelease release with all six assets
+   The release must be the latest, non-prerelease release with all ten assets
    and the expected `WhatsNew.md` body; `CI`, `CodeQL`, `Docs`, `Dependency
    Review` (on PRs) and `Scorecard` must be green; Pages and the wiki must show
-   3.15.0 and the side menu; the app's update check
+   3.16.0 and the side menu; the app's update check
    (`https://api.github.com/repos/purelogiccode/CHDStudio/releases/latest`)
-   must see the new tag; and `CHDStudio/bin/Release/` must contain the six new
+   must see the new tag; and `CHDStudio/bin/Release/` must contain the ten new
    bundles beside every older file.
 
 ### Deployment invariants
 
-- The app is framework-dependent and single-file: **never** use
-  `--self-contained true` or embed the .NET runtime.
+- The primary `.zip`/`.tar.gz`/`.dmg` bundles are framework-dependent and
+  single-file: **never** use `--self-contained true` or embed the .NET runtime
+  for them. The Linux `.AppImage` and `.flatpak` are the self-contained
+  exception.
 - Publish all six RIDs: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`,
-  `osx-x64`, `osx-arm64`.
-- Bundle formats are Windows `.zip`, Linux `.tar.gz` and macOS `.dmg`, packaged
-  on their native runners.
+  `osx-x64`, `osx-arm64`, plus `linux-x64`/`linux-arm64` AppImage and Flatpak.
+- Bundle formats are Windows `.zip`, Linux `.tar.gz`, Linux
+  `.AppImage`/`.flatpak`, and macOS `.dmg`, packaged on their native runners.
 - Every bundle carries `LICENSE.txt`, `ReadMe.md` and `WhatsNew.md`.
 - Version is in `CHDStudio/CHDStudio.csproj`, `CHDStudio.Tests/CHDStudio.Tests.csproj`,
   `WhatsNew.md` and `docs/WhatsNew.md`; `scripts/ci/version.mjs` enforces it.
@@ -289,7 +303,7 @@ a real file on each runtime).
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | push/PR to `master`, manual | Restore, build, test; uploads trx + coverage results |
-| `.github/workflows/release.yml` | tag `release_*`, manual with tag | Validate version, test, package native bundles (Windows `.zip`, Linux `.tar.gz`, macOS `.dmg`) for all six RIDs (x64+arm64), attest provenance, publish and verify the GitHub release |
+| `.github/workflows/release.yml` | tag `release_*`, manual with tag | Validate version, test, package native bundles (Windows `.zip`, Linux `.tar.gz`/`.AppImage`/`.flatpak`, macOS `.dmg`) for all six RIDs (x64+arm64), attest provenance, publish and verify the GitHub release |
 | `.github/workflows/docs.yml` | push/PR to `master`, manual | PR: build the Jekyll Pages site; master: also deploy Pages and sync `docs/` to the GitHub wiki |
 | `.github/workflows/codeql.yml` | push/PR to `master`, weekly, manual | CodeQL code scanning for C# and the Actions workflows (`security-and-quality`) |
 | `.github/workflows/dependency-review.yml` | PR to `master` | Fail PRs that add high/critical vulnerable dependencies |

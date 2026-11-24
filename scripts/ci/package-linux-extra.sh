@@ -60,9 +60,9 @@ chmod 755 "$STAGE/CHDStudio"
 # ---- AppImage ----------------------------------------------------------------
 cp -a "$STAGE/." "$APPDIR/"
 cp "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.desktop" "$APPDIR/"
-cp "$ROOT/CHDStudio/icon/chd.png" "$APPDIR/com.purelogiccode.CHDStudio.png"
+cp "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.png" "$APPDIR/com.purelogiccode.CHDStudio.png"
 cp "$ROOT/packaging/linux/AppRun" "$APPDIR/AppRun"
-cp "$ROOT/CHDStudio/icon/chd.png" "$APPDIR/.DirIcon"
+cp "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.png" "$APPDIR/.DirIcon"
 chmod 755 "$APPDIR/AppRun"
 
 APPIMAGE_TOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${ARCH}.AppImage"
@@ -94,13 +94,13 @@ flatpak build-init \
 
 mkdir -p "$FLATPAK_BUILD/files/bin" \
          "$FLATPAK_BUILD/files/share/applications" \
-         "$FLATPAK_BUILD/files/share/icons/hicolor/1024x1024/apps" \
+         "$FLATPAK_BUILD/files/share/icons/hicolor/512x512/apps" \
          "$FLATPAK_BUILD/files/share/metainfo"
 cp -a "$STAGE/." "$FLATPAK_BUILD/files/bin/"
 cp "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.desktop" \
     "$FLATPAK_BUILD/files/share/applications/"
-cp "$ROOT/CHDStudio/icon/chd.png" \
-    "$FLATPAK_BUILD/files/share/icons/hicolor/1024x1024/apps/${APP_ID}.png"
+cp "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.png" \
+    "$FLATPAK_BUILD/files/share/icons/hicolor/512x512/apps/${APP_ID}.png"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$DATE/g" \
     "$ROOT/packaging/linux/com.purelogiccode.CHDStudio.metainfo.xml" \
     > "$FLATPAK_BUILD/files/share/metainfo/${APP_ID}.metainfo.xml"

@@ -5,6 +5,22 @@ nav_order: 16
 
 # What's New
 
+## 3.16.0 (2026-11-24)
+
+### Linux packaging
+
+*   **AppImage releases for Linux x64 and ARM64.** `release_<version>_linux-x64.AppImage` and `release_<version>_linux-arm64.AppImage` are self-contained, executable files that launch without installing the .NET runtime or the rest of the bundle.
+*   **Flatpak releases for Linux x64 and ARM64.** `release_<version>_linux-x64.flatpak` and `release_<version>_linux-arm64.flatpak` install as `com.purelogiccode.CHDStudio` against `org.freedesktop.Platform//25.08`, with the same self-contained payload.
+*   **Native ARM64 Linux packaging.** The ARM64 `.tar.gz`, AppImage, and Flatpak are now built and smoke-tested on a native `ubuntu-24.04-arm` runner instead of being cross-packaged on x64.
+*   **The existing bundles are unchanged in role.** Windows `.zip`, Linux `.tar.gz`, and macOS `.dmg` remain the framework-dependent releases. AppImage and Flatpak are the portable, self-contained exception because Flatpak cannot use an uninstalled host .NET runtime.
+
+### Verification
+
+*   **Real-host launches:** AppImage and Flatpak opened the main window on real Linux x64 and Linux ARM64 hosts; the Windows x64, Windows ARM64, and macOS ARM64 bundles were also launched and checked on their native hosts.
+*   **Test suite:** 1,333 tests pass (1,304 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+*   **Release workflow:** verifies ten assets (six existing bundles plus four Linux extras) and attests each newly built Linux extra.
+
 ## 3.15.0 (2026-11-24)
 
 ### New features

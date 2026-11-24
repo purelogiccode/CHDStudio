@@ -2,7 +2,7 @@
 #
 # Cut a release by pushing a tag that matches the version in
 # CHDStudio/CHDStudio.csproj, e.g.:
-#   git tag release_3.15.0 && git push origin release_3.15.0
+#   git tag release_3.16.0 && git push origin release_3.16.0
 #
 # Artifacts:
 #   * release_<version>_win-<arch>.zip   (Windows)
@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, e.g. release_3.15.0
+        description: Existing tag to release, e.g. release_3.16.0
         required: true
         type: string
 
@@ -252,7 +252,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y flatpak xvfb dbus-x11
+          sudo apt-get install -y flatpak xvfb dbus-x11 xdotool
           flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive --assumeyes flathub \
             org.freedesktop.Platform//25.08 \
@@ -285,27 +285,36 @@ jobs:
           appimage="dist/release_${version}_${rid}.AppImage"
           flatpak="dist/release_${version}_${rid}.flatpak"
 
+          check_window() {
+            local log="$1"
+            shift
+            set +e
+            dbus-run-session -- xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
+              "$@" >"'"$log"'" 2>&1 &
+              pid=$!
+              for _ in $(seq 1 20); do
+                if xdotool search --name "CHD Studio" >/dev/null 2>&1; then
+                  kill "$pid" 2>/dev/null || true
+                  exit 0
+                fi
+                sleep 1
+              done
+              kill "$pid" 2>/dev/null || true
+              exit 1
+            ' bash "$@"
+            local code=$?
+            set -e
+            if [[ $code -ne 0 ]]; then
+              cat "$log" || true
+              return 1
+            fi
+          }
+
           chmod +x "$appimage"
-          set +e
-          timeout 25s xvfb-run -a -s "-screen 0 1440x900x24" \
-            env APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" > appimage.log 2>&1
-          app_code=$?
-          set -e
-          if [[ $app_code -ne 0 && $app_code -ne 124 ]]; then
-            cat appimage.log
-            exit 1
-          fi
+          APPIMAGE_EXTRACT_AND_RUN=1 check_window appimage.log "$(pwd)/$appimage"
 
           flatpak install --user --noninteractive --assumeyes "$flatpak"
-          set +e
-          timeout 25s dbus-run-session -- xvfb-run -a -s "-screen 0 1440x900x24" \
-            flatpak run com.purelogiccode.CHDStudio > flatpak.log 2>&1
-          flat_code=$?
-          set -e
-          if [[ $flat_code -ne 0 && $flat_code -ne 124 ]]; then
-            cat flatpak.log
-            exit 1
-          fi
+          check_window flatpak.log flatpak run com.purelogiccode.CHDStudio
 
       - name: Attest Linux extras
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
