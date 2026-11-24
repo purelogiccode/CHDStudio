@@ -79,7 +79,12 @@ internal static class ChdSharpEncoderService
     ///     Optional parent CHD for delta (child) output. The parent's hunk and unit sizes must
     ///     match the command's; the library throws when they do not.
     /// </param>
-    /// <exception cref="ArgumentException">The command is not a supported creation command.</exception>
+    /// <param name="hunkBytesOverride">
+    ///     Optional hunk size for the output. Used for the PSP/PPSSPP-compatible
+    ///     <c>createdvd -hs 2048</c> mode; the value must be a whole multiple of the command's unit
+    ///     size. When null the command's chdman-compatible default is used.
+    /// </param>
+    /// <exception cref="ArgumentException">The command or hunk size is not supported.</exception>
     internal static void Encode(
         string command,
         string inputPath,
@@ -90,7 +95,8 @@ internal static class ChdSharpEncoderService
         Action<HunkProgress>? onHunkCompleted = null,
         bool conservativeCodecs = false,
         IReadOnlyList<uint>? codecTags = null,
-        string? parentPath = null
+        string? parentPath = null,
+        uint? hunkBytesOverride = null
     )
     {
         var options = new ChdEncodeOptions
@@ -102,6 +108,9 @@ internal static class ChdSharpEncoderService
 
         var cdCodecs = conservativeCodecs ? CdCodecsCompatible : codecTags ?? CdCodecs;
         var rawCodecs = conservativeCodecs ? RawCodecsCompatible : codecTags ?? RawCodecs;
+
+        if (hunkBytesOverride is { } requestedHunk)
+            ValidateHunkSize(command, rawUnits2352, requestedHunk);
 
         // chdman refuses inputs whose size is not a whole number of units for the raw commands.
         // The built-in encoder has to reject them too: encoding a partial trailing unit would drop
@@ -133,7 +142,7 @@ internal static class ChdSharpEncoderService
                 ChdEncoder.EncodeCd(
                     inputPath,
                     outputPath,
-                    CdHunkBytes,
+                    hunkBytesOverride ?? CdHunkBytes,
                     CdUnitBytes,
                     cdCodecs,
                     options,
@@ -147,7 +156,7 @@ internal static class ChdSharpEncoderService
                 ChdEncoder.EncodeRaw(
                     inputPath,
                     outputPath,
-                    RawHunkBytes,
+                    hunkBytesOverride ?? RawHunkBytes,
                     DvdUnitBytes,
                     rawCodecs,
                     options,
@@ -178,7 +187,7 @@ internal static class ChdSharpEncoderService
                 ChdEncoder.EncodeRaw(
                     inputPath,
                     outputPath,
-                    RawHunkBytes,
+                    hunkBytesOverride ?? RawHunkBytes,
                     HardDiskUnitBytes,
                     rawCodecs,
                     options,
@@ -190,7 +199,8 @@ internal static class ChdSharpEncoderService
             case "createraw":
             {
                 var unitBytes = rawUnits2352 ? RawCdUnitBytes : HardDiskUnitBytes;
-                var hunkBytes = Math.Max(RawHunkBytes / unitBytes * unitBytes, unitBytes);
+                var hunkBytes =
+                    hunkBytesOverride ?? Math.Max(RawHunkBytes / unitBytes * unitBytes, unitBytes);
                 ChdEncoder.EncodeRaw(
                     inputPath,
                     outputPath,
@@ -225,4 +235,41 @@ internal static class ChdSharpEncoderService
                 );
         }
     }
+
+    /// <summary>
+    ///     Rejects a requested hunk size that cannot be represented for the selected command.
+    ///     chdman requires the hunk size to be a whole multiple of the unit size; the built-in
+    ///     encoder enforces the same rule instead of writing a file it cannot describe correctly.
+    /// </summary>
+    /// <param name="command">The chdman-compatible creation command.</param>
+    /// <param name="rawUnits2352">Whether a raw source uses 2352-byte units.</param>
+    /// <param name="hunkBytes">The requested hunk size in bytes.</param>
+    private static void ValidateHunkSize(string command, bool rawUnits2352, uint hunkBytes)
+    {
+        var unitBytes = command switch
+        {
+            "createcd" => CdUnitBytes,
+            "createdvd" => DvdUnitBytes,
+            "createhd" => HardDiskUnitBytes,
+            "createraw" => rawUnits2352 ? RawCdUnitBytes : HardDiskUnitBytes,
+            _ => 0u,
+        };
+
+        if (unitBytes == 0)
+        {
+            throw new ArgumentException(
+                $"A custom hunk size is not supported for '{command}'.",
+                nameof(command)
+            );
+        }
+
+        if (hunkBytes is < 16 or > 1024 * 1024 || hunkBytes % unitBytes != 0)
+        {
+            throw new ArgumentException(
+                $"Hunk size {hunkBytes:N0} must be a multiple of the {unitBytes:N0}-byte unit size and between 16 and 1,048,576 bytes.",
+                nameof(hunkBytes)
+            );
+        }
+    }
 }
+

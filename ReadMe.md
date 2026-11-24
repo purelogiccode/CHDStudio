@@ -208,7 +208,7 @@ CHDStudio.exe "C:\ROMs\MyGames"
 2.  Select your **Source Folder** (containing images or archives).
 3.  Select your **Output Folder**.
 4.  *(Optional)* Check "Process smaller files first" to sort by file size.
-5.  *(Optional)* Check "Force CD" or "Force DVD" to override automatic command detection.
+5.  *(Optional)* Check "Force CD" or "Force DVD" to override automatic command detection. For PSP ISOs intended for PPSSPP, enable **PSP 2048 hunk** (forces `createdvd -hs 2048`).
 6.  *(Optional)* Choose a **Compression** preset (Default, Smallest, Most compatible, Auto or Uncompressed).
 7.  *(Optional)* Enable **Create a delta (child) CHD against a parent** and select the parent CHD.
 8.  *(Optional)* Set a time limit per file to abort conversions that exceed the specified duration.

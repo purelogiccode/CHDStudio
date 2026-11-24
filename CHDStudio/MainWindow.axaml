@@ -281,6 +281,11 @@
                                                         Content="Force DVD"
                                                         IsCheckedChanged="ForceCreateDvdCheckBox_IsCheckedChanged"
                                                         ToolTip.Tip="Force CHDMAN to use the 'createdvd' command" />
+                                                    <CheckBox
+                                                        x:Name="PspHunkSizeCheckBox"
+                                                        Content="PSP 2048 hunk"
+                                                        IsCheckedChanged="PspHunkSizeCheckBox_IsCheckedChanged"
+                                                        ToolTip.Tip="Create a DVD-mode CHD with a 2048-byte hunk size (chdman createdvd -hs 2048), recommended for PSP ISOs in PPSSPP" />
                                                 </StackPanel>
                                                 <TextBlock
                                                     Text="Compression:"

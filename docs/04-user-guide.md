@@ -29,6 +29,7 @@ Title-bar buttons: **Donate** (opens the project's donation page), **About** (in
 | **Process smaller files first** | Sorts the batch by ascending file size so quick conversions finish first. |
 | **Time limit per file** (minutes, default 15) | Aborts a single conversion that exceeds the limit; the file is marked failed and the batch continues. The app enforces a hard cap of 4 hours (`AppConfig.MaxConversionTimeoutHours`). |
 | **Force CD** / **Force DVD** | Overrides automatic command detection (`createcd` / `createdvd`). The two checkboxes are mutually exclusive. |
+| **PSP 2048 hunk** | Forces `createdvd` with `-hs 2048`, the hunk size PPSSPP recommends for PSP ISOs. The option checks **Force DVD** automatically and is disabled for delta CHDs, whose parent hunk size must match. |
 | **Compression** | Codec preset for new CHDs: **Default** (chdman-compatible), **Smallest** (zstd/cdzs, requires a recent MAME/libchdr reader), **Most compatible** (zlib/cdzl), **Auto** (per-platform preset), or **Uncompressed** (raw/DVD/HDD/CD; laserdisc output always uses AVHuff). |
 | **Create a delta (child) CHD against a parent** | Stores only the hunks that differ from the selected parent. The parent's hunk and unit sizes must match the selected command. |
 

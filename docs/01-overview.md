@@ -122,7 +122,7 @@ Content is inspected first; the extension only decides the outcome for files who
 7. **`.raw` (raw data)** → `createraw` (with an explicit unit size `-us 2352`). Cue descriptors referencing `.raw` audio tracks convert through the cue, whose track types already carry the 2352-byte unit size (`createcd` rejects `-us`).
 8. **`.avi` (laserdisc)** → `createld` (A/V `avhu` codec, one frame per hunk), always, regardless of the Force CD/DVD checkboxes.
 
-The user can override 5–7 via **Force CD** / **Force DVD** checkboxes. PBP always extracts first.
+The user can override 5-7 via **Force CD** / **Force DVD** checkboxes. The **PSP 2048 hunk** checkbox selects `createdvd -hs 2048` for PPSSPP-compatible PSP ISOs. PBP always extracts first.
 
 Generated cue sheets reference the disc image where it already lies rather than copying it, because chdman resolves a cue's `FILE` entry against the cue's own directory. That also means such a cue must be written on the **same volume** as the image: chdman joins the `FILE` string to the cue's directory unconditionally, so an absolute path becomes `C:\temp\D:\game.iso` and fails.
 

@@ -139,6 +139,7 @@ internal partial class MainWindow : Window, IDisposable
     private ChdCompressionPreset _conversionCompressionPreset = ChdCompressionPreset.Default;
     private string? _conversionParentPath;
     private bool _createDeltaChd;
+    private bool _pspHunkSize;
 
     // Tracks whether a close was requested while an operation was running
     private bool _pendingClose;
@@ -1776,9 +1777,20 @@ internal partial class MainWindow : Window, IDisposable
                 return;
             }
 
+            var pspHunk = PspHunkSizeCheckBox.IsChecked == true;
+            if (createDelta && pspHunk)
+            {
+                ShowError(
+                    "The PSP 2048-byte hunk size cannot be combined with a delta CHD. "
+                        + "The parent CHD's hunk size must match, so uncheck one of the options."
+                );
+                return;
+            }
+
             _conversionCompressionPreset = compressionPreset;
             _createDeltaChd = createDelta;
             _conversionParentPath = createDelta ? parentPath : null;
+            _pspHunkSize = pspHunk;
 
             RenewCancellationTokenSource();
 
@@ -1808,6 +1820,10 @@ internal partial class MainWindow : Window, IDisposable
                     : null;
 
             LogMessage("--- Starting batch conversion process... ---");
+            if (pspHunk)
+                LogMessage(
+                    "PSP mode: using createdvd with a 2048-byte hunk size (-hs 2048)."
+                );
             _wasCancelled = false;
 
             try
@@ -2044,6 +2060,7 @@ internal partial class MainWindow : Window, IDisposable
             );
         ForceCreateCdCheckBox.IsEnabled = enabled;
         ForceCreateDvdCheckBox.IsEnabled = enabled;
+        PspHunkSizeCheckBox.IsEnabled = enabled;
         ConversionCompressionComboBox.IsEnabled = enabled;
         CreateDeltaChdCheckBox.IsEnabled = enabled;
         ConversionParentChdTextBox.IsEnabled = enabled;
@@ -6825,11 +6842,15 @@ internal partial class MainWindow : Window, IDisposable
         var isRaw = inputFile.EndsWith(FileExtensions.Raw, StringComparison.OrdinalIgnoreCase);
         var isIso = inputFile.EndsWith(FileExtensions.Iso, StringComparison.OrdinalIgnoreCase);
         var isAvi = inputFile.EndsWith(FileExtensions.Avi, StringComparison.OrdinalIgnoreCase);
+        // PSP ISOs are 2048-byte-sector images and PPSSPP expects a createdvd CHD with a
+        // 2048-byte hunk. Laserdisc input has its own verb/hunk layout, so the option does
+        // not apply to it.
+        var pspHunk = _pspHunkSize && !isAvi;
 
         var command =
             isAvi ? "createld"
-            : forceCd || (!forceDvd && !isIso && !isImg && !isRaw) ? "createcd"
-            : forceDvd || isIso ? "createdvd"
+            : !pspHunk && (forceCd || (!forceDvd && !isIso && !isImg && !isRaw)) ? "createcd"
+            : pspHunk || forceDvd || isIso ? "createdvd"
             : isImg ? "createhd"
             : "createraw";
 
@@ -6879,6 +6900,9 @@ internal partial class MainWindow : Window, IDisposable
             // and createdvd/createhd reject "-us" ("Option '-us' not valid for this command").
             args += " -us 2352";
         }
+
+        if (pspHunk)
+            args += " -hs 2048";
 
         if (codecArgument is not null)
             args += $" -c {codecArgument}";
@@ -7692,7 +7716,8 @@ internal partial class MainWindow : Window, IDisposable
                             fallbackTimeoutCts.Token,
                             progress.ReportHunk,
                             codecTags: codecTags,
-                            parentPath: _createDeltaChd ? _conversionParentPath : null
+                            parentPath: _createDeltaChd ? _conversionParentPath : null,
+                            hunkBytesOverride: pspHunk ? 2048u : null
                         ),
                     fallbackTimeoutCts.Token
                 );
@@ -7874,7 +7899,8 @@ internal partial class MainWindow : Window, IDisposable
                                 fallbackTimeoutCts.Token,
                                 progress.ReportHunk,
                                 conservativeCodecs: true,
-                                parentPath: _createDeltaChd ? _conversionParentPath : null
+                                parentPath: _createDeltaChd ? _conversionParentPath : null,
+                                hunkBytesOverride: pspHunk ? 2048u : null
                             ),
                         fallbackTimeoutCts.Token
                     );
@@ -7945,7 +7971,8 @@ internal partial class MainWindow : Window, IDisposable
                                     progress.ReportHunk,
                                     conservativeCodecs: false,
                                     codecTags: [CodecTags.None],
-                                    parentPath: null
+                                    parentPath: null,
+                                    hunkBytesOverride: pspHunk ? 2048u : null
                                 ),
                             fallbackTimeoutCts.Token
                         );
@@ -9902,7 +9929,7 @@ internal partial class MainWindow : Window, IDisposable
         if (IsLoaded) RefreshFileListForActiveTab();
     }
 
-    /// <summary>Clears the force-DVD option when force-CD is checked.</summary>
+    /// <summary>Clears the force-DVD and PSP options when force-CD is checked.</summary>
     private void ForceCreateCdCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
     {
         // Only react to the box becoming checked: IsCheckedChanged also fires when it is
@@ -9910,6 +9937,7 @@ internal partial class MainWindow : Window, IDisposable
         if (ForceCreateCdCheckBox.IsChecked == true)
         {
             ForceCreateDvdCheckBox.IsChecked = false;
+            PspHunkSizeCheckBox.IsChecked = false;
         }
     }
 
@@ -9919,6 +9947,20 @@ internal partial class MainWindow : Window, IDisposable
         if (ForceCreateDvdCheckBox.IsChecked == true)
         {
             ForceCreateCdCheckBox.IsChecked = false;
+        }
+        else if (PspHunkSizeCheckBox.IsChecked == true)
+        {
+            PspHunkSizeCheckBox.IsChecked = false;
+        }
+    }
+
+    /// <summary>Forces DVD mode when the PSP 2048-byte hunk option is checked.</summary>
+    private void PspHunkSizeCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (PspHunkSizeCheckBox.IsChecked == true)
+        {
+            ForceCreateCdCheckBox.IsChecked = false;
+            ForceCreateDvdCheckBox.IsChecked = true;
         }
     }
 
