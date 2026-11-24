@@ -39,6 +39,7 @@ internal sealed class PbpTestFileBuilder
     private int _trailingPaddingBytes;
     private int _shortIndexBlockIndex = -1;
     private int _shortIndexBytes;
+    private int _finalBlockSectors = -1;
 
     private string _title = "Test Game";
 
@@ -217,6 +218,21 @@ internal sealed class PbpTestFileBuilder
     {
         _shortIndexBlockIndex = blockIndex;
         _shortIndexBytes = count;
+        return this;
+    }
+
+    /// <summary>
+    ///     Writes the final ISO index block with only <paramref name="sectors" /> sectors (1-16)
+    ///     instead of a padded 16-sector block, and records the matching total sector count in the
+    ///     ISO9660 volume descriptor. Several PBP authoring tools store the disc's partially filled
+    ///     last block this way; extraction must accept the short final block.
+    /// </summary>
+    /// <param name="sectors">Number of sectors stored in the final block, 1-16.</param>
+    public PbpTestFileBuilder WithFinalBlockSectors(int sectors)
+    {
+        _finalBlockSectors = sectors is >= 1 and <= 16
+            ? sectors
+            : throw new ArgumentOutOfRangeException(nameof(sectors));
         return this;
     }
 
@@ -448,7 +464,7 @@ internal sealed class PbpTestFileBuilder
                 continue;
             }
 
-            var storedLength = _compressBlocks ? GetStoredBlock(blockData, i).Length : BlockSize;
+            var storedLength = _compressBlocks ? GetStoredBlock(blockData, i).Length : blockData.Length;
             var entryLength = storedLength;
             if (i == _shortIndexBlockIndex)
                 entryLength = Math.Max(0, entryLength - _shortIndexBytes);
@@ -462,7 +478,7 @@ internal sealed class PbpTestFileBuilder
                 // uncompressed block, set by pop-fe with compression disabled), SHA-1 at 8.
                 BinaryPrimitives.WriteUInt16LittleEndian(
                     entry.Slice(4, 2),
-                    (ushort)(_compressBlocks ? entryLength : BlockSize)
+                    (ushort)(_compressBlocks ? entryLength : blockData.Length)
                 );
                 if (!_compressBlocks)
                     entry[6] = 0x01;
@@ -471,13 +487,13 @@ internal sealed class PbpTestFileBuilder
             {
                 BinaryPrimitives.WriteInt32LittleEndian(
                     entry[4..8],
-                    _compressBlocks ? entryLength : BlockSize
+                    _compressBlocks ? entryLength : blockData.Length
                 );
             }
 
             stream.Write(entry);
 
-            currentOffset += (uint)(_compressBlocks ? storedLength : BlockSize);
+            currentOffset += (uint)storedLength;
         }
 
         return offsets;
@@ -542,11 +558,13 @@ internal sealed class PbpTestFileBuilder
 
     private byte[] GetBlockData(int blockIndex)
     {
+        var length = GetBlockLength(blockIndex);
+
         if (_incompressibleBlocks)
         {
-            var randomBlock = new byte[BlockSize];
+            var randomBlock = new byte[length];
             var seed = 0x2F6E2B1 ^ (blockIndex * 0x9E3779B1);
-            for (var i = 0; i < BlockSize; i++)
+            for (var i = 0; i < length; i++)
             {
                 seed = seed * 1103515245 + 12345;
                 randomBlock[i] = (byte)((seed >> 16) & 0xFF);
@@ -554,10 +572,9 @@ internal sealed class PbpTestFileBuilder
 
             if (blockIndex == 1)
             {
-                var sectorCount = (uint)(_blockCount * 16);
                 BinaryPrimitives.WriteUInt32LittleEndian(
                     randomBlock.AsSpan(104, 4),
-                    sectorCount
+                    TotalSectorCount()
                 );
             }
 
@@ -569,13 +586,13 @@ internal sealed class PbpTestFileBuilder
             // Block index 1 (the second block) carries the ISO9660 volume information:
             // PbpDiscInfo.ReadIsoSize reads the sector count from bytes 104..107 of this
             // block, exactly like the reference implementation's GetIsoSize().
-            var data = new byte[BlockSize];
+            var data = new byte[length];
 
             // Fill with a recognizable pattern
-            for (var i = 0; i < BlockSize; i++)
+            for (var i = 0; i < length; i++)
                 data[i] = (byte)((i + blockIndex) & 0xFF);
 
-            if (_customIsoBlock1Data?.Length <= BlockSize)
+            if (_customIsoBlock1Data?.Length <= length)
             {
                 Buffer.BlockCopy(_customIsoBlock1Data, 0, data, 0, _customIsoBlock1Data.Length);
             }
@@ -583,19 +600,34 @@ internal sealed class PbpTestFileBuilder
             {
                 // ISO size in sectors at bytes 104-107 (little-endian uint32)
                 // Total ISO size = sectorCount * IsoBlockSize
-                // We want _blockCount blocks, each with 16 sectors
-                var sectorCount = (uint)(_blockCount * 16);
-                BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(104, 4), sectorCount);
+                BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(104, 4), TotalSectorCount());
             }
 
             return data;
         }
 
         // Other blocks: fill with pattern
-        var block = new byte[BlockSize];
-        for (var i = 0; i < BlockSize; i++)
+        var block = new byte[length];
+        for (var i = 0; i < length; i++)
             block[i] = (byte)((i + blockIndex * 17) & 0xFF);
         return block;
+    }
+
+    /// <summary>Returns the uncompressed byte length of one ISO block (the final one may be short).</summary>
+    /// <param name="blockIndex">Zero-based block index.</param>
+    private int GetBlockLength(int blockIndex)
+    {
+        return blockIndex == _blockCount - 1 && _finalBlockSectors > 0
+            ? _finalBlockSectors * IsoBlockSize
+            : BlockSize;
+    }
+
+    /// <summary>Returns the total number of sectors the ISO9660 volume descriptor declares.</summary>
+    private uint TotalSectorCount()
+    {
+        return _finalBlockSectors > 0
+            ? (uint)((_blockCount - 1) * 16 + _finalBlockSectors)
+            : (uint)(_blockCount * 16);
     }
 
     private byte[] CompressBlock(byte[] data)

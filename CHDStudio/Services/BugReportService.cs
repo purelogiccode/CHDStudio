@@ -137,6 +137,23 @@ internal class BugReportService
         // known at the collision preflight. The batch keeps the first product and warns about the
         // duplicate, which is the intended behaviour, not an app bug.
         "was already produced earlier in this batch",
+        // A .pbp whose magic is wrong and whose bytes are not a disc image is a renamed or
+        // incomplete user file. Content inspection has already tried every format the app knows.
+        "Failed to open PBP file: InvalidHeader",
+        "is not a PBP (its header is missing)",
+        // A PBP whose PSAR block is short is damaged download data; the message tells the user
+        // to re-download it. The decoder is not at fault.
+        "the PBP's disc data is damaged",
+        // The OS has no handler registered for the URL (a Windows install with no default
+        // browser, or a headless Linux session). The app copies the URL and tells the user.
+        "Failed to open browser",
+        "Error opening URL",
+        // A release bundle missing one of the app's own managed libraries cannot load optional
+        // functionality. The size pre-flight degrades gracefully; this is an installation issue.
+        "Could not load file or assembly 'MDSSharp",
+        // Windows privilege failures while opening the output file are storage/permission
+        // conditions (for example a restricted root directory), not an encoder defect.
+        "A required privilege is not held by the client",
         // CHDSharp hitting a device or permission error (drive unplugged, disk failing, full disk,
         // denied access) is an environment condition, not an encoder defect.
         "CHDSharp could not read or write",

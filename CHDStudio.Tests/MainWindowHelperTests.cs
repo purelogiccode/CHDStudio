@@ -320,6 +320,20 @@ public class MainWindowHelperTests : IDisposable
         Assert.Equal(expected, MainWindow.IsChdWriteFailure(message));
     }
 
+    [Theory]
+    [InlineData(
+        "Error creating CHD file (I:\\Game.chdtmp): A required privilege is not held by the client.",
+        true
+    )]
+    [InlineData("Error creating CHD file: Access denied", true)]
+    [InlineData("Error creating CHD file: Permission denied", true)]
+    [InlineData("Error creating CHD file: UnauthorizedAccessException", true)]
+    [InlineData("Error creating CHD file: The disk is full", false)]
+    public void IsPermissionError_ClassifiesWindowsPrivilegeFailure(string message, bool expected)
+    {
+        Assert.Equal(expected, MainWindow.IsPermissionError(message));
+    }
+
     [Fact]
     public void IsDamagedPbpBlock_ShortDeflateStream_ReturnsTrue()
     {

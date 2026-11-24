@@ -9,6 +9,9 @@ internal enum DiscImageKind
     /// <summary>Raw CD sectors: the 12-byte sync mark is present.</summary>
     RawCd,
 
+    /// <summary>A cooked ISO9660 image with 2048-byte sectors.</summary>
+    Iso,
+
     /// <summary>Alcohol 120% .mds descriptor.</summary>
     AlcoholDescriptor,
 

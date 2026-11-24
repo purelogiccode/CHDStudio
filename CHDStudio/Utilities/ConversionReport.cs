@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using CCDSharp;
 using CHDStudio.Models;
 using MDSSharp;
@@ -314,17 +315,16 @@ internal static class ConversionReport
         List<string>? volumes;
         try
         {
-            volumes = SplitImageJoiner.TryGetVolumeSet(file);
+            volumes = TryGetSplitImageVolumes(file);
         }
-        catch (Exception ex)
-            when (ex is FileNotFoundException or FileLoadException or TypeLoadException
-                or BadImageFormatException
-            )
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // The size pre-flight only feeds the savings summary, and MDSSharp owns
             // SplitImageJoiner. A deployment where that assembly cannot be resolved must not
             // abort the whole batch before the first conversion; count the input itself and
             // let the conversion path report the real problem if the input needs MDSSharp.
+            // The call lives in a separate non-inlined method because a JIT failure resolving
+            // MDSSharp happens before this method's own try block becomes active.
             Logger.Information(ex, "Could not inspect {File} for split-image volumes", file);
             sourceFiles.Add(file);
             return;
@@ -338,5 +338,19 @@ internal static class ConversionReport
 
         foreach (var volume in volumes)
             sourceFiles.Add(volume);
+    }
+
+    /// <summary>
+    ///     Calls MDSSharp's split-volume detector. This is deliberately a separate, non-inlined
+    ///     method: when MDSSharp is missing from the deployment, JIT resolution of its type fails
+    ///     at the call site inside <see cref="AddFile" />'s try block instead of while JITting
+    ///     <see cref="AddFile" /> itself, so the size pre-flight can degrade to counting the input.
+    /// </summary>
+    /// <param name="file">The input path to inspect.</param>
+    /// <returns>The split volumes, or null when the path is not a split-image set.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static List<string>? TryGetSplitImageVolumes(string file)
+    {
+        return SplitImageJoiner.TryGetVolumeSet(file);
     }
 }
