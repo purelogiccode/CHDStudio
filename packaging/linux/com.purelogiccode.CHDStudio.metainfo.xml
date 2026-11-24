@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.purelogiccode.CHDStudio</id>
+  <name>CHD Studio</name>
+  <summary>Convert disc images to CHD and manage CHD files</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <description>
+    <p>
+      CHD Studio converts cue, iso, img, ccd, mds, pbp, cso, isz, ecm, split-image
+      sets and archives to MAME CHD, and verifies, explores and extracts existing CHD
+      files.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.purelogiccode.CHDStudio.desktop</launchable>
+  <url type="homepage">https://github.com/purelogiccode/CHDStudio</url>
+  <url type="bugtracker">https://github.com/purelogiccode/CHDStudio/issues</url>
+  <developer_name>PureLogicCode</developer_name>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>
