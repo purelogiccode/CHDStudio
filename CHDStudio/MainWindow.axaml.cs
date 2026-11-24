@@ -10075,6 +10075,9 @@ internal partial class MainWindow : Window, IDisposable
             }
         }
         catch (Exception clipboardEx)
+            when (clipboardEx is InvalidOperationException or NotSupportedException
+                or ObjectDisposedException or ExternalException or IOException
+            )
         {
             LogMessage($"Failed to copy URL to clipboard: {clipboardEx.Message}");
         }
