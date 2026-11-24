@@ -6847,12 +6847,21 @@ internal partial class MainWindow : Window, IDisposable
         // not apply to it.
         var pspHunk = _pspHunkSize && !isAvi;
 
-        var command =
-            isAvi ? "createld"
-            : !pspHunk && (forceCd || (!forceDvd && !isIso && !isImg && !isRaw)) ? "createcd"
-            : pspHunk || forceDvd || isIso ? "createdvd"
-            : isImg ? "createhd"
-            : "createraw";
+        string command;
+        if (isAvi)
+            command = "createld";
+        else if (pspHunk)
+            command = "createdvd";
+        else if (forceCd)
+            command = "createcd";
+        else if (!forceDvd && !isIso && !isImg && !isRaw)
+            command = "createcd";
+        else if (forceDvd || isIso)
+            command = "createdvd";
+        else if (isImg)
+            command = "createhd";
+        else
+            command = "createraw";
 
         if (isAvi && _createDeltaChd)
         {
