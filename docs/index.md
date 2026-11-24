@@ -35,7 +35,7 @@ This documentation covers the project from both a user and a developer perspecti
 | Fact | Value |
 |------|-------|
 | **Application name** | `CHDStudio` |
-| **Latest version** | 3.15.0 |
+| **Latest version** | 3.16.0 |
 | **Target framework** | .NET 11.0 (`net11.0;net11.0-windows`), Avalonia |
 | **Platform** | Windows 10 / 11, Linux and macOS (x64 and ARM64; release bundles for all six runtime identifiers) |
 | **License** | GPL v3.0 |

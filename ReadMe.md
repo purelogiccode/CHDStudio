@@ -158,7 +158,7 @@ Generated cue sheets reference the disc image where it already lies rather than 
 
 ## 💻 Requirements
 
-*   **Operating System**: Windows 10 / 11 (x64 or ARM64), Linux (x64 or ARM64) and macOS (Intel or Apple silicon); release bundles are published for all six runtime identifiers
+*   **Operating System**: Windows 10 / 11 (x64 or ARM64), Linux (x64 or ARM64) and macOS (Intel or Apple silicon); release bundles are published for all six runtime identifiers plus portable Linux AppImage/Flatpak.
 *   **Runtime**: [.NET 11.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/11.0) on Windows; the .NET 11.0 runtime on Linux and macOS
 *   **Bundled Dependencies**:
     *   `chdman.exe` / `chdman_arm64.exe` (MAME Project — primary encoder on Windows, extraction fallback)
@@ -181,12 +181,12 @@ Generated cue sheets reference the disc image where it already lies rather than 
 
 ## 📥 Installation
 
-1.  Download the latest bundle from the [Releases](https://github.com/purelogiccode/CHDStudio/releases) page: the `.zip` for Windows (`win-x64` or `win-arm64`), the `.tar.gz` for Linux (`linux-x64` or `linux-arm64`), or the `.dmg` for macOS (`osx-x64` or `osx-arm64`).
-2.  Extract the archive or mount the disk image and move the contents to a permanent folder.
+1.  Download the latest bundle from the [Releases](https://github.com/purelogiccode/CHDStudio/releases) page: the `.zip` for Windows (`win-x64` or `win-arm64`), the `.tar.gz` for Linux (`linux-x64` or `linux-arm64`), the `.dmg` for macOS (`osx-x64` or `osx-arm64`), or the `.AppImage`/`.flatpak` for portable Linux use.
+2.  Extract the archive or mount the disk image and move the contents to a permanent folder. For AppImage, mark the file executable and run it; for Flatpak, install the bundle with `flatpak install --user <bundle>.flatpak`.
 3.  **Important** (Windows): ensure the tool `.exe` files (including ARM64 variants) remain in the same directory as `CHDStudio.exe`. On Linux and macOS, keep `7zz` next to the app inside the `CHDStudio` folder; nothing else is required because the CHDSharp encoder is built in.
 4.  Launch the application.
 
-Each release bundle is named `release_<version>_<rid>.<ext>` (for example `release_3.15.0_win-x64.zip`, `release_3.15.0_linux-x64.tar.gz` or `release_3.15.0_osx-arm64.dmg`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 11 runtime is **not** embedded in the executable.
+Each release bundle is named `release_<version>_<rid>.<ext>` (for example `release_3.16.0_win-x64.zip`, `release_3.16.0_linux-x64.tar.gz` or `release_3.16.0_osx-arm64.dmg`) and contains the framework-dependent single-file app, the native Avalonia libraries, the matching `chdman`/7-Zip tools, and this `ReadMe.md`, `LICENSE.txt` and `WhatsNew.md`. The .NET 11 runtime is **not** embedded in the `.zip`/`.tar.gz`/`.dmg` executables. The Linux `.AppImage` and `.flatpak` are self-contained and include the runtime.
 
 Every release bundle is built by GitHub Actions and gets a signed build-provenance attestation. Verify a download with the GitHub CLI:
 

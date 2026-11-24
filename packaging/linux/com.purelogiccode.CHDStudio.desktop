@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CHD Studio
+Comment=Convert disc images to CHD and manage CHD files
+Exec=CHDStudio
+Icon=com.purelogiccode.CHDStudio
+Terminal=false
+Categories=Utility;
+StartupNotify=true

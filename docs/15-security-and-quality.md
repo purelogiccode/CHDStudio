@@ -32,7 +32,7 @@ for the full scope, response timeline and safe-harbor terms.
 | `Dependency Review` | pull request to `master` | Fails a PR that adds a high or critical vulnerable dependency |
 | `Scorecard` | push to `master`, weekly, branch-protection changes, manual | OpenSSF Scorecard supply-chain checks; publishes results and uploads SARIF |
 | `Docs` | push/PR to `master`, manual | Builds the Pages site, verifies `WhatsNew.md` is in sync, deploys Pages and syncs the wiki |
-| `Release` | `release_*` tag, manual with tag | Validates the version, runs the full test suite, publishes all six RIDs, packages the native `.zip`/`.tar.gz`/`.dmg` bundles, attests each one, publishes the GitHub release and verifies all six assets |
+| `Release` | `release_*` tag, manual with tag | Validates the version, runs the full test suite, publishes all six RIDs plus AppImage/Flatpak extras, packages the native `.zip`/`.tar.gz`/`.dmg`/`.AppImage`/`.flatpak` bundles, attests each one, publishes the GitHub release and verifies all ten assets |
 
 GitHub Code Quality runs a separate dynamic `CodeQL - Code Quality` analysis for
 C# and the Node helper scripts.
@@ -96,8 +96,9 @@ release blockers.
 ## 15.6 Release archive
 
 Local release bundles are archived in `CHDStudio/bin/Release/`. That folder is
-append-only: copy the new six bundles in and never delete older files. The
-bundles contain `LICENSE.txt`, `ReadMe.md`, `WhatsNew.md`, the
-framework-dependent single-file application, the platform native libraries and
-only that RID's tools. The .NET runtime is never embedded. See
+append-only: copy the new ten bundles in and never delete older files. The
+framework-dependent `.zip`/`.tar.gz`/`.dmg` bundles contain `LICENSE.txt`,
+`ReadMe.md`, `WhatsNew.md`, the single-file application, the platform native
+libraries and only that RID's tools; the portable Linux `.AppImage` and
+`.flatpak` are self-contained. See
 [Release & Deployment](14-release-and-deployment.md) for the full routine.

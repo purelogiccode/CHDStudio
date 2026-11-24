@@ -2,16 +2,18 @@
 #
 # Cut a release by pushing a tag that matches the version in
 # CHDStudio/CHDStudio.csproj, e.g.:
-#   git tag release_3.15.0 && git push origin release_3.15.0
+#   git tag release_3.16.0 && git push origin release_3.16.0
 #
 # Artifacts:
 #   * release_<version>_win-<arch>.zip   (Windows)
 #   * release_<version>_linux-<arch>.tar.gz (Linux, with a CHDStudio/ folder)
+#   * release_<version>_linux-<arch>.AppImage
+#   * release_<version>_linux-<arch>.flatpak
 #   * release_<version>_osx-<arch>.dmg   (macOS, with a CHDStudio/ folder)
 # for win-x64, win-arm64, linux-x64, linux-arm64, osx-x64 and osx-arm64.
-# The app is framework-dependent (users install the .NET 11 Desktop Runtime on
-# Windows, the .NET 11 runtime on Linux/macOS) and published as a single file;
-# see scripts/ci/package-release.ps1.
+# The primary bundles are framework-dependent (users install the .NET 11
+# Desktop Runtime on Windows, the .NET 11 runtime on Linux/macOS) and published
+# as a single file; the AppImage and Flatpak are self-contained.
 name: Release
 
 on:
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to release, e.g. release_3.15.0
+        description: Existing tag to release, e.g. release_3.16.0
         required: true
         type: string
 
@@ -114,11 +116,11 @@ jobs:
             ext: .zip
           - rid: linux-x64
             tfm: net11.0
-            os: ubuntu-latest
+            os: ubuntu-24.04
             ext: .tar.gz
           - rid: linux-arm64
             tfm: net11.0
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             ext: .tar.gz
           - rid: osx-x64
             tfm: net11.0
@@ -215,6 +217,121 @@ jobs:
           path: dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}${{ matrix.ext }}
           if-no-files-found: error
 
+  package-linux-extras:
+    name: Package ${{ matrix.rid }} AppImage & Flatpak
+    needs: [meta, test]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            arch: x86_64
+            os: ubuntu-24.04
+          - rid: linux-arm64
+            arch: aarch64
+            os: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Install Flatpak and runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb dbus-x11 xdotool
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive --assumeyes flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08
+
+      - name: Publish self-contained single-file app
+        run: >
+          dotnet publish CHDStudio/CHDStudio.csproj
+          -c Release
+          -f net11.0
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -o publish-extras/${{ matrix.rid }}
+
+      - name: Build AppImage and Flatpak
+        run: >
+          bash scripts/ci/package-linux-extra.sh
+          --rid '${{ matrix.rid }}'
+          --arch '${{ matrix.arch }}'
+          --version '${{ needs.meta.outputs.version }}'
+          --publish-dir 'publish-extras/${{ matrix.rid }}'
+          --output-dir 'dist'
+
+      - name: Smoke-test AppImage and Flatpak
+        run: |
+          set -euo pipefail
+          version="${{ needs.meta.outputs.version }}"
+          rid="${{ matrix.rid }}"
+          appimage="dist/release_${version}_${rid}.AppImage"
+          flatpak="dist/release_${version}_${rid}.flatpak"
+
+          check_window() {
+            local log="$1"
+            shift
+            set +e
+            dbus-run-session -- xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
+              "$@" >"'"$log"'" 2>&1 &
+              pid=$!
+              for _ in $(seq 1 20); do
+                if xdotool search --name "CHD Studio" >/dev/null 2>&1; then
+                  kill "$pid" 2>/dev/null || true
+                  exit 0
+                fi
+                sleep 1
+              done
+              kill "$pid" 2>/dev/null || true
+              exit 1
+            ' bash "$@"
+            local code=$?
+            set -e
+            if [[ $code -ne 0 ]]; then
+              cat "$log" || true
+              return 1
+            fi
+          }
+
+          chmod +x "$appimage"
+          APPIMAGE_EXTRACT_AND_RUN=1 check_window appimage.log "$(pwd)/$appimage"
+
+          flatpak install --user --noninteractive --assumeyes "$flatpak"
+          check_window flatpak.log flatpak run com.purelogiccode.CHDStudio
+
+      - name: Attest Linux extras
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: |
+            dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.AppImage
+            dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.flatpak
+
+      - name: Upload Linux extras
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-${{ matrix.rid }}-extras
+          path: |
+            dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.AppImage
+            dist/release_${{ needs.meta.outputs.version }}_${{ matrix.rid }}.flatpak
+          if-no-files-found: error
+
   publish:
     name: Create GitHub release
     needs: [meta, package]
@@ -242,9 +359,9 @@ jobs:
           set -euo pipefail
           ls -l release
           shopt -s nullglob
-          assets=(release/*.zip release/*.tar.gz release/*.dmg)
-          if [[ ${#assets[@]} -ne 6 ]]; then
-            echo "::error::Expected six release bundles, found ${#assets[@]}."
+          assets=(release/*.zip release/*.tar.gz release/*.dmg release/*.AppImage release/*.flatpak)
+          if [[ ${#assets[@]} -ne 10 ]]; then
+            echo "::error::Expected ten release bundles, found ${#assets[@]}."
             exit 1
           fi
           prerelease=()
@@ -267,26 +384,30 @@ jobs:
               "${assets[@]}"
           fi
 
-      - name: Verify all six release assets
+      - name: Verify all ten release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
           set -euo pipefail
-          declare -A ext=(
-            [win-x64]=.zip
-            [win-arm64]=.zip
-            [linux-x64]=.tar.gz
-            [linux-arm64]=.tar.gz
-            [osx-x64]=.dmg
-            [osx-arm64]=.dmg
+          expected=(
+            "release_${VERSION}_win-x64.zip"
+            "release_${VERSION}_win-arm64.zip"
+            "release_${VERSION}_linux-x64.tar.gz"
+            "release_${VERSION}_linux-arm64.tar.gz"
+            "release_${VERSION}_linux-x64.AppImage"
+            "release_${VERSION}_linux-arm64.AppImage"
+            "release_${VERSION}_linux-x64.flatpak"
+            "release_${VERSION}_linux-arm64.flatpak"
+            "release_${VERSION}_osx-x64.dmg"
+            "release_${VERSION}_osx-arm64.dmg"
           )
-          for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
-            name="release_${VERSION}_${rid}${ext[$rid]}"
-            if ! gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$name"; then
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for name in "${expected[@]}"; do
+            if ! grep -qx "$name" <<< "$assets"; then
               echo "::error::Release $TAG is missing $name"
               exit 1
             fi
           done
-          echo "All six release bundles are attached to $TAG."
+          echo "All ten release bundles are attached to $TAG."
