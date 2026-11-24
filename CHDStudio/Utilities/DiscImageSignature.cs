@@ -15,6 +15,12 @@ internal static class DiscImageSignature
     /// <summary>Bytes read from the front of a file; enough for every signature below.</summary>
     private const int HeaderLength = 32;
 
+    /// <summary>First sector that can hold the ISO9660 volume descriptor (2048-byte sectors).</summary>
+    private const int IsoFirstVolumeDescriptorSector = 16;
+
+    /// <summary>The ISO9660 volume descriptor identifier at bytes 1-5 of sector 16.</summary>
+    private static ReadOnlySpan<byte> IsoVolumeDescriptorId => "CD001"u8;
+
     /// <summary>The 12-byte sync pattern that opens every raw CD sector.</summary>
     private static readonly byte[] CdSyncMark =
     [
@@ -52,13 +58,61 @@ internal static class DiscImageSignature
             )
             {
                 read = stream.ReadAtLeast(header, header.Length, false);
-            }
+                var kind = Classify(header.AsSpan(0, read));
+                if (kind != DiscImageKind.Unknown)
+                    return kind;
 
-            return Classify(header.AsSpan(0, read));
+                return HasIsoVolumeDescriptor(stream) ? DiscImageKind.Iso : DiscImageKind.Unknown;
+            }
         }
         catch (Exception)
         {
             return DiscImageKind.Unknown;
+        }
+    }
+
+    /// <summary>
+    ///     Returns whether the stream holds an ISO9660 volume descriptor where a cooked image places
+    ///     it. A plain 2048-byte-sector ISO has no signature in its first sector, so this deeper
+    ///     probe is what distinguishes it from an unknown file (and lets a mislabelled .pbp that is
+    ///     really an ISO be routed to conversion instead of being rejected as a PBP).
+    /// </summary>
+    /// <param name="stream">The seekable file stream to inspect.</param>
+    /// <returns>True when sector 16 carries an ISO9660 primary or supplementary descriptor.</returns>
+    private static bool HasIsoVolumeDescriptor(Stream stream)
+    {
+        try
+        {
+            Span<byte> descriptor = stackalloc byte[8];
+            // The primary descriptor normally sits at sector 16; a boot record at 16 pushes it
+            // to 17. Checking the next two sectors covers both layouts at negligible cost.
+            for (var sector = IsoFirstVolumeDescriptorSector; sector <= 18; sector++)
+            {
+                var offset = sector * 2048L;
+                if (stream.Length < offset + descriptor.Length)
+                    return false;
+
+                stream.Seek(offset, SeekOrigin.Begin);
+                stream.ReadExactly(descriptor);
+
+                // Match the 8-byte descriptor prefix the reference ISO parsers test for:
+                // type (primary/supplementary), "CD001", version 1, reserved 0.
+                if (
+                    descriptor[0] is 1 or 2
+                    && descriptor[1..6].SequenceEqual(IsoVolumeDescriptorId)
+                    && descriptor[6] == 1
+                    && descriptor[7] == 0
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException)
+        {
+            return false;
         }
     }
 
@@ -144,6 +198,7 @@ internal static class DiscImageSignature
         return kind switch
         {
             DiscImageKind.RawCd => "a raw CD disc image",
+            DiscImageKind.Iso => "an ISO9660 disc image",
             DiscImageKind.AlcoholDescriptor => "an Alcohol 120% .mds descriptor",
             DiscImageKind.Rar => "a RAR archive",
             DiscImageKind.Zip => "a ZIP archive",

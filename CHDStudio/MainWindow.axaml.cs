@@ -4333,8 +4333,18 @@ internal partial class MainWindow : Window, IDisposable
                 // defect: extracting the short block would shift every later block and produce
                 // a corrupt image, so the file is skipped with actionable guidance instead of
                 // filing a bug report for the user's data.
-                LogWarning(
+                LogMessage(
                     $" {originalName}: the PBP's disc data is damaged (a compressed block ends before a full 16-sector block) — skipping. Re-download the file."
+                );
+            }
+            else if (result.ErrorCode == PbpError.InvalidHeader)
+            {
+                // The file does not start with PBP magic and content inspection could not route
+                // it to any known image format. That is a property of the user's file (renamed,
+                // incomplete, or unrelated data), not an application defect, so it belongs in
+                // the activity log without a bug report.
+                LogMessage(
+                    $" {originalName} is not a PBP (its header is missing) and its content is not a disc image the app recognises — skipping."
                 );
             }
             else
@@ -4347,11 +4357,6 @@ internal partial class MainWindow : Window, IDisposable
 
                 switch (result.ErrorCode)
                 {
-                    case PbpError.InvalidHeader:
-                        LogMessage(
-                            "       The file does not begin with a PBP header - it is not a PlayStation EBOOT."
-                        );
-                        break;
                     case PbpError.CorruptFile or PbpError.DecompressionError or PbpError.InvalidSfo:
                         LogMessage(
                             "       The file may be truncated or corrupt (re-download it), or it may not be a PSX PBP."
@@ -4413,9 +4418,10 @@ internal partial class MainWindow : Window, IDisposable
 
     /// <summary>
     ///     Handles a .pbp whose content is not a PBP at all: an archive is extracted, a CSO is
-    ///     decompressed, an ISZ/ECM is restored, and a plain disc image is converted directly.
-    ///     Returns null when the content is not a format the app knows, so the caller keeps the
-    ///     original PBP error report.
+    ///     decompressed, an ISZ/ECM is restored, and a plain disc image (including a cooked
+    ///     ISO9660 image, which has no signature in its first sector) is converted directly.
+    ///     Returns null only when the content is itself detected as a PBP, so the caller keeps
+    ///     the original PBP error report.
     /// </summary>
     /// <param name="inputFile">The mislabelled .pbp input.</param>
     /// <param name="originalName">File name used in log messages.</param>
@@ -4445,7 +4451,7 @@ internal partial class MainWindow : Window, IDisposable
     )
     {
         var kind = DiscImageSignature.Detect(inputFile);
-        if (kind is DiscImageKind.Pbp or DiscImageKind.Unknown) return null;
+        if (kind == DiscImageKind.Pbp) return null;
 
         var outputChd = ComputeOutputChdPath(inputFile, inputFolder, outputFolder);
 
@@ -9431,14 +9437,18 @@ internal partial class MainWindow : Window, IDisposable
     /// <summary>Returns whether chdman's error output indicates a permission error.</summary>
     /// <param name="errorOutput">Captured chdman error output.</param>
     /// <returns>True when the output mentions denied access.</returns>
-    private static bool IsPermissionError(string? errorOutput)
+    internal static bool IsPermissionError(string? errorOutput)
     {
         if (string.IsNullOrEmpty(errorOutput))
             return false;
 
         return errorOutput.Contains("Permission denied", StringComparison.OrdinalIgnoreCase)
                || errorOutput.Contains("Access denied", StringComparison.OrdinalIgnoreCase)
-               || errorOutput.Contains("UnauthorizedAccess", StringComparison.OrdinalIgnoreCase);
+               || errorOutput.Contains("UnauthorizedAccess", StringComparison.OrdinalIgnoreCase)
+               || errorOutput.Contains(
+                   "A required privilege is not held by the client",
+                   StringComparison.OrdinalIgnoreCase
+               );
     }
 
     /// <summary>
@@ -10052,37 +10062,30 @@ internal partial class MainWindow : Window, IDisposable
 
         if (result != MessageBoxResult.Yes) return;
 
+        if (UrlLauncher.TryOpen(release.HtmlUrl, out var urlError)) return;
+
+        LogMessage($"Failed to open browser: {urlError}");
+
         try
         {
-            Process.Start(new ProcessStartInfo(release.HtmlUrl) { UseShellExecute = true });
+            var clipboard = GetTopLevel(this)?.Clipboard;
+            if (clipboard is not null)
+            {
+                await clipboard.SetTextAsync(release.HtmlUrl);
+            }
         }
-        catch (Exception urlEx)
+        catch (Exception clipboardEx)
         {
-            LogMessage($"Failed to open browser: {urlEx.Message}");
-            await ReportBugAsync("Failed to open browser", urlEx);
-
-            try
-            {
-                var clipboard = GetTopLevel(this)?.Clipboard;
-                if (clipboard is not null)
-                {
-                    await clipboard.SetTextAsync(release.HtmlUrl);
-                }
-            }
-            catch (Exception clipboardEx)
-            {
-                LogMessage($"Failed to copy URL to clipboard: {clipboardEx.Message}");
-                await ReportBugAsync("Failed to copy URL to clipboard", clipboardEx);
-            }
-
-            await MessageBox.ShowAsync(
-                this,
-                $"Unable to open browser automatically. The update URL has been copied to your clipboard.\n\nURL: {release.HtmlUrl}\n\nPlease paste it into your browser manually.",
-                "Browser Launch Failed",
-                MessageBoxButton.Ok,
-                MessageBoxImage.Information
-            );
+            LogMessage($"Failed to copy URL to clipboard: {clipboardEx.Message}");
         }
+
+        await MessageBox.ShowAsync(
+            this,
+            $"Unable to open browser automatically. The update URL has been copied to your clipboard.\n\nURL: {release.HtmlUrl}\n\nPlease paste it into your browser manually.",
+            "Browser Launch Failed",
+            MessageBoxButton.Ok,
+            MessageBoxImage.Information
+        );
     }
 
     /// <summary>
@@ -10157,16 +10160,8 @@ internal partial class MainWindow : Window, IDisposable
     /// <summary>Opens the project's donation page in the default browser.</summary>
     private void DonateMenuItem_Click(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            Process.Start(
-                new ProcessStartInfo { FileName = AppConfig.DonationUrl, UseShellExecute = true }
-            );
-        }
-        catch (Exception ex)
-        {
-            LogError("Failed to open the donation page", ex);
-        }
+        if (!UrlLauncher.TryOpen(AppConfig.DonationUrl, out var error))
+            LogMessage($"Failed to open the donation page: {error}");
     }
 
     /// <summary>Opens the About window.</summary>

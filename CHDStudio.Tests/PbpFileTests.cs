@@ -252,6 +252,38 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
+    public void ExtractToAcceptsAShortFinalBlock()
+    {
+        // A disc whose sector count is not a multiple of 16 can store its last index block with
+        // only the sectors the image actually contains. The block is complete at its own declared
+        // size, not at the padded 16-sector size, and must extract successfully.
+        var path = Path.Combine(_tempDir, $"shortfinal_{Guid.NewGuid():N}.pbp");
+        new PbpTestFileBuilder()
+            .WithBlockCount(3)
+            .WithFinalBlockSectors(7)
+            .BuildTo(path);
+
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            const uint expectedIsoSize = 39 * PbpDiscInfo.IsoBlockSize;
+            Assert.Equal(expectedIsoSize, pbp.Discs[0].IsoSize);
+
+            using var outputStream = new MemoryStream();
+            pbp.Discs[0].ExtractTo(outputStream);
+            Assert.Equal(expectedIsoSize, (uint)outputStream.Length);
+
+            var binPath = Path.Combine(_tempDir, $"{Guid.NewGuid():N}.bin");
+            var result = pbp.Discs[0].ExtractToBinCue(binPath);
+            Assert.Equal(PbpError.None, result);
+            Assert.Equal(expectedIsoSize, (uint)new FileInfo(binPath).Length);
+        }
+    }
+
+    [Fact]
     public void ExtractToIgnoresIndexEntriesBeyondDeclaredIsoSize()
     {
         // Authoring tools can leave non-zero data after the real index entries (pop-fe writes a

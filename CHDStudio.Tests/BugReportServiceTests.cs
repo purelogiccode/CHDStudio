@@ -454,6 +454,28 @@ public class BugReportServiceTests
     // A device that became unready mid-batch (removable card reader, network share).
     [InlineData(" Cannot create the output folder: The device is not ready. : 'H:\\roms\\ps1'.")]
     [InlineData(" Cannot convert 'game.iso': the source or output could not be read or written (The device is not ready. : 'F:\\CHDStudio_Temp\\x.iso').")]
+    // A .pbp whose header is not PBP magic and whose content is not a known image format.
+    [InlineData(
+        "Failed to extract PBP file: Bloody Roar.PBP (190,840,832 bytes) - Failed to open PBP file: InvalidHeader (code 1)"
+    )]
+    [InlineData(
+        " Bloody Roar.PBP is not a PBP (its header is missing) and its content is not a disc image the app recognises — skipping."
+    )]
+    // A genuinely damaged PBP block: the message already tells the user to re-download it.
+    [InlineData(
+        " Tekken.PBP: the PBP's disc data is damaged (a compressed block ends before a full 16-sector block) — skipping. Re-download the file."
+    )]
+    // No default browser / headless session: the app copies the URL instead.
+    [InlineData("Failed to open browser: An error occurred trying to start process 'https://example.com' with working directory 'C:\\app'. Class not registered")]
+    [InlineData("Error opening URL: https://example.com")]
+    // A release bundle missing the optional MDSSharp assembly.
+    [InlineData(
+        "Could not load file or assembly 'MDSSharp, Version=1.2.3.0, Culture=neutral, PublicKeyToken=null'. The system cannot find the file specified."
+    )]
+    // A Windows privilege failure while the encoder opens its output file.
+    [InlineData(
+        "Failed to convert 'Death Connection (Japan).iso': Error creating CHD file (I:\\Death Connection (Japan).6f9e52f6.chdtmp): A required privilege is not held by the client."
+    )]
     public void IsExcludedFromBugReport_KnownPatterns_ReturnsTrue(string message)
     {
         Assert.True(BugReportService.IsExcludedFromBugReport(message));
