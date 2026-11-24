@@ -112,11 +112,13 @@ The conversion writes to `<name>.<8hex>.chdtmp` next to the destination and move
 ### Command & argument selection
 
 ```csharp
-command = isAvi                                                      ? "createld"
-        : !pspHunk && (forceCd || (!forceDvd && !isIso && !isImg && !isRaw)) ? "createcd"
-        : pspHunk || forceDvd || isIso                               ? "createdvd"
-        : isImg                                                      ? "createhd"
-        :                                                              "createraw";
+if (isAvi) command = "createld";
+else if (pspHunk) command = "createdvd";
+else if (forceCd) command = "createcd";
+else if (!forceDvd && !isIso && !isImg && !isRaw) command = "createcd";
+else if (forceDvd || isIso) command = "createdvd";
+else if (isImg) command = "createhd";
+else command = "createraw";
 ```
 
 - `pspHunk` — the **PSP 2048 hunk** option forces `createdvd` and adds `-hs 2048`, the hunk size PPSSPP recommends for PSP ISOs. The built-in CHDSharp encoder receives the same override. The option is not applied to laserdisc input and is rejected with a delta CHD, whose parent hunk size must match.
