@@ -257,7 +257,7 @@ public class PbpFileTests : IDisposable
         // A disc whose sector count is not a multiple of 16 can store its last index block with
         // only the sectors the image actually contains. The block is complete at its own declared
         // size, not at the padded 16-sector size, and must extract successfully.
-        var path = Path.Combine(_tempDir, $"shortfinal_{Guid.NewGuid():N}.pbp");
+        var path = Path.Join(_tempDir, $"shortfinal_{Guid.NewGuid():N}.pbp");
         new PbpTestFileBuilder()
             .WithBlockCount(3)
             .WithFinalBlockSectors(7)
@@ -276,7 +276,7 @@ public class PbpFileTests : IDisposable
             pbp.Discs[0].ExtractTo(outputStream);
             Assert.Equal(expectedIsoSize, (uint)outputStream.Length);
 
-            var binPath = Path.Combine(_tempDir, $"{Guid.NewGuid():N}.bin");
+            var binPath = Path.Join(_tempDir, $"{Guid.NewGuid():N}.bin");
             var result = pbp.Discs[0].ExtractToBinCue(binPath);
             Assert.Equal(PbpError.None, result);
             Assert.Equal(expectedIsoSize, (uint)new FileInfo(binPath).Length);

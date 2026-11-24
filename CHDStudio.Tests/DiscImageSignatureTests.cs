@@ -92,7 +92,7 @@ public class DiscImageSignatureTests : IDisposable
         // A plain 2048-byte-sector ISO has no signature in its first sector; the ISO9660 primary
         // volume descriptor at sector 16 is what identifies it. This is the shape of the .pbp
         // files that were really renamed ISOs and failed with InvalidHeader.
-        var path = Path.Combine(_tempDir, "game.pbp");
+        var path = Path.Join(_tempDir, "game.pbp");
         var data = new byte[16 * 2048 + 8];
         data[16 * 2048] = 1;
         "CD001"u8.CopyTo(data.AsSpan(16 * 2048 + 1));

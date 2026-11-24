@@ -65,7 +65,10 @@ internal static class DiscImageSignature
                 return HasIsoVolumeDescriptor(stream) ? DiscImageKind.Iso : DiscImageKind.Unknown;
             }
         }
-        catch (Exception)
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException or System.Security.SecurityException
+            )
         {
             return DiscImageKind.Unknown;
         }
