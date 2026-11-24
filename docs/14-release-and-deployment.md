@@ -20,12 +20,12 @@ All four values must match, and `WhatsNew.md` must contain a section whose
 heading starts with that exact version:
 
 ```markdown
-## 3.14.1 (2026-11-18)
+## 3.15.0 (2026-11-24)
 ```
 
 `scripts/ci/version.mjs` validates all of this locally and in CI. A release tag
 is `release_<version>` and must match the project version exactly, for example
-`release_3.14.1`.
+`release_3.15.0`.
 
 ## 14.2 Build the six runtime bundles
 
@@ -50,7 +50,7 @@ automatically with one matrix job per RID. For a local build, publish and
 package a RID with:
 
 ```powershell
-$version = "3.14.1"
+$version = "3.15.0"
 $rid = "win-x64"          # or linux-x64 / osx-arm64
 $tfm = "net11.0-windows"  # net11.0 for Linux/macOS
 
@@ -97,7 +97,7 @@ node scripts/ci/version.mjs
 jb inspectcode --output=InspectCode.log CSharp_CHDStudio.sln
 ```
 
-The full suite must pass (**1,314 tests**: 1,285 unit + 29 integration), and
+The full suite must pass (**1,333 tests**: 1,304 unit + 29 integration), and
 InspectCode must report **zero warnings and zero errors**. The remaining
 InspectCode notes are suggestions, not release blockers. For a Linux bundle,
 extract the `.tar.gz` and confirm `CHDStudio` and `7zz` are executable; for a
@@ -130,8 +130,8 @@ secret; without it the step reports that it skipped the sync.
 After the docs and version files are committed and pushed to `master`:
 
 ```powershell
-git tag release_3.14.1
-git push origin release_3.14.1
+git tag release_3.15.0
+git push origin release_3.15.0
 ```
 
 The `Release` workflow then:

@@ -59,7 +59,7 @@ dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-x
 dotnet publish CHDStudio/CHDStudio.csproj -c Release -f net11.0-windows -r win-arm64 --self-contained false -p:PublishSingleFile=true -o publish/win-arm64
 
 # Release bundle (run on the bundle's OS; CI does this per RID)
-./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.14.1 -PublishDir publish/win-x64 -OutputDir dist
+./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.15.0 -PublishDir publish/win-x64 -OutputDir dist
 
 # Run on Windows (multi-targeted, so pick the Windows TFM)
 dotnet run --project CHDStudio/CHDStudio.csproj -f net11.0-windows
@@ -123,7 +123,7 @@ Do not commit while InspectCode reports warnings or errors.
   version, body = the `WhatsNew.md` section). Re-running the workflow refreshes
   the notes and uploads assets with `--clobber`.
 
-### Standard release routine (used for 3.14.1)
+### Standard release routine (used for 3.15.0)
 
 1. **Review the changes since the previous tag** and fix regressions before
    changing versions. Run the full suite, not only the CI filter.
@@ -144,12 +144,12 @@ Do not commit while InspectCode reports warnings or errors.
 4. **Commit and push `master`**, then tag and push the tag:
    ```powershell
    git add -A
-   git commit -m "release: prepare 3.14.1"
-   git tag release_3.14.1
+   git commit -m "release: prepare 3.15.0"
+   git tag release_3.15.0
    git push origin master
-   git push origin release_3.14.1
+   git push origin release_3.15.0
    ```
-   The tag must exactly match the csproj version and the `## 3.14.1` heading in
+   The tag must exactly match the csproj version and the `## 3.15.0` heading in
    `WhatsNew.md`. The `Protect master` ruleset lets repository admins bypass the
    PR requirement for this maintenance push; the release tag itself is not
    blocked.
@@ -166,9 +166,9 @@ Do not commit while InspectCode reports warnings or errors.
    ```powershell
    dotnet publish CHDStudio/CHDStudio.csproj -c Release `
        -f net11.0-windows -r win-x64 --self-contained false `
-       -p:PublishSingleFile=true -o publish/3.14.1/win-x64
-   ./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.14.1 `
-       -PublishDir publish/3.14.1/win-x64 -OutputDir dist/3.14.1
+       -p:PublishSingleFile=true -o publish/3.15.0/win-x64
+   ./scripts/ci/package-release.ps1 -Rid win-x64 -Version 3.15.0 `
+       -PublishDir publish/3.15.0/win-x64 -OutputDir dist/3.15.0
    ```
    Linux `.tar.gz` and macOS `.dmg` must be packaged on those operating systems;
    `package-release.ps1` refuses to build them elsewhere. If a publish fails
@@ -179,7 +179,7 @@ Do not commit while InspectCode reports warnings or errors.
    append-only local release archive; never remove older bundles, posters, or
    any other file in it. Record the before/after file count.
    ```powershell
-   gh release download release_3.14.1 --dir CHDStudio/bin/Release --clobber
+   gh release download release_3.15.0 --dir CHDStudio/bin/Release --clobber
    ```
 7. **Let the `Docs` workflow deploy documentation**: it builds Jekyll from
    `docs/`, verifies `docs/WhatsNew.md` is identical to the root file, deploys
@@ -188,19 +188,19 @@ Do not commit while InspectCode reports warnings or errors.
    secret. Confirm Pages is using `build_type: workflow`.
 8. **Verify after CI**:
    ```powershell
-   gh release view release_3.14.1
+   gh release view release_3.15.0
    $attestDir = Join-Path $env:TEMP 'chdstudio-attest'
    New-Item -ItemType Directory -Force -Path $attestDir | Out-Null
-   gh release download release_3.14.1 `
-       --pattern release_3.14.1_win-x64.zip --dir $attestDir --clobber
-   gh attestation verify (Join-Path $attestDir 'release_3.14.1_win-x64.zip') `
+   gh release download release_3.15.0 `
+       --pattern release_3.15.0_win-x64.zip --dir $attestDir --clobber
+   gh attestation verify (Join-Path $attestDir 'release_3.15.0_win-x64.zip') `
        --repo purelogiccode/CHDStudio
    gh run list --limit 10
    ```
    The release must be the latest, non-prerelease release with all six assets
    and the expected `WhatsNew.md` body; `CI`, `CodeQL`, `Docs`, `Dependency
    Review` (on PRs) and `Scorecard` must be green; Pages and the wiki must show
-   3.14.1 and the side menu; the app's update check
+   3.15.0 and the side menu; the app's update check
    (`https://api.github.com/repos/purelogiccode/CHDStudio/releases/latest`)
    must see the new tag; and `CHDStudio/bin/Release/` must contain the six new
    bundles beside every older file.

@@ -5,6 +5,34 @@ nav_order: 16
 
 # What's New
 
+## 3.15.0 (2026-11-24)
+
+### New features
+
+*   **PSP 2048-byte hunk mode (#21).** The Convert tab now has a **PSP 2048 hunk** checkbox next to Force CD / Force DVD. It forces `createdvd` and adds `-hs 2048`, the layout PPSSPP recommends for PSP ISOs. The in-process CHDSharp encoder receives the same hunk size on the first attempt and both verification retries. PSP mode is mutually exclusive with Force CD and is rejected for delta CHDs because the parent's hunk size must match.
+*   **Browser launch fallback.** Update, About and donation links now try the platform opener (`explorer.exe`, `open` or `xdg-open`) when the desktop shell has no URL association, and copy/show the link instead of filing a bug report.
+
+### Bug fixes
+
+*   **Short final PBP blocks extract.** PBPSharp now derives the expected size of the last ISO block from the declared ISO9660 sector count. A final block containing fewer than 16 sectors is complete at that shorter length, while a short middle block is still rejected so the image cannot shift.
+*   **Mislabelled `.pbp` files are routed by content.** Cooked ISO9660 images are recognised from their volume descriptor at sector 16 and converted instead of failing with `InvalidHeader`. The remaining unknown `.pbp` cases are logged as user-data skips.
+*   **Missing MDSSharp no longer aborts a Linux batch.** The split-image pre-flight call is isolated in a non-inlined helper, so a deployment missing the optional assembly falls back to counting the input instead of failing before the first conversion.
+*   **Fewer false bug reports.** Damaged PBP data, unknown `.pbp` content, Windows privilege failures, browser-launch failures and CHDSharp hunk-level CRC/decode diagnostics are now classified as user-data or environment conditions. CHDSharp diagnostics remain attached to the app's own verification/extraction message.
+*   **Existing duplicate-output notice retained.** Two inputs resolving to the same CHD still keep the first product and log the duplicate as informational.
+
+### Libraries and dependencies
+
+*   **MDSSharp 1.3.0** adds cooked Mode 2 Form 1 (`MODE2/2048`) and Form 2 (`MODE2/2324`) support.
+*   **PBPSharp 1.1.9** source includes the short-final-block fix; NuGet 1.1.8 remains the latest published package.
+*   Avalonia 12.2.0, SharpCompress 0.50.11 and Meziantou.Analyzer 3.0.342 are current; the GitHub Actions dependency-review and Scorecard actions were updated to their current SHA-pinned releases.
+*   Remaining `Path.Combine` code-scanning notes in the tests were replaced with `Path.Join`, and the new code was tightened to keep the code-scanning alert count at zero.
+
+### Verification
+
+*   **Test suite:** 1,333 tests pass (1,304 unit + 29 integration-tagged).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+*   **Code scanning:** zero open alerts; CI, CodeQL, Docs and Scorecard are green on `master`.
+
 ## 3.14.1 (2026-11-18)
 
 ### Bug fixes

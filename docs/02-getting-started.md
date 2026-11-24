@@ -70,14 +70,14 @@ The solution contains seven projects:
 | Package | Version | Purpose |
 |---------|---------|---------|
 | CHDSharp | 1.7.1 | Pure C# CHD reading, verification, extraction, and creation (chdman byte-identical output) |
-| Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.1.6 | Cross-platform Fluent Design UI framework and controls |
-| SharpCompress | 0.50.9 | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
+| Avalonia (+ Desktop, Fluent theme, DataGrid) | 12.2.0 | Cross-platform Fluent Design UI framework and controls |
+| SharpCompress | 0.50.11 | Archive extraction (7z/rar), and bzip2 decompression for ISZ chunks |
 | NAudio | 3.3.0 | MP3 decoding via Media Foundation |
 | Serilog | 4.4.0 | Structured logging |
 | Serilog.Sinks.File | 7.0.0 | Rolling file logs |
 | Serilog.Sinks.Debug | 3.0.0 | Debugger sink |
 | SharpZipLib | 1.4.2 | Reference-compatible inflater for PBP PSAR blocks (via PBPSharp) |
-| Meziantou.Analyzer | 3.0.339 | Roslyn analyzers (build-time only) |
+| Meziantou.Analyzer | 3.0.342 | Roslyn analyzers (build-time only) |
 | Roslynator.Analyzers | 5.0.1 | Roslyn analyzers (build-time only) |
 
 ---
