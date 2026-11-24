@@ -334,7 +334,7 @@ jobs:
 
   publish:
     name: Create GitHub release
-    needs: [meta, package]
+    needs: [meta, package, package-linux-extras]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
