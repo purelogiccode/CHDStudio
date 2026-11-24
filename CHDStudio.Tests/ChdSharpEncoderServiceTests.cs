@@ -179,6 +179,48 @@ public class ChdSharpEncoderServiceTests : IDisposable
     }
 
     [Fact]
+    public void CreateDvd_Psp2048Hunk_EncodesVerifiableChd()
+    {
+        File.WriteAllBytes(PathFor("psp.iso"), new byte[2048 * 20]);
+        var chdPath = PathFor("psp.chd");
+
+        ChdSharpEncoderService.Encode(
+            "createdvd",
+            PathFor("psp.iso"),
+            chdPath,
+            false,
+            2,
+            CancellationToken.None,
+            hunkBytesOverride: 2048
+        );
+
+        AssertVerifies(chdPath);
+        var header = ReadHeader(chdPath);
+        Assert.Equal(2048u, header.UnitBytes);
+        Assert.Equal(2048u, header.HunkBytes);
+    }
+
+    [Fact]
+    public void CreateDvd_InvalidHunkSize_Throws()
+    {
+        File.WriteAllBytes(PathFor("invalid.iso"), new byte[2048 * 20]);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            ChdSharpEncoderService.Encode(
+                "createdvd",
+                PathFor("invalid.iso"),
+                PathFor("invalid.chd"),
+                false,
+                2,
+                CancellationToken.None,
+                hunkBytesOverride: 3000
+            )
+        );
+
+        Assert.Contains("multiple of the", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CreateHd_EncodesVerifiableHardDiskChd()
     {
         File.WriteAllBytes(PathFor("disk.img"), new byte[512 * 2048]);

@@ -113,17 +113,20 @@ The conversion writes to `<name>.<8hex>.chdtmp` next to the destination and move
 
 ```csharp
 command = isAvi                                                      ? "createld"
-        : forceCd || (!forceDvd && !isIso && !isImg && !isRaw)       ? "createcd"
-        : forceDvd || isIso                                          ? "createdvd"
+        : !pspHunk && (forceCd || (!forceDvd && !isIso && !isImg && !isRaw)) ? "createcd"
+        : pspHunk || forceDvd || isIso                               ? "createdvd"
         : isImg                                                      ? "createhd"
         :                                                              "createraw";
 ```
+
+- `pspHunk` — the **PSP 2048 hunk** option forces `createdvd` and adds `-hs 2048`, the hunk size PPSSPP recommends for PSP ISOs. The built-in CHDSharp encoder receives the same override. The option is not applied to laserdisc input and is rejected with a delta CHD, whose parent hunk size must match.
 
 - `isAvi` — a laserdisc `.avi` always converts with `createld` (A/V `avhu` codec, one frame per hunk), regardless of the Force CD/DVD checkboxes; `-us` is not added.
 
 - `hasCue = isImg && File.Exists(Path.ChangeExtension(input, ".cue"))` — an `.img` with a sibling `.cue` is treated as a CD image.
 - **Verb choice is still extension-driven here**, but this code is now only reached for images that content inspection (§5.2) did not claim. So `Data size ... is not divisible by sector size` should now mean a genuinely broken file rather than a mislabelled one.
 - Base args: `{command} -i "<in>" -o "<out>" -f -np {cores}`.
+- **PSP 2048 hunk** adds `-hs 2048` on `createdvd`; the built-in encoder uses the same hunk size on its first attempt and both verification retries.
 - **`.raw` inputs get `-us 2352` only when the command is `createraw`** — chdman's `createraw` requires an explicit unit size when no parent CHD is supplied ("Unit size must be specified if no output parent CHD is supplied"). A `.raw` input combined with Force CD or Force DVD runs `createcd`/`createdvd`, which reject the option, so it is not appended there.
 - **`.cue`/`.toc` descriptors referencing `.raw` tracks do not get `-us`** — `createcd` does not accept the option ("Option '-us' not valid for this command"); it derives the 2352-byte unit size from the cue's own `MODE1/2352`/`MODE2/2352` track types, so the cue is handed over unchanged.
 - `-np` (processors) comes from a UI/core setting.

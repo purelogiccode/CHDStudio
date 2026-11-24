@@ -189,6 +189,8 @@ In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/C
 
 The codec column is the **Default** preset. The Convert tab's Compression selector overrides it through `codecTags`; `parentPath` adds `-op`/`ChdEncodeOptions.ParentPath` for delta output. The conservative retry always uses the compatible set.
 
+`hunkBytesOverride` replaces the command's default hunk size after validation against the unit size. The **PSP 2048 hunk** option passes `2048` for `createdvd` (`-hs 2048`), matching PPSSPP's recommended PSP layout; the same value is reused by the verification retries. Delta output keeps the parent's hunk size, which is why the UI rejects the PSP option together with a delta CHD.
+
 ### Integration
 
 - Called from `ConvertToChdAsync`'s local `TryChdSharpInProcessAsync` on a background thread (`Task.Run`), after the input has been prepared (ASCII copy or cue work directory). The staged output is moved into place only after `Encode` returns.
