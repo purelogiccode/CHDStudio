@@ -218,7 +218,25 @@ try {
     Get-ChildItem -LiteralPath $stage -File | Sort-Object Name | ForEach-Object {
         Write-Host ("  {0,-24} {1,8:N2} MB" -f $_.Name, ($_.Length / 1MB))
     }
-    Write-Host ("SHA256: " + (Get-FileHash -LiteralPath $bundlePath -Algorithm SHA256).Hash)
+
+    # hdiutil can still hold the freshly written .dmg for a moment. The hash is
+    # informational, so retry briefly and never fail the release over the lock.
+    $bundleHash = $null
+    for ($attempt = 0; $attempt -lt 10 -and -not $bundleHash; $attempt++) {
+        try {
+            $bundleHash = (Get-FileHash -LiteralPath $bundlePath -Algorithm SHA256).Hash
+        }
+        catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    if ($bundleHash) {
+        Write-Host "SHA256: $bundleHash"
+    }
+    else {
+        Write-Warning "SHA256 could not be computed for $bundlePath (file still locked)."
+    }
 }
 finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
