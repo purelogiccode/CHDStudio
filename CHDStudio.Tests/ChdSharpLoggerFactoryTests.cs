@@ -67,4 +67,21 @@ public class ChdSharpLoggerFactoryTests
         Assert.NotNull(captured);
         Assert.Contains("second", captured);
     }
+
+    /// <summary>
+    ///     Hunk-level failures in a user's CHD are diagnostics, not application errors. They are
+    ///     captured for the caller's classified message but must not be forwarded to the
+    ///     bug-report sink as Error events.
+    /// </summary>
+    [Theory]
+    [InlineData(LogLevel.Warning, Serilog.Events.LogEventLevel.Information)]
+    [InlineData(LogLevel.Error, Serilog.Events.LogEventLevel.Information)]
+    [InlineData(LogLevel.Critical, Serilog.Events.LogEventLevel.Fatal)]
+    public void LibraryFailuresDoNotBecomeBugReportLevels(
+        LogLevel input,
+        Serilog.Events.LogEventLevel expected
+    )
+    {
+        Assert.Equal(expected, ChdSharpLoggerFactory.MapLevel(input));
+    }
 }

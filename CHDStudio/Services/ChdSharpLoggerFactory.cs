@@ -57,6 +57,17 @@ internal sealed class ChdSharpLoggerFactory : ILoggerFactory
         }
     }
 
+    /// <summary>
+    ///     Maps a CHDSharp level to the Serilog level the application writes. Exposed for tests so
+    ///     the rule that library-level decode errors do not reach the bug-report sink stays covered.
+    /// </summary>
+    /// <param name="logLevel">CHDSharp level to map.</param>
+    /// <returns>The equivalent Serilog level.</returns>
+    internal static LogEventLevel MapLevel(LogLevel logLevel)
+    {
+        return ChdSharpLogger.MapToSerilog(logLevel);
+    }
+
     /// <summary>Stores a warning-or-above message for the caller to attach to its own report.</summary>
     /// <param name="message">The rendered message.</param>
     private static void Capture(string message)
@@ -121,7 +132,7 @@ internal sealed class ChdSharpLoggerFactory : ILoggerFactory
             var message = formatter(state, exception);
 
             Serilog.Log.Write(
-                Map(logLevel),
+                MapToSerilog(logLevel),
                 exception,
                 "{ChdSharpCategory}: {Message}",
                 _category,
@@ -137,16 +148,17 @@ internal sealed class ChdSharpLoggerFactory : ILoggerFactory
 
         /// <summary>
         ///     Maps a <see cref="LogLevel" /> to the matching Serilog level. CHDSharp's
-        ///     <see cref="LogLevel.Warning" /> is deliberately written at
-        ///     <see cref="LogEventLevel.Information" />: the library also uses it for user-data
-        ///     notices (for example "track has subcode data, it will be omitted"), and every
-        ///     Warning-and-above Serilog event is forwarded to the bug-report API. Genuine
-        ///     failures are reported by the application's own classified error message, which
-        ///     carries the captured detail.
+        ///     <see cref="LogLevel.Warning" /> and <see cref="LogLevel.Error" /> are deliberately
+        ///     written at <see cref="LogEventLevel.Information" />: the library uses Error for
+        ///     hunk-level decode/CRC failures in a user's CHD and Warning for user-data notices,
+        ///     and every Warning-and-above Serilog event is forwarded to the bug-report API.
+        ///     Genuine failures are reported by the application's own classified error message,
+        ///     which carries the captured detail; a corrupt input must not file a library-internal
+        ///     error report.
         /// </summary>
         /// <param name="logLevel">Level to map.</param>
         /// <returns>The equivalent Serilog level.</returns>
-        private static LogEventLevel Map(LogLevel logLevel)
+        internal static LogEventLevel MapToSerilog(LogLevel logLevel)
         {
             return logLevel switch
             {
@@ -154,7 +166,7 @@ internal sealed class ChdSharpLoggerFactory : ILoggerFactory
                 LogLevel.Debug => LogEventLevel.Debug,
                 LogLevel.Information => LogEventLevel.Information,
                 LogLevel.Warning => LogEventLevel.Information,
-                LogLevel.Error => LogEventLevel.Error,
+                LogLevel.Error => LogEventLevel.Information,
                 LogLevel.Critical => LogEventLevel.Fatal,
                 _ => LogEventLevel.Debug
             };

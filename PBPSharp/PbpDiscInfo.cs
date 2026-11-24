@@ -345,6 +345,15 @@ public sealed class PbpDiscInfo
         // 64-bit math: the PSAR offset plus a large block offset can overflow int32 on
         // multi-gigabyte files.
         var thisOffset = _psarOffset + PsarIsoOffset + entry.Offset;
+
+        // The final index entry may represent fewer than 16 sectors: an ISO whose sector count
+        // is not a multiple of 16 is written by several authoring tools as a short final block,
+        // and the public API documents that the last block may be shorter. Use the ISO9660
+        // sector count to know exactly how many bytes that block should produce; when the size
+        // is unknown, keep the historical full-block requirement. Resolve it before seeking:
+        // the lazy size probe reads block 1 and moves the stream.
+        var expectedLength = GetExpectedBlockLength(blockIndex);
+
         _stream.Seek(thisOffset, SeekOrigin.Begin);
 
         // A full-size block, or any block explicitly flagged as stored/uncompressed, is
@@ -370,18 +379,28 @@ public sealed class PbpDiscInfo
             // The index length is not always exactly the stored stream length: writers pad a
             // block, leave a few bytes of the next stream in the range, or record a length that
             // lags the next entry. The next entry's offset is where this block's data really
-            // ends, so read up to it. The inflater stops as soon as one full 16-sector block has
-            // been produced, so trailing bytes inside that range are never parsed as deflate
+            // ends, so read up to it. The inflater stops as soon as the expected output length
+            // has been produced, so trailing bytes inside that range are never parsed as deflate
             // data; they only make a cut-short stream whole.
             var readLength = GetStoredBlockLength(blockIndex, entry);
 
             var inBuffer = ArrayPool<byte>.Shared.Rent(readLength);
             try
             {
-                _stream.ReadExactly(inBuffer, 0, readLength);
                 try
                 {
-                    bytesRead = DecompressBlock(inBuffer, readLength, buffer);
+                    _stream.ReadExactly(inBuffer, 0, readLength);
+                }
+                catch (EndOfStreamException ex)
+                {
+                    var detail =
+                        $"block {blockIndex} of {_isoIndex.Count} (disc {Index}, id {DiscId}) needs {readLength} bytes at file offset 0x{thisOffset:X}, but the stream ended at 0x{_stream.Position:X} (length 0x{_stream.Length:X}).";
+                    PbpDiagnostics.SetDetail(detail);
+                    throw new EndOfStreamException(detail, ex);
+                }
+                try
+                {
+                    bytesRead = DecompressBlock(inBuffer, readLength, buffer, expectedLength);
                 }
                 catch (Exception ex)
                 {
@@ -420,6 +439,27 @@ public sealed class PbpDiscInfo
             return entry.Length;
 
         return (int)Math.Min(distance, MaxBlockEntrySize);
+    }
+
+    /// <summary>
+    ///     Returns the number of decompressed bytes the indexed block should produce. Every block
+    ///     but the last holds 16 sectors. The last block is shorter when the disc's ISO9660 sector
+    ///     count is not a multiple of 16, as several authoring tools write it; in that case the
+    ///     declared image size is the only way to know the exact length. When the size cannot be
+    ///     derived, the historical full-block requirement is kept.
+    /// </summary>
+    /// <param name="blockIndex">Zero-based block index.</param>
+    /// <returns>The expected number of decompressed bytes for the block.</returns>
+    private int GetExpectedBlockLength(int blockIndex)
+    {
+        const int fullBlockSize = 16 * IsoBlockSize;
+        var isoSize = IsoSize;
+        if (isoSize == 0 || blockIndex != _isoIndex.Count - 1)
+            return fullBlockSize;
+
+        var blockStart = (long)blockIndex * fullBlockSize;
+        var remaining = isoSize - blockStart;
+        return remaining is > 0 and < fullBlockSize ? (int)remaining : fullBlockSize;
     }
 
     /// <summary>
@@ -614,32 +654,64 @@ public sealed class PbpDiscInfo
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
     /// <param name="output">The buffer that receives the decompressed data.</param>
+    /// <param name="expectedLength">The number of bytes this block must produce (a full 16-sector
+    /// block, or the shorter length of the final block).</param>
     /// <returns>The number of bytes written to <paramref name="output" />.</returns>
     /// <exception cref="InvalidDataException">
     ///     Thrown when the block cannot be inflated as either raw deflate or a zlib stream.
     /// </exception>
-    private static int DecompressBlock(byte[] compressed, int compressedLength, byte[] output)
+    private static int DecompressBlock(
+        byte[] compressed,
+        int compressedLength,
+        byte[] output,
+        int expectedLength
+    )
     {
-        if (TryInflate(compressed, compressedLength, output, noHeader: true, out var size, out var rawFailure))
+        if (
+            TryInflate(
+                compressed,
+                compressedLength,
+                output,
+                expectedLength,
+                noHeader: true,
+                out var size,
+                out var rawFailure
+            )
+        )
             return size;
 
         var zlibFailure = "not attempted (stream too short)";
         if (
             compressedLength > 2
-            && TryInflate(compressed, compressedLength, output, noHeader: false, out size, out zlibFailure)
+            && TryInflate(
+                compressed,
+                compressedLength,
+                output,
+                expectedLength,
+                noHeader: false,
+                out size,
+                out zlibFailure
+            )
         )
             return size;
 
         // Some valid streams trip SharpZipLib's inflater (its state machine is stricter than
         // zlib's) even though the data is complete. Retry with the .NET zlib implementation:
         // it accepts a few stream shapes SharpZipLib rejects, and a block is only accepted when
-        // it produces exactly one full 16-sector block.
-        if (TrySystemInflate(compressed, compressedLength, output, noHeader: true, out size))
+        // it produces exactly the expected output length.
+        if (TrySystemInflate(compressed, compressedLength, output, expectedLength, noHeader: true, out size))
             return size;
 
         if (
             compressedLength > 2
-            && TrySystemInflate(compressed, compressedLength, output, noHeader: false, out size)
+            && TrySystemInflate(
+                compressed,
+                compressedLength,
+                output,
+                expectedLength,
+                noHeader: false,
+                out size
+            )
         )
             return size;
 
@@ -656,19 +728,20 @@ public sealed class PbpDiscInfo
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
     /// <param name="output">The buffer that receives the decompressed data.</param>
+    /// <param name="expectedLength">The number of bytes this block must produce.</param>
     /// <param name="noHeader">True for raw deflate, false for a zlib-wrapped stream.</param>
     /// <param name="size">The number of bytes written when inflation succeeds.</param>
-    /// <returns><see langword="true" /> when the block inflated to a full block.</returns>
+    /// <returns><see langword="true" /> when the block inflated to the expected length.</returns>
     private static bool TrySystemInflate(
         byte[] compressed,
         int compressedLength,
         byte[] output,
+        int expectedLength,
         bool noHeader,
         out int size
     )
     {
         size = 0;
-        var blockSize = 16 * IsoBlockSize;
         var written = 0;
 
         try
@@ -678,9 +751,9 @@ public sealed class PbpDiscInfo
                 ? new DeflateStream(input, CompressionMode.Decompress)
                 : new ZLibStream(input, CompressionMode.Decompress);
 
-            while (written < blockSize)
+            while (written < expectedLength)
             {
-                var read = inflater.Read(output, written, blockSize - written);
+                var read = inflater.Read(output, written, expectedLength - written);
                 if (read == 0) break;
                 written += read;
             }
@@ -689,11 +762,11 @@ public sealed class PbpDiscInfo
         {
             // The runtime's zlib-backed stream needs a clean end-of-stream marker and throws when
             // the writer never finished the stream (Z_SYNC_FLUSH). Everything up to the throw is
-            // valid output, so a block that already reached its full size is still good.
-            if (written < blockSize) return false;
+            // valid output, so a block that already reached its expected size is still good.
+            if (written < expectedLength) return false;
         }
 
-        if (written != blockSize) return false;
+        if (written != expectedLength) return false;
 
         size = written;
         return true;
@@ -706,6 +779,7 @@ public sealed class PbpDiscInfo
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
     /// <param name="output">The buffer that receives the decompressed data.</param>
+    /// <param name="expectedLength">The number of bytes this block must produce.</param>
     /// <param name="noHeader">True for raw deflate, false for a zlib-wrapped stream.</param>
     /// <param name="size">The number of bytes written when inflation succeeds.</param>
     /// <param name="error">The failure message when inflation fails.</param>
@@ -714,6 +788,7 @@ public sealed class PbpDiscInfo
         byte[] compressed,
         int compressedLength,
         byte[] output,
+        int expectedLength,
         bool noHeader,
         out int size,
         out string error
@@ -721,7 +796,7 @@ public sealed class PbpDiscInfo
     {
         try
         {
-            size = Inflate(compressed, compressedLength, output, noHeader);
+            size = Inflate(compressed, compressedLength, output, expectedLength, noHeader);
             error = string.Empty;
             return true;
         }
@@ -734,52 +809,54 @@ public sealed class PbpDiscInfo
     }
 
     /// <summary>
-    ///     Inflates one block with SharpZipLib's raw inflater, bounded to exactly one full block.
+    ///     Inflates one block with SharpZipLib's raw inflater, bounded to the expected output length.
     ///     The stream wrapper is deliberately not used: it reports a stream whose final block never
     ///     sets BFINAL as "Unexpected EOF" even though every byte has been decoded. Inflation stops
-    ///     the moment the output block is full; a stream that ends before then is rejected so a
+    ///     the moment the expected block is full; a stream that ends before then is rejected so a
     ///     short block can never shift every later block in the extracted image.
     /// </summary>
     /// <param name="compressed">The buffer holding the compressed block.</param>
     /// <param name="compressedLength">The number of valid bytes in <paramref name="compressed" />.</param>
     /// <param name="output">The buffer that receives the decompressed data.</param>
+    /// <param name="expectedLength">The number of bytes this block must produce.</param>
     /// <param name="noHeader">True for raw deflate, false for a zlib-wrapped stream.</param>
     /// <returns>The number of bytes written to <paramref name="output" />.</returns>
     private static int Inflate(
         byte[] compressed,
         int compressedLength,
         byte[] output,
+        int expectedLength,
         bool noHeader
     )
     {
         var inflater = new Inflater(noHeader);
         inflater.SetInput(compressed, 0, compressedLength);
 
-        var blockSize = 16 * IsoBlockSize;
         var written = 0;
 
         try
         {
-            while (written < blockSize)
+            while (written < expectedLength)
             {
-                var read = inflater.Inflate(output, written, blockSize - written);
+                var read = inflater.Inflate(output, written, expectedLength - written);
                 if (read == 0)
                     break;
 
                 written += read;
             }
 
-            // A full block is complete regardless of what follows in the input: trailing padding,
-            // the next entry's stream, or a final deflate block that never set BFINAL because the
-            // writer flushed with Z_SYNC_FLUSH. Parsing past this point would reject valid blocks.
-            if (written == blockSize)
+            // The expected block is complete regardless of what follows in the input: trailing
+            // padding, the next entry's stream, or a final deflate block that never set BFINAL
+            // because the writer flushed with Z_SYNC_FLUSH. Parsing past this point would reject
+            // valid blocks.
+            if (written == expectedLength)
                 return written;
 
             if (inflater.IsNeedingDictionary)
                 throw new InvalidDataException("the deflate stream needs a preset dictionary.");
 
             throw new InvalidDataException(
-                $"the deflate stream produced only {written:N0} of {blockSize:N0} bytes."
+                $"the deflate stream produced only {written:N0} of {expectedLength:N0} bytes."
             );
         }
         catch (IndexOutOfRangeException ex)

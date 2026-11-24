@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -6,6 +5,7 @@ using Avalonia.Interactivity;
 using CHDStudio.Dialogs;
 using CHDStudio.Models;
 using CHDStudio.Services;
+using CHDStudio.Utilities;
 
 namespace CHDStudio;
 
@@ -55,27 +55,15 @@ internal partial class AboutWindow : Window
     {
         if (sender is not Button { Tag: string url } || string.IsNullOrWhiteSpace(url)) return;
 
-        try
-        {
-            using var process = Process.Start(
-                new ProcessStartInfo { FileName = url, UseShellExecute = true }
-            );
-        }
-        catch (Exception ex)
-        {
-            if (App.SharedBugReportService != null)
-            {
-                _ = App.SharedBugReportService.SendBugReportAsync($"Error opening URL: {url}", ex);
-            }
+        if (UrlLauncher.TryOpen(url, out var error)) return;
 
-            _ = MessageBox.ShowAsync(
-                this,
-                $"Unable to open link: {ex.Message}",
-                "Error",
-                MessageBoxButton.Ok,
-                MessageBoxImage.Error
-            );
-        }
+        _ = MessageBox.ShowAsync(
+            this,
+            $"Unable to open link: {error}",
+            "Error",
+            MessageBoxButton.Ok,
+            MessageBoxImage.Error
+        );
     }
 
     private static string GetApplicationVersion()

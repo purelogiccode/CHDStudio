@@ -816,7 +816,7 @@ public class MdsTests : IDisposable
     {
         var mds = WriteMds("CookedMode2.mds", 0x00, new TrackSpec(0x04, 1, 2048, 0));
         WriteMdf("CookedMode2.mdf", 2048, 4);
-        var workDir = Path.Combine(_tempDir, "workmode2");
+        var workDir = Path.Join(_tempDir, "workmode2");
         Directory.CreateDirectory(workDir);
 
         var disc = MdsParser.Parse(mds);
@@ -840,7 +840,7 @@ public class MdsTests : IDisposable
     {
         var mds = WriteMds("Form2.mds", 0x00, new TrackSpec(0x05, 1, 2324, 0));
         WriteMdf("Form2.mdf", 2324, 4);
-        var workDir = Path.Combine(_tempDir, "workform2");
+        var workDir = Path.Join(_tempDir, "workform2");
         Directory.CreateDirectory(workDir);
 
         var disc = MdsParser.Parse(mds);

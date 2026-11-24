@@ -87,6 +87,23 @@ public class DiscImageSignatureTests : IDisposable
     }
 
     [Fact]
+    public void DetectRecognisesCookedIsoVolumeDescriptor()
+    {
+        // A plain 2048-byte-sector ISO has no signature in its first sector; the ISO9660 primary
+        // volume descriptor at sector 16 is what identifies it. This is the shape of the .pbp
+        // files that were really renamed ISOs and failed with InvalidHeader.
+        var path = Path.Combine(_tempDir, "game.pbp");
+        var data = new byte[16 * 2048 + 8];
+        data[16 * 2048] = 1;
+        "CD001"u8.CopyTo(data.AsSpan(16 * 2048 + 1));
+        data[16 * 2048 + 6] = 1;
+        File.WriteAllBytes(path, data);
+
+        Assert.Equal(DiscImageKind.Iso, DiscImageSignature.Detect(path));
+        Assert.Equal("an ISO9660 disc image", DiscImageSignature.Describe(DiscImageKind.Iso));
+    }
+
+    [Fact]
     public void DetectReadsFromDiskAndSurvivesAMissingFile()
     {
         var path = Path.Combine(_tempDir, "image.rar");
