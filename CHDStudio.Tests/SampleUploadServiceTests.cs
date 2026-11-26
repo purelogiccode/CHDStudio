@@ -206,10 +206,10 @@ public sealed class SampleUploadServiceTests : IDisposable
             if (path.EndsWith("/abort", StringComparison.Ordinal))
             {
                 aborted = true;
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+                return Task.FromResult(Empty(HttpStatusCode.NoContent));
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            return Task.FromResult(Empty(HttpStatusCode.NotFound));
         });
         using var client = new HttpClient(handler);
 
@@ -290,6 +290,14 @@ public sealed class SampleUploadServiceTests : IDisposable
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
+    }
+
+    /// <summary>Builds an empty response with the supplied status code.</summary>
+    /// <param name="status">HTTP status code.</param>
+    /// <returns>The response message.</returns>
+    private static HttpResponseMessage Empty(HttpStatusCode status)
+    {
+        return new HttpResponseMessage(status);
     }
 
     /// <summary>Records progress synchronously so assertions do not race the callback queue.</summary>

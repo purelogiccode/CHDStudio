@@ -167,11 +167,13 @@ internal static class SelectedInputMover
                 }
 
                 Directory.CreateDirectory(targetDirectory);
-                foreach (var move in moves)
+                var targetDirectories = moves
+                    .Select(static move => Path.GetDirectoryName(move.Target))
+                    .Where(static directory => !string.IsNullOrEmpty(directory))
+                    .Distinct(PathComparer);
+                foreach (var targetParent in targetDirectories)
                 {
-                    var targetParent = Path.GetDirectoryName(move.Target);
-                    if (!string.IsNullOrEmpty(targetParent))
-                        Directory.CreateDirectory(targetParent);
+                    Directory.CreateDirectory(targetParent!);
                 }
 
                 if (!await MoveSetAsync(moves, logError, token).ConfigureAwait(false))
