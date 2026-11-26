@@ -94,7 +94,7 @@ internal static class SelectedInputMover
                     .OrderBy(source => PathComparer.Equals(source, input) ? 1 : 0)
                     .Select(source => (
                         Source: source,
-                        Target: Path.Combine(targetDirectory, Path.GetFileName(source))
+                        Target: Path.Join(targetDirectory, Path.GetFileName(source))
                     ))
                     .ToList();
 
@@ -338,16 +338,16 @@ internal static class SelectedInputMover
         var safeName = PathUtils.SanitizeFileName(baseName);
         if (safeName.Length == 0) safeName = Guid.NewGuid().ToString("N");
 
-        var candidate = Path.Combine(parentDirectory, safeName);
+        var candidate = Path.Join(parentDirectory, safeName);
         if (!Directory.Exists(candidate) && !File.Exists(candidate)) return candidate;
 
         for (var suffix = 2; suffix <= 999; suffix++)
         {
-            candidate = Path.Combine(parentDirectory, $"{safeName} ({suffix})");
+            candidate = Path.Join(parentDirectory, $"{safeName} ({suffix})");
             if (!Directory.Exists(candidate) && !File.Exists(candidate)) return candidate;
         }
 
-        return Path.Combine(parentDirectory, $"{safeName}_{Guid.NewGuid():N}");
+        return Path.Join(parentDirectory, $"{safeName}_{Guid.NewGuid():N}");
     }
 
     /// <summary>
@@ -359,17 +359,17 @@ internal static class SelectedInputMover
     /// <returns>A path that does not exist yet.</returns>
     private static string ReserveFileName(string directory, string fileName)
     {
-        var candidate = Path.Combine(directory, fileName);
+        var candidate = Path.Join(directory, fileName);
         if (!File.Exists(candidate)) return candidate;
 
         var stem = Path.GetFileNameWithoutExtension(fileName);
         var extension = Path.GetExtension(fileName);
         for (var suffix = 2; suffix <= 999; suffix++)
         {
-            candidate = Path.Combine(directory, $"{stem} ({suffix}){extension}");
+            candidate = Path.Join(directory, $"{stem} ({suffix}){extension}");
             if (!File.Exists(candidate)) return candidate;
         }
 
-        return Path.Combine(directory, $"{stem}_{Guid.NewGuid():N}{extension}");
+        return Path.Join(directory, $"{stem}_{Guid.NewGuid():N}{extension}");
     }
 }

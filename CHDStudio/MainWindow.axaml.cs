@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -1752,7 +1751,7 @@ internal partial class MainWindow : Window, IDisposable
             );
             if (inputFolder == null) return;
 
-            var destination = Path.Combine(inputFolder, "Failed");
+            var destination = Path.Join(inputFolder, "Failed");
             MoveFailedConversionButton.IsEnabled = false;
             StartConversionButton.IsEnabled = false;
             UpdateStatusBarMessage("Moving failed files...");
@@ -1981,7 +1980,7 @@ internal partial class MainWindow : Window, IDisposable
                         Path.GetFileNameWithoutExtension(chosen.FileName)
                     );
                     if (baseName.Length > 40) baseName = baseName[..40];
-                    temporaryZip = Path.Combine(
+                    temporaryZip = Path.Join(
                         Path.GetTempPath(),
                         $"{baseName}.sample.{Guid.NewGuid().ToString("N")[..8]}.zip"
                     );
@@ -2069,7 +2068,7 @@ internal partial class MainWindow : Window, IDisposable
             LogError($" Could not submit the diagnostic sample: {ex.Message}");
             ShowError($"The sample could not be submitted:\n\n{ex.Message}");
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             LogError($" Could not submit the diagnostic sample: {ex.Message}", ex);
             ShowError($"The sample could not be submitted:\n\n{ex.Message}");
@@ -4324,7 +4323,7 @@ internal partial class MainWindow : Window, IDisposable
         var stagingDir = Path.GetDirectoryName(outputFile);
         return string.IsNullOrEmpty(stagingDir)
             ? stagingName
-            : Path.Combine(stagingDir, stagingName);
+            : Path.Join(stagingDir, stagingName);
     }
 
     /// <summary>
@@ -10929,6 +10928,11 @@ internal partial class MainWindow : Window, IDisposable
 
         var email = _donationState.Email;
         if (string.IsNullOrWhiteSpace(email))
+        {
+            return;
+        }
+
+        if (_donationState.HasDonated)
         {
             return;
         }

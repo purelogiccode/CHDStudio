@@ -427,13 +427,14 @@
                                             </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
-                                    <StackPanel
+                                    <WrapPanel
                                         Grid.Row="5"
                                         Orientation="Horizontal"
                                         HorizontalAlignment="Right"
-                                        Spacing="10"
+                                        ItemSpacing="10"
+                                        LineSpacing="8"
                                         Margin="0,0,0,10"
-                                        ToolTip.Tip="Select or deselect all files in the conversion list">
+                                        ToolTip.Tip="Select, move, copy or submit files in the conversion list">
                                         <Button
                                             Classes="primary"
                                             Content="_Select All"
@@ -496,7 +497,7 @@
                                                     Text="Requires exactly one checked row marked Failed. Multi-file sets (descriptor data files or split volumes) are packed into one ZIP first, then uploaded to the developer's private storage for investigation." />
                                             </ToolTip.Tip>
                                         </Button>
-                                    </StackPanel>
+                                    </WrapPanel>
 
                                     <Button
                                         Grid.Row="6"

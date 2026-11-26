@@ -322,7 +322,7 @@ public class PbpFileTests : IDisposable
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry, 4), 0u);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(trailingEntry + 4, 2), 0xFFFF);
 
-        var path = Path.Combine(_tempDir, $"shortfinaltrailing_{Guid.NewGuid():N}.pbp");
+        var path = Path.Join(_tempDir, $"shortfinaltrailing_{Guid.NewGuid():N}.pbp");
         File.WriteAllBytes(path, bytes);
 
         var error = PbpFile.Open(path, out var pbp);
