@@ -311,6 +311,36 @@ public class PbpFileTests : IDisposable
     }
 
     [Fact]
+    public void ExtractToAcceptsAShortFinalBlockBeforeTrailingIndexEntries()
+    {
+        // Authoring tools can leave a non-zero entry after the image data (pop-fe writes a
+        // subchannel blob there). The short final block is then not the last index entry; its
+        // expected size must still come from the declared ISO size, not from its table position.
+        var bytes = new PbpTestFileBuilder().WithBlockCount(3).WithFinalBlockSectors(7).Build();
+        var psarOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x24, 4));
+        var trailingEntry = psarOffset + 0x4000 + 3 * 32;
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry, 4), 0u);
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(trailingEntry + 4, 2), 0xFFFF);
+
+        var path = Path.Combine(_tempDir, $"shortfinaltrailing_{Guid.NewGuid():N}.pbp");
+        File.WriteAllBytes(path, bytes);
+
+        var error = PbpFile.Open(path, out var pbp);
+        Assert.Equal(PbpError.None, error);
+        Assert.NotNull(pbp);
+
+        using (pbp)
+        {
+            const uint expectedIsoSize = 39 * PbpDiscInfo.IsoBlockSize;
+            Assert.Equal(expectedIsoSize, pbp.Discs[0].IsoSize);
+
+            using var outputStream = new MemoryStream();
+            pbp.Discs[0].ExtractTo(outputStream);
+            Assert.Equal(expectedIsoSize, (uint)outputStream.Length);
+        }
+    }
+
+    [Fact]
     public void OpenSingleDiscPbpWithNegativeBlockLengthSucceedsAndReportsAtExtraction()
     {
         var path = Path.Combine(_tempDir, $"negativelen_{Guid.NewGuid():N}.pbp");

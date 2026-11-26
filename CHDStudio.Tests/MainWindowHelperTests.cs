@@ -334,6 +334,33 @@ public class MainWindowHelperTests : IDisposable
         Assert.Equal(expected, MainWindow.IsPermissionError(message));
     }
 
+    [Theory]
+    [InlineData(
+        "Error creating CHD file (C:\\roms\\Game.60de8523.chdtmp): No such file or directory",
+        true
+    )]
+    [InlineData("error creating chd file (D:\\out\\Game.chdtmp): Permission denied", true)]
+    [InlineData("Error parsing input file (C:\\roms\\Game.iso: No such file or directory)", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsChdmanOutputCreationError_ClassifiesOutputOpenFailures(
+        string? message,
+        bool expected
+    )
+    {
+        Assert.Equal(expected, MainWindow.IsChdmanOutputCreationError(message));
+    }
+
+    [Fact]
+    public void GetStagingOutputPath_IncludesGuidAndStagingSuffix()
+    {
+        Assert.Equal(
+            @"C:\roms\Game.00000000.chdtmp",
+            MainWindow.GetStagingOutputPath(@"C:\roms\Game.chd")
+        );
+        Assert.Equal("Game.00000000.chdtmp", MainWindow.GetStagingOutputPath("Game.chd"));
+    }
+
     [Fact]
     public void IsDamagedPbpBlock_ShortDeflateStream_ReturnsTrue()
     {

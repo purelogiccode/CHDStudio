@@ -520,7 +520,7 @@ PBP files are produced by several authoring tools, and PBPSharp reads the layout
 - **popstation / PSX2PSP / iPoPS** — 32-bit ISO index size field, raw deflate blocks.
 - **pop-fe** — official 16-bit index size field with a stored/uncompressed flag byte, uncompressed (stored) blocks when compression is disabled, zlib-wrapped deflate blocks, and multi-disc `PSTITLEIMG` headers with zeroed template fields.
 - **Unfinished deflate streams** - a raw stream whose final block never sets BFINAL (a writer that flushed with `Z_SYNC_FLUSH` instead of finishing the stream) is accepted once the expected output length has been decoded; SharpZipLib's stream wrapper would report it as "Unexpected EOF" even though every byte is present.
-- **Short final blocks** - the last index entry may store fewer than 16 sectors when the disc's ISO9660 sector count is not a multiple of 16. The expected length comes from the declared image size, so the block is complete at that shorter length while a cut-short earlier block is still rejected.
+- **Short final blocks** - the block that contains the end of the image may store fewer than 16 sectors when the disc's ISO9660 sector count is not a multiple of 16. The expected length comes from the declared image size and the block's own position, so it still works when an authoring tool leaves non-zero entries after the image data. The block is complete at that shorter length while a cut-short earlier block is still rejected.
 - **Trailing bytes after a block** — padding a writer appended to a block, or the first bytes of the next stream when an index length overstates the block, are not parsed as a continuation. Inflation stops at the full 16-sector block, so those bytes cannot turn a valid block into a bogus "unknown block type"/"invalid codelength" error.
 - **Under-stated index lengths** — when the next index entry starts after the declared length, the reader takes the block's stored data up to that offset, so a length recorded before the writer's last flush still yields the whole stream.
 - **Incompressible blocks** — deflate streams a few bytes larger than the raw 16-sector block are accepted.
@@ -561,8 +561,8 @@ dotnet test CHDStudio.Tests/CHDStudio.Tests.csproj -c Release --filter "FullyQua
 
 ### 1.1.9
 
-- The final ISO index block may now decompress to fewer than 16 sectors. When the ISO9660 volume descriptor declares a sector count that is not a multiple of 16, the expected length of the last block is derived from the image size, so a PBP that stores only the sectors it actually contains no longer fails with `DecompressionError` ("the deflate stream produced only N of 37,632 bytes"). This matches the documented `ReadBlock` contract that the last block may be shorter.
-- A truncated compressed block still fails: short output is accepted only for the final index entry and only when the declared image size says that shorter length is complete.
+- The ISO block that contains the end of the image may now decompress to fewer than 16 sectors. When the ISO9660 volume descriptor declares a sector count that is not a multiple of 16, its expected length is derived from the image size and the block's position, so a PBP that stores only the sectors it actually contains no longer fails with `DecompressionError` ("the deflate stream produced only N of 37,632 bytes"). Position-based detection also keeps this working when an authoring tool leaves non-zero entries after the image data. This matches the documented `ReadBlock` contract that the last block may be shorter.
+- A truncated compressed block still fails: short output is accepted only for the block the declared image size ends in, and only when that shorter length is complete.
 - `EndOfStreamException` while reading a block now carries the block index, disc, file offset, requested length and stream length, so a truncated PBP is immediately identifiable in diagnostics.
 - No public API changes.
 

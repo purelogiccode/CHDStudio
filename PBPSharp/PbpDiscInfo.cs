@@ -346,12 +346,13 @@ public sealed class PbpDiscInfo
         // multi-gigabyte files.
         var thisOffset = _psarOffset + PsarIsoOffset + entry.Offset;
 
-        // The final index entry may represent fewer than 16 sectors: an ISO whose sector count
-        // is not a multiple of 16 is written by several authoring tools as a short final block,
-        // and the public API documents that the last block may be shorter. Use the ISO9660
-        // sector count to know exactly how many bytes that block should produce; when the size
-        // is unknown, keep the historical full-block requirement. Resolve it before seeking:
-        // the lazy size probe reads block 1 and moves the stream.
+        // The block that contains the end of the image may represent fewer than 16 sectors: an
+        // ISO whose sector count is not a multiple of 16 is written by several authoring tools as
+        // a short final block, and the public API documents that the last block may be shorter.
+        // Use the ISO9660 sector count and the block's position to know exactly how many bytes it
+        // should produce (trailing non-zero index entries do not affect it); when the size is
+        // unknown, keep the historical full-block requirement. Resolve it before seeking: the
+        // lazy size probe reads block 1 and moves the stream.
         var expectedLength = GetExpectedBlockLength(blockIndex);
 
         _stream.Seek(thisOffset, SeekOrigin.Begin);
@@ -443,10 +444,12 @@ public sealed class PbpDiscInfo
 
     /// <summary>
     ///     Returns the number of decompressed bytes the indexed block should produce. Every block
-    ///     but the last holds 16 sectors. The last block is shorter when the disc's ISO9660 sector
-    ///     count is not a multiple of 16, as several authoring tools write it; in that case the
-    ///     declared image size is the only way to know the exact length. When the size cannot be
-    ///     derived, the historical full-block requirement is kept.
+    ///     holds 16 sectors except the one that contains the declared end of the image: the last
+    ///     data block is shorter when the disc's ISO9660 sector count is not a multiple of 16, as
+    ///     several authoring tools write it. The check is based on the block's own position rather
+    ///     than on it being the final index entry, because authoring tools can leave extra non-zero
+    ///     entries after the image data (pop-fe writes a subchannel blob there). When the size
+    ///     cannot be derived, the historical full-block requirement is kept.
     /// </summary>
     /// <param name="blockIndex">Zero-based block index.</param>
     /// <returns>The expected number of decompressed bytes for the block.</returns>
@@ -454,7 +457,7 @@ public sealed class PbpDiscInfo
     {
         const int fullBlockSize = 16 * IsoBlockSize;
         var isoSize = IsoSize;
-        if (isoSize == 0 || blockIndex != _isoIndex.Count - 1)
+        if (isoSize == 0)
             return fullBlockSize;
 
         var blockStart = (long)blockIndex * fullBlockSize;

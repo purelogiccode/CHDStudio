@@ -3792,6 +3792,25 @@ internal partial class MainWindow : Window, IDisposable
     }
 
     /// <summary>
+    ///     Returns the longest staging path a destination can produce. The real staging name adds
+    ///     an eight-character GUID and the <c>.chdtmp</c> suffix to the destination's base name;
+    ///     this representative name lets the chdman path-safety check see the length chdman will
+    ///     actually open before the staging file is created.
+    /// </summary>
+    /// <param name="outputFile">Destination CHD path.</param>
+    /// <returns>The representative staging path.</returns>
+    internal static string GetStagingOutputPath(string outputFile)
+    {
+        var stagingName = Path.GetFileNameWithoutExtension(outputFile)
+                          + ".00000000"
+                          + StagingExtension;
+        var stagingDir = Path.GetDirectoryName(outputFile);
+        return string.IsNullOrEmpty(stagingDir)
+            ? stagingName
+            : Path.Combine(stagingDir, stagingName);
+    }
+
+    /// <summary>
     ///     True when the input is an archive (including split .001 and RAR volume sets), whose output
     ///     name is derived from its contents rather than the input's own base name.
     /// </summary>
@@ -6801,6 +6820,10 @@ internal partial class MainWindow : Window, IDisposable
     /// <param name="timeoutMinutes">Per-file timeout in minutes, or null for none.</param>
     /// <param name="token">Cancellation token.</param>
     /// <param name="recursionDepth">Retry depth used when switching from createcd to createdvd.</param>
+    /// <param name="retryInSafeTempDirectory">
+    ///     Whether this attempt was forced into an ASCII-safe temporary directory after chdman
+    ///     failed to create its output file next to the destination.
+    /// </param>
     /// <returns>True when the file was converted successfully.</returns>
     private async Task<bool> ConvertToChdAsync(
         string chdmanPath,
@@ -6811,7 +6834,8 @@ internal partial class MainWindow : Window, IDisposable
         bool forceDvd,
         int? timeoutMinutes,
         CancellationToken token,
-        int recursionDepth = 0
+        int recursionDepth = 0,
+        bool retryInSafeTempDirectory = false
     )
     {
         // An .img or .bin sitting next to a .cue of the same name is the data half of a cue/bin
@@ -6996,9 +7020,18 @@ internal partial class MainWindow : Window, IDisposable
         // Computed here, after cue work-dir preparation above, so an input that was already staged
         // into a safe work directory is not flagged again.
         var pathNeedsAscii = !PathUtils.IsChdmanSafePath(inputFile);
-        var pathNeedsAsciiOut = !PathUtils.IsChdmanSafePath(outputFile);
 
-        if (asciiTempDir == null && (pathNeedsAscii || pathNeedsAsciiOut))
+        // The staging name chdman actually opens is longer than the destination name (a GUID
+        // plus .chdtmp), so a destination just under MAX_PATH can still push the staging path
+        // past the limit. Check the path that will really be handed to chdman.
+        var pathNeedsAsciiOut =
+            !PathUtils.IsChdmanSafePath(outputFile)
+            || !PathUtils.IsChdmanSafePath(GetStagingOutputPath(outputFile));
+
+        if (
+            asciiTempDir == null
+            && (retryInSafeTempDirectory || pathNeedsAscii || pathNeedsAsciiOut)
+        )
         {
             // The staging location must itself be safe to hand to chdman: the system temp folder
             // lives under the user profile and can contain non-ASCII characters or be overlong,
@@ -7032,9 +7065,10 @@ internal partial class MainWindow : Window, IDisposable
             args = args.Replace($"\"{originalInputFile}\"", $"\"{inputFile}\"")
                 .Replace($"\"{originalOutputFile}\"", $"\"{outputFile}\"");
         }
-        else if (asciiTempDir != null && pathNeedsAsciiOut)
+        else if (asciiTempDir != null && (retryInSafeTempDirectory || pathNeedsAsciiOut))
         {
-            // Work directory already prepared for the input; only the output name is non-ASCII.
+            // Work directory already prepared for the input; only the output needs staging
+            // (a non-ASCII/overlong destination, or a chdman output-creation failure).
             asciiOutputFile = Path.Combine(
                 asciiTempDir,
                 Guid.NewGuid().ToString("N") + FileExtensions.Chd
@@ -7308,9 +7342,39 @@ internal partial class MainWindow : Window, IDisposable
                             true,
                             timeoutMinutes,
                             token,
-                            recursionDepth + 1
+                            recursionDepth + 1,
+                            retryInSafeTempDirectory
                         );
                     }
+                }
+
+                // chdman could not open its output file even though the app could create the
+                // destination folder. Its own file APIs can disagree with the app's view of the
+                // path (a reparse point, a cloud-synced folder, a name that only grew past
+                // MAX_PATH after the staging suffix, ...). Retry once with the output written in
+                // an ASCII-safe temporary directory; on success the staged CHD is moved to the
+                // real destination by the normal path.
+                if (
+                    !retryInSafeTempDirectory
+                    && !token.IsCancellationRequested
+                    && IsChdmanOutputCreationError(errorText)
+                )
+                {
+                    LogMessage(
+                        $" chdman could not create the output file in '{Path.GetDirectoryName(originalOutputFile)}'; retrying with a temporary output folder..."
+                    );
+                    return await ConvertToChdAsync(
+                        chdmanPath,
+                        originalInputFile,
+                        originalOutputFile,
+                        cores,
+                        forceCd,
+                        forceDvd,
+                        timeoutMinutes,
+                        token,
+                        recursionDepth,
+                        retryInSafeTempDirectory: true
+                    );
                 }
 
                 if (File.Exists(outputFile))
@@ -7498,6 +7562,16 @@ internal partial class MainWindow : Window, IDisposable
                 );
                 LogMessage(
                     "       Choose a different output folder (e.g. Documents or a data drive) or run as administrator."
+                );
+            }
+            else if (IsChdmanOutputCreationError(errorTextFinal))
+            {
+                var outputFolder = Path.GetDirectoryName(originalOutputFile) ?? originalOutputFile;
+                LogError(
+                    $" Failed to convert '{Path.GetFileName(originalInputFile)}': chdman could not create the output file in '{outputFolder}'. The folder may have been moved, renamed or removed, or its drive may be disconnected."
+                );
+                LogMessage(
+                    "       Check that the output folder exists and is writable, then try again."
                 );
             }
             else if (IsMissingDeviceError(errorTextFinal))
@@ -9485,6 +9559,21 @@ internal partial class MainWindow : Window, IDisposable
                    "A required privilege is not held by the client",
                    StringComparison.OrdinalIgnoreCase
                );
+    }
+
+    /// <summary>
+    ///     True when chdman failed to open its output file
+    ///     (<c>Error creating CHD file (...)</c>). The message does not identify the cause: chdman
+    ///     maps a missing directory, an invalid name, a removed drive and some reparse-point or
+    ///     cloud-folder quirks to the same line, so the caller retries in a safe temporary folder
+    ///     before reporting it.
+    /// </summary>
+    /// <param name="errorOutput">Captured chdman error output.</param>
+    /// <returns>True when chdman could not create its output file.</returns>
+    internal static bool IsChdmanOutputCreationError(string? errorOutput)
+    {
+        return errorOutput?.Contains("Error creating CHD file", StringComparison.OrdinalIgnoreCase)
+               == true;
     }
 
     /// <summary>
