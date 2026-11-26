@@ -373,3 +373,8 @@ the runner's Node 24 runtime is used.
   `CHDStudio.Tests/`. The suite must pass before a release.
   `[Trait("Category", "Integration")]` classes depend on local sample folders
   and are excluded from CI with `--filter "Category!=Integration"`.
+- `CHDStudio.Tests` also references `Avalonia.Headless` (matching the app's
+  Avalonia version) for headless UI tests. Keep `MainWindowUiTests` in the
+  serialized `Avalonia UI` collection and route UI work through
+  `UiTestSession`; the xUnit v3-only `Avalonia.Headless.XUnit` adapter does not
+  work with this project's xUnit 2.9.3.

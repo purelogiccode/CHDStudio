@@ -380,8 +380,9 @@ Moves the conversion inputs marked `Failed` into a `Failed` folder inside the so
 
 - A descriptor input takes its referenced data files with it (cue/gdi/toc through `GameFileParser`, ccd via `CcdConverter` plus `.cdt`, mds via `MdsParser`); a bare `.mdf`/`.mdx` takes its `.mds`, and a bare `.img`/`.sub` takes its `.ccd`.
 - Split images (`SplitImageJoiner.TryGetVolumeSet`) and multi-part archives (`RarVolumeSet.GetVolumePaths`) are expanded so every volume moves with the set.
-- A single image moves directly into the chosen folder; a descriptor set moves into a subfolder named after the input (unique ` (2)`, ` (3)`, ... on collision) so cue/bin and mds/mdf pairs stay together.
-- Companions move first and the primary input last. If any move fails, the files already moved are put back, so a descriptor never loses its data files; a locked source reports which file blocked the set.
+- A single image moves directly into the chosen folder; a descriptor set moves into a subfolder named after the input (unique ` (2)`, ` (3)`, ... on collision) so cue/bin and mds/mdf pairs stay together. Relative subfolders referenced by a descriptor are preserved under that set folder; a descriptor that references a file outside its own folder is left in place and reported, and a set already inside the destination is not renamed.
+- Companions move first and the primary input last. If any move fails or is cancelled, the files already moved are put back, so a descriptor never loses its data files; a locked source reports which file blocked the set.
+- `GetUploadSetEntriesAsync` returns the same set with forward-slash ZIP entry names relative to the descriptor folder, so a diagnostic sample keeps `tracks/01.bin` instead of flattening it.
 - `MoveSelectedResult` reports the primary inputs that moved and those that failed; the caller removes the moved rows from the conversion list.
 
 ---

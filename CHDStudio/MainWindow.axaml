@@ -175,6 +175,7 @@
                     Click="DonationStatusButton_Click"
                     ToolTip.Tip="Enter the email used for your donation and check whether it was recognized" />
                 <Button
+                    x:Name="DismissDonationBannerButton"
                     Grid.Column="4"
                     Classes="caption"
                     Width="32"
@@ -428,6 +429,7 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
                                     <WrapPanel
+                                        x:Name="FailedActionPanel"
                                         Grid.Row="5"
                                         Orientation="Horizontal"
                                         HorizontalAlignment="Right"

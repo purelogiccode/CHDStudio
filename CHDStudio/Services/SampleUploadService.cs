@@ -34,6 +34,9 @@ internal static class SampleUploadService
     /// <summary>Maximum number of part URLs requested at once.</summary>
     private const int PartsPerUrlRequest = 10;
 
+    /// <summary>How long the best-effort abort request may take during failure cleanup.</summary>
+    private static readonly TimeSpan AbortTimeout = TimeSpan.FromSeconds(5);
+
     private static readonly HttpClient Client = new(new SocketsHttpHandler())
     {
         // Large files over a home connection can take much longer than the default 100 seconds.
@@ -53,6 +56,7 @@ internal static class SampleUploadService
     /// <param name="progress">Optional byte-progress callback.</param>
     /// <param name="token">Cancellation token.</param>
     /// <param name="apiBaseUrl">Optional API base URL override (used by tests).</param>
+    /// <param name="httpClient">Optional HTTP client override (used by tests).</param>
     /// <returns>The file name and the server-side sample id.</returns>
     internal static async Task<(Guid Id, string FileName)> UploadAsync(
         string filePath,
@@ -60,9 +64,11 @@ internal static class SampleUploadService
         string? note,
         IProgress<SampleUploadProgress>? progress,
         CancellationToken token,
-        string? apiBaseUrl = null
+        string? apiBaseUrl = null,
+        HttpClient? httpClient = null
     )
     {
+        var client = httpClient ?? Client;
         var baseUrl = apiBaseUrl ?? AppConfig.SampleUploadApiUrl;
         var fileInfo = new FileInfo(filePath);
         if (!fileInfo.Exists)
@@ -86,7 +92,7 @@ internal static class SampleUploadService
 
         SampleUploadTicket ticket;
         using var createMessage = CreateApiRequest(HttpMethod.Post, baseUrl, createRequest);
-        using (var createResponse = await Client
+        using (var createResponse = await client
                    .SendAsync(createMessage, token)
                    .ConfigureAwait(false))
         {
@@ -137,7 +143,8 @@ internal static class SampleUploadService
                         baseUrl,
                         ticket.Id,
                         partNumbers,
-                        token
+                        token,
+                        client
                     )
                     .ConfigureAwait(false);
 
@@ -152,21 +159,32 @@ internal static class SampleUploadService
                         );
 
                     var length = (int)Math.Min(partSize, remaining);
-                    var read = await stream
-                        .ReadAsync(buffer.AsMemory(0, length), token)
-                        .ConfigureAwait(false);
-                    if (read != length)
-                        throw new SampleUploadException(
-                            "The file changed while it was being uploaded. Try again without modifying it."
-                        );
+                    var totalRead = 0;
+                    while (totalRead < length)
+                    {
+                        var read = await stream
+                            .ReadAsync(
+                                buffer.AsMemory(totalRead, length - totalRead),
+                                token
+                            )
+                            .ConfigureAwait(false);
+                        if (read == 0)
+                        {
+                            throw new SampleUploadException(
+                                "The file changed while it was being uploaded. Try again without modifying it."
+                            );
+                        }
 
-                    sha256.AppendData(buffer, 0, read);
+                        totalRead += read;
+                    }
 
-                    using var partContent = new ByteArrayContent(buffer, 0, read);
+                    sha256.AppendData(buffer, 0, totalRead);
+
+                    using var partContent = new ByteArrayContent(buffer, 0, totalRead);
                     partContent.Headers.ContentType =
                         new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
-                    using var putResponse = await Client
+                    using var putResponse = await client
                         .PutAsync(part.Url, partContent, token)
                         .ConfigureAwait(false);
 
@@ -187,7 +205,7 @@ internal static class SampleUploadService
                         );
 
                     parts.Add(new PartETagDto(part.PartNumber, etag));
-                    uploaded += read;
+                    uploaded += totalRead;
                     progress?.Report(new SampleUploadProgress(uploaded, fileInfo.Length));
                 }
             }
@@ -207,7 +225,7 @@ internal static class SampleUploadService
                 $"{baseUrl}/{ticket.Id}/complete",
                 completeRequest
             );
-            using var completeResponse = await Client
+            using var completeResponse = await client
                 .SendAsync(completeMessage, token)
                 .ConfigureAwait(false);
 
@@ -221,7 +239,7 @@ internal static class SampleUploadService
         }
         catch
         {
-            await TryAbortAsync(baseUrl, ticket.Id).ConfigureAwait(false);
+            await TryAbortAsync(baseUrl, ticket.Id, client).ConfigureAwait(false);
             throw;
         }
         finally
@@ -231,11 +249,18 @@ internal static class SampleUploadService
     }
 
     /// <summary>Requests presigned URLs for a batch of parts.</summary>
+    /// <param name="baseUrl">Sample API base URL.</param>
+    /// <param name="id">Pending sample id.</param>
+    /// <param name="partNumbers">One-based part numbers.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <param name="client">HTTP client to use.</param>
+    /// <returns>The presigned part URLs.</returns>
     private static async Task<IReadOnlyList<SamplePartUrl>> RequestPartUrlsAsync(
         string baseUrl,
         Guid id,
         IReadOnlyList<int> partNumbers,
-        CancellationToken token
+        CancellationToken token,
+        HttpClient client
     )
     {
         using var request = CreateApiRequest(
@@ -243,7 +268,7 @@ internal static class SampleUploadService
             $"{baseUrl}/{id}/parts",
             new { partNumbers }
         );
-        using var response = await Client
+        using var response = await client
             .SendAsync(request, token)
             .ConfigureAwait(false);
 
@@ -262,17 +287,21 @@ internal static class SampleUploadService
     }
 
     /// <summary>Best-effort cancellation of a pending upload.</summary>
-    private static async Task TryAbortAsync(string baseUrl, Guid id)
+    /// <param name="baseUrl">Sample API base URL.</param>
+    /// <param name="id">Pending sample id.</param>
+    /// <param name="client">HTTP client to use.</param>
+    private static async Task TryAbortAsync(string baseUrl, Guid id, HttpClient client)
     {
         try
         {
+            using var timeoutCts = new CancellationTokenSource(AbortTimeout);
             using var request = CreateApiRequest(
                 HttpMethod.Post,
                 $"{baseUrl}/{id}/abort",
                 body: null
             );
-            using var response = await Client
-                .SendAsync(request, CancellationToken.None)
+            using var response = await client
+                .SendAsync(request, timeoutCts.Token)
                 .ConfigureAwait(false);
             _ = response.IsSuccessStatusCode;
         }

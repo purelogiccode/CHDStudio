@@ -5,6 +5,39 @@ nav_order: 16
 
 # What's New
 
+## 3.17.0 (2026-11-26)
+
+### Donation banner
+
+*   **The title-bar Donate button is now a dismissible donation banner.** The banner sits below the title bar and keeps the donation request visible without taking space from the application commands. **Donate** opens the CHD Studio donation page with the application preselected.
+*   **Donation recognition without an account.** **I already donated** asks for the email used on purelogiccode.com, validates it, stores it locally and checks it through the website's existing `POST /api/donations/verify` endpoint. A completed donation hides the banner permanently; **Dismiss** hides it until the next launch.
+*   **Private local state.** The email, recognized flag and last-check time live in `%LocalAppData%\CHDStudio\donation.json`. The address is sent only when checking a donation (or silently refreshing a saved address at startup) and is never written to the activity log or bug reports.
+*   **The About window links to the CHD Studio donation page** with the application preselected.
+
+### Failed-file workflow and diagnostic samples
+
+*   **The conversion list explains failures.** A new **Reason** column shows the last error or warning recorded for each failed input, with the full text in a tooltip. `failed-conversions.txt` now repeats every path with that reason, and the end-of-batch summary points at the retry actions.
+*   **Select Failed** selects exactly the rows marked `Failed`, clearing every other selection, so **Start Conversion** retries only those inputs.
+*   **Move Failed** moves every row marked `Failed` - not just the checked rows - into a `Failed` folder inside the source folder. Cue/gdi/toc/ccd/mds data files and split image or archive volumes move with their input, relative subfolders referenced by a descriptor are preserved, descriptor sets get their own subfolder, sets already inside `Failed` are left alone, and name collisions get a numeric suffix instead of overwriting.
+*   **Copy Failure Details** puts every failed path, its recorded reason and the application version on the clipboard for pasting into an issue or message.
+*   **Submit Sample** requires exactly one checked failed row and, after a consent prompt, uploads it to private Cloudflare R2 storage through the website's new diagnostic sample API. Descriptor sets and split volumes are packed into one temporary ZIP first, upload progress is shown, the operation is cancellable, and the recorded failure reason travels with the submission. The website stores only metadata and issues short-lived presigned URLs; files never pass through the website.
+*   **The button row wraps instead of clipping.** The failure actions and the existing selection actions share a wrapping panel, so narrow windows move buttons to the next line rather than hiding them.
+
+### Bug fixes
+
+*   **PBP images with trailing ISO index entries extract.** The short final block is now identified by its position in the image rather than by being the last index entry, so authoring tools that leave a non-zero entry after the image data (pop-fe writes a subchannel blob there) no longer make the final data block fail with `DecompressionError`.
+*   **chdman output-creation failures get one safe retry.** When chdman cannot open its staging output even though the application can create the folder (an overlong staging name, reparse point, cloud-synced folder or a drive that changed), the conversion retries once with the output in an ASCII-safe temporary folder before falling back to the built-in encoder.
+*   **Dependency versions shown by the About window are current again** (CHDSharp 1.7.2, Avalonia 12.2.0, the in-house libraries, SharpCompress 0.50.12, VideoGameFileSystemParser 1.4.0 and NAudio 3.3.0), matching the project files and the documentation.
+
+### Tests and verification
+
+*   **Headless Avalonia UI tests.** A new suite drives the real `MainWindow`, donation dialog and About window through Avalonia's headless platform: the banner and its dismiss/hidden states, the donation email validation and keyboard paths, the wrapped failure actions, tooltips, button enablement, Select Failed and an end-to-end Move Failed set move.
+*   **Diagnostic sample upload client tests.** The multipart create/parts/PUT/complete flow, progress reporting, server-error messages, unsupported part sizes and abort-on-failure are covered with a fake HTTP handler.
+*   **Test suite:** 1,398 tests pass (1,369 unit, including 28 headless UI tests and 5 sample-upload client tests, plus 29 integration-tagged tests).
+*   **Real-host bundle launches:** Windows x64 and ARM64, Linux x64 and ARM64, and macOS ARM64 bundles were extracted/mounted and opened their main window on native hosts.
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+*   **Code scanning:** zero open alerts; CI, CodeQL, Docs and Scorecard are green on `master`.
+
 ## 3.16.0 (2026-11-24)
 
 ### Linux packaging

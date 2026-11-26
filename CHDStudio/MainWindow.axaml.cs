@@ -185,6 +185,14 @@ internal partial class MainWindow : Window, IDisposable
     ///     Sets up services, checks for required executables, and initializes the UI.
     /// </summary>
     public MainWindow()
+        : this(null) { }
+
+    /// <summary>
+    ///     Initializes a new instance of the <see cref="MainWindow" /> class with the supplied
+    ///     donation state. Used by tests so they do not depend on the user's AppData file.
+    /// </summary>
+    /// <param name="donationState">Donation state to use, or <see langword="null" /> to load it.</param>
+    internal MainWindow(DonationState? donationState)
     {
         InitializeComponent();
         _cts = new CancellationTokenSource();
@@ -237,7 +245,7 @@ internal partial class MainWindow : Window, IDisposable
         };
         _archiveService = new ArchiveService(sevenZipExePath, isSevenZipAvailable);
 
-        _donationState = DonationStateStore.Load();
+        _donationState = donationState ?? DonationStateStore.Load();
         UpdateDonationBanner();
 
         // F8 screenshot hotkey (window-scoped on every platform)
@@ -1752,8 +1760,14 @@ internal partial class MainWindow : Window, IDisposable
             if (inputFolder == null) return;
 
             var destination = Path.Join(inputFolder, "Failed");
+            Interlocked.Exchange(ref _operationRunningState, 1);
+            RenewCancellationTokenSource();
+            var token = GetCancellationToken();
             MoveFailedConversionButton.IsEnabled = false;
             StartConversionButton.IsEnabled = false;
+            SelectFailedConversionButton.IsEnabled = false;
+            CopyFailureDetailsButton.IsEnabled = false;
+            SubmitSampleButton.IsEnabled = false;
             UpdateStatusBarMessage("Moving failed files...");
 
             var result = await SelectedInputMover.MoveAsync(
@@ -1761,7 +1775,7 @@ internal partial class MainWindow : Window, IDisposable
                 failed,
                 LogMessage,
                 message => LogError(message),
-                CancellationToken.None
+                token
             );
 
             if (result.MovedInputs.Count > 0)
@@ -1795,6 +1809,10 @@ internal partial class MainWindow : Window, IDisposable
                 UpdateStatusBarMessage("Failed files moved");
             }
         }
+        catch (OperationCanceledException)
+        {
+            LogMessage(" Moving failed files canceled.");
+        }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             LogError($"Could not move the failed files: {ex.Message}", ex);
@@ -1802,6 +1820,7 @@ internal partial class MainWindow : Window, IDisposable
         }
         finally
         {
+            Interlocked.Exchange(ref _operationRunningState, 0);
             StartConversionButton.IsEnabled = true;
             var hasFailures = _conversionFiles.Any(static f =>
                 string.Equals(f.Status, "Failed", StringComparison.Ordinal)
@@ -1810,6 +1829,8 @@ internal partial class MainWindow : Window, IDisposable
             SelectFailedConversionButton.IsEnabled = hasFailures;
             CopyFailureDetailsButton.IsEnabled = hasFailures;
             SubmitSampleButton.IsEnabled = hasFailures;
+
+            if (_pendingClose) Close();
         }
     }
 
@@ -1893,10 +1914,10 @@ internal partial class MainWindow : Window, IDisposable
             }
 
             var chosen = checkedFailed[0];
-            IReadOnlyList<string> uploadSet;
+            IReadOnlyList<(string FullPath, string EntryName)> uploadSet;
             try
             {
-                uploadSet = await SelectedInputMover.GetUploadSetAsync(
+                uploadSet = await SelectedInputMover.GetUploadSetEntriesAsync(
                     chosen.FullPath,
                     CancellationToken.None
                 );
@@ -1918,7 +1939,7 @@ internal partial class MainWindow : Window, IDisposable
             {
                 try
                 {
-                    totalBytes += new FileInfo(file).Length;
+                    totalBytes += new FileInfo(file.FullPath).Length;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -1993,8 +2014,8 @@ internal partial class MainWindow : Window, IDisposable
                             {
                                 token.ThrowIfCancellationRequested();
                                 archive.CreateEntryFromFile(
-                                    file,
-                                    Path.GetFileName(file),
+                                    file.FullPath,
+                                    file.EntryName,
                                     CompressionLevel.Fastest
                                 );
                             }
@@ -2022,7 +2043,7 @@ internal partial class MainWindow : Window, IDisposable
                 });
 
                 var note = isSet
-                    ? $"Set of {uploadSet.Count} files: {string.Join(", ", uploadSet.Select(Path.GetFileName))}"
+                    ? $"Set of {uploadSet.Count} files: {string.Join(", ", uploadSet.Select(static entry => entry.EntryName))}"
                     : null;
                 if (note is { Length: > 1500 }) note = note[..1500];
 
@@ -2078,6 +2099,7 @@ internal partial class MainWindow : Window, IDisposable
             ClearProgressDisplay();
             SetControlsState(true);
             UpdateStatusBarMessage("Ready for conversion");
+            if (_pendingClose) Close();
         }
     }
 
@@ -2983,6 +3005,9 @@ internal partial class MainWindow : Window, IDisposable
 
             var line = message.Trim();
             if (line.Length == 0) return;
+
+            if (kind == ConversionDiagnosticKind.Info && IsChdmanProgressLine(line))
+                return;
 
             switch (kind)
             {
@@ -8751,12 +8776,7 @@ internal partial class MainWindow : Window, IDisposable
         {
             var line = lines[i];
             if (
-                line.Contains("% complete", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("Compressing,", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("Converting,", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("Output bytes", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("Compression ratio", StringComparison.OrdinalIgnoreCase)
-                || line.Contains("ratio=", StringComparison.OrdinalIgnoreCase)
+                IsChdmanProgressLine(line)
                 || line.StartsWith("Fatal error occurred", StringComparison.OrdinalIgnoreCase)
             )
             {
@@ -8771,6 +8791,19 @@ internal partial class MainWindow : Window, IDisposable
                 ? "chdman encountered an error. The file may be corrupted, in an unsupported format, or a required codec may be missing."
                 : lines[^1]
             : string.Empty;
+    }
+
+    /// <summary>True for chdman progress/statistics lines that are not failure reasons.</summary>
+    /// <param name="line">Log line to test.</param>
+    /// <returns>True when the line is progress output.</returns>
+    private static bool IsChdmanProgressLine(string line)
+    {
+        return line.Contains("% complete", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Compressing,", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Converting,", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Output bytes", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Compression ratio", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("ratio=", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -10648,7 +10681,7 @@ internal partial class MainWindow : Window, IDisposable
             var failedNotice =
                 $"{_conversionFailedInputs.Count} failed file(s) are marked 'Failed' in the list; "
                 + "the Reason column shows why each one failed. Use 'Select Failed' to retry only "
-                + "those, 'Move Selected...' to set them aside, or see 'failed-conversions.txt' in "
+                + "those, 'Move Failed' to set them aside, or see 'failed-conversions.txt' in "
                 + "the output folder for the full list with reasons.";
             LogMessage($" {failedNotice}");
             summary += $"\n\n{failedNotice}";

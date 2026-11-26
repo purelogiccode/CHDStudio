@@ -149,7 +149,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the CHDSharp library for in-process CHD reading, verification, extraction and creation">
-                        <Run Text="Uses " /><Run Text="CHDSharp" FontWeight="Bold" /><Run Text=" (v1.4.5) by Peterson Fernandes for in-process CHD reading, verification, extraction and creation (chdman byte-identical output)." />
+                        <Run Text="Uses " /><Run Text="CHDSharp" FontWeight="Bold" /><Run Text=" (v1.7.2) by Peterson Fernandes for in-process CHD reading, verification, extraction and creation (chdman byte-identical output)." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -181,7 +181,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the Avalonia UI framework for the cross-platform front end">
-                        <Run Text="Uses " /><Run Text="Avalonia" FontWeight="Bold" /><Run Text=" (v12.1.3) for the cross-platform Fluent Design user interface." />
+                        <Run Text="Uses " /><Run Text="Avalonia" FontWeight="Bold" /><Run Text=" (v12.2.0) for the cross-platform Fluent Design user interface." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -197,7 +197,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the project's own CSOSharp library for CSO/CISO decompression">
-                        <Run Text="Uses " /><Run Text="CSOSharp" FontWeight="Bold" /><Run Text=" (v1.0.1) for .cso/.ciso decompression." />
+                        <Run Text="Uses " /><Run Text="CSOSharp" FontWeight="Bold" /><Run Text=" (v1.0.2) for .cso/.ciso decompression." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -213,7 +213,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the project's own PBPSharp library for PlayStation PBP handling">
-                        <Run Text="Uses " /><Run Text="PBPSharp" FontWeight="Bold" /><Run Text=" (v1.1.3) for PlayStation .pbp extraction and SFO metadata parsing." />
+                        <Run Text="Uses " /><Run Text="PBPSharp" FontWeight="Bold" /><Run Text=" (v1.1.9) for PlayStation .pbp extraction and SFO metadata parsing." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -229,7 +229,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the project's own CCDSharp library for CloneCD image parsing">
-                        <Run Text="Uses " /><Run Text="CCDSharp" FontWeight="Bold" /><Run Text=" (v1.0.1) for CloneCD (.ccd/.img/.sub) parsing." />
+                        <Run Text="Uses " /><Run Text="CCDSharp" FontWeight="Bold" /><Run Text=" (v1.0.3) for CloneCD (.ccd/.img/.sub) parsing." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -245,7 +245,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the project's own MDSSharp library for Alcohol 120% and Daemon Tools images">
-                        <Run Text="Uses " /><Run Text="MDSSharp" FontWeight="Bold" /><Run Text=" (v1.2.0) for Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing and decryption." />
+                        <Run Text="Uses " /><Run Text="MDSSharp" FontWeight="Bold" /><Run Text=" (v1.3.0) for Alcohol 120% / Daemon Tools (.mds/.mdf/.mdx) parsing and decryption." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -261,7 +261,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses the project's own ISZSharp library for UltraISO images">
-                        <Run Text="Uses " /><Run Text="ISZSharp" FontWeight="Bold" /><Run Text=" (v1.0.2) for UltraISO .isz decompression." />
+                        <Run Text="Uses " /><Run Text="ISZSharp" FontWeight="Bold" /><Run Text=" (v1.0.3) for UltraISO .isz decompression." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -277,7 +277,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses VideoGameFileSystemParser to browse the file systems inside CHD images in the CHD Explorer">
-                        <Run Text="Uses " /><Run Text="VideoGameFileSystemParser" FontWeight="Bold" /><Run Text=" (v1.3.0) for the CHD Explorer's console file-system parsers." />
+                        <Run Text="Uses " /><Run Text="VideoGameFileSystemParser" FontWeight="Bold" /><Run Text=" (v1.4.0) for the CHD Explorer's console file-system parsers." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -293,7 +293,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses SharpCompress for archive extraction and bzip2 decompression">
-                        <Run Text="Uses " /><Run Text="SharpCompress" FontWeight="Bold" /><Run Text=" (v0.50.4) for archive extraction and bzip2 decompression." />
+                        <Run Text="Uses " /><Run Text="SharpCompress" FontWeight="Bold" /><Run Text=" (v0.50.12) for archive extraction and bzip2 decompression." />
                     </TextBlock>
                     <Button
                         Classes="link"
@@ -309,7 +309,7 @@
                         Foreground="#8b949e"
                         Margin="0,0,0,4"
                         ToolTip.Tip="Uses NAudio for MP3 audio track decoding on Windows">
-                        <Run Text="Uses " /><Run Text="NAudio" FontWeight="Bold" /><Run Text=" (v3.1.0) for MP3 audio track decoding on Windows (Media Foundation)." />
+                        <Run Text="Uses " /><Run Text="NAudio" FontWeight="Bold" /><Run Text=" (v3.3.0) for MP3 audio track decoding on Windows (Media Foundation)." />
                     </TextBlock>
                     <Button
                         Classes="link"

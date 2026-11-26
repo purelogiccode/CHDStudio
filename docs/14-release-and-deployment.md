@@ -20,12 +20,12 @@ All four values must match, and `WhatsNew.md` must contain a section whose
 heading starts with that exact version:
 
 ```markdown
-## 3.16.0 (2026-11-24)
+## 3.17.0 (2026-11-26)
 ```
 
 `scripts/ci/version.mjs` validates all of this locally and in CI. A release tag
 is `release_<version>` and must match the project version exactly, for example
-`release_3.16.0`.
+`release_3.17.0`.
 
 ## 14.2 Build the runtime bundles
 
@@ -53,7 +53,7 @@ The `Release` workflow does this automatically with one matrix job per RID and
 a native Linux-extras job. For a local build, publish and package a RID with:
 
 ```powershell
-$version = "3.16.0"
+$version = "3.17.0"
 $rid = "win-x64"          # or linux-x64 / osx-arm64
 $tfm = "net11.0-windows"  # net11.0 for Linux/macOS
 
@@ -153,8 +153,8 @@ secret; without it the step reports that it skipped the sync.
 After the docs and version files are committed and pushed to `master`:
 
 ```powershell
-git tag release_3.16.0
-git push origin release_3.16.0
+git tag release_3.17.0
+git push origin release_3.17.0
 ```
 
 The `Release` workflow then:

@@ -11,6 +11,7 @@ internal sealed record MoveSelectedResult(
     IReadOnlyList<string> FailedInputs
 );
 
+
 /// <summary>
 ///     Moves selected conversion inputs to another folder, carrying the data files their
 ///     cue/gdi/toc/ccd/mds descriptors reference and every volume of a split image or archive set.
@@ -58,6 +59,13 @@ internal static class SelectedInputMover
 
             try
             {
+                if (IsInsideDirectory(input, destinationFolder))
+                {
+                    failed.Add(input);
+                    logError($" '{input}' is already in the Failed folder.");
+                    continue;
+                }
+
                 var companions = await GetCompanionFilesAsync(input, token).ConfigureAwait(false);
                 var missingCompanions = companions.Where(companion => !File.Exists(companion)).ToList();
                 if (missingCompanions.Count > 0)
@@ -79,7 +87,38 @@ internal static class SelectedInputMover
                     continue;
                 }
 
-                var isSet = sources.Count > 1;
+                // Preserve the folder layout a descriptor uses. A cue that references
+                // "tracks\01.bin" must keep that relative path after the move, or the moved set
+                // no longer converts. Absolute references keep working in their original place,
+                // so those files stay put rather than being flattened next to the descriptor.
+                var inputDirectory = Path.GetDirectoryName(Path.GetFullPath(input))
+                    ?? Path.GetFullPath(input);
+                var relativeSources = new List<(string Source, string Relative)>();
+                foreach (var source in sources)
+                {
+                    var relative = Path.GetRelativePath(
+                        inputDirectory,
+                        Path.GetFullPath(source)
+                    );
+                    if (Path.IsPathRooted(relative))
+                    {
+                        log(
+                            $" Note: '{Path.GetFileName(source)}' is referenced by an absolute path and stays in place."
+                        );
+                        continue;
+                    }
+
+                    if (IsOutsideDirectory(relative))
+                    {
+                        throw new InvalidOperationException(
+                            $"the set references '{source}', which is outside its own folder; move it manually."
+                        );
+                    }
+
+                    relativeSources.Add((source, relative));
+                }
+
+                var isSet = relativeSources.Count > 1;
                 var targetDirectory = isSet
                     ? ReserveDirectory(
                         destinationFolder,
@@ -87,14 +126,11 @@ internal static class SelectedInputMover
                     )
                     : destinationFolder;
 
-                if (isSet)
-                    Directory.CreateDirectory(targetDirectory);
-
-                var moves = sources
-                    .OrderBy(source => PathComparer.Equals(source, input) ? 1 : 0)
+                var moves = relativeSources
+                    .OrderBy(source => PathComparer.Equals(source.Source, input) ? 1 : 0)
                     .Select(source => (
-                        Source: source,
-                        Target: Path.Join(targetDirectory, Path.GetFileName(source))
+                        source.Source,
+                        Target: Path.Join(targetDirectory, source.Relative)
                     ))
                     .ToList();
 
@@ -128,6 +164,14 @@ internal static class SelectedInputMover
                     failed.Add(input);
                     logError($" '{input}' is already in that folder.");
                     continue;
+                }
+
+                Directory.CreateDirectory(targetDirectory);
+                foreach (var move in moves)
+                {
+                    var targetParent = Path.GetDirectoryName(move.Target);
+                    if (!string.IsNullOrEmpty(targetParent))
+                        Directory.CreateDirectory(targetParent);
                 }
 
                 if (!await MoveSetAsync(moves, logError, token).ConfigureAwait(false))
@@ -171,41 +215,62 @@ internal static class SelectedInputMover
     {
         var completed = new List<(string Source, string Target)>();
 
-        foreach (var move in moves)
+        try
         {
-            if (
-                !await RetryingFileOperations
-                    .TryMoveAsync(move.Source, move.Target, token)
-                    .ConfigureAwait(false)
-            )
+            foreach (var move in moves)
             {
-                for (var i = completed.Count - 1; i >= 0; i--)
+                if (
+                    !await RetryingFileOperations
+                        .TryMoveAsync(move.Source, move.Target, token)
+                        .ConfigureAwait(false)
+                )
                 {
-                    var movedBack = await RetryingFileOperations
-                        .TryMoveAsync(
-                            completed[i].Target,
-                            completed[i].Source,
-                            CancellationToken.None
-                        )
-                        .ConfigureAwait(false);
-                    if (!movedBack)
-                    {
-                        logError(
-                            $" Could not put '{completed[i].Target}' back at '{completed[i].Source}'."
-                        );
-                    }
+                    await RollbackAsync(completed, logError).ConfigureAwait(false);
+                    logError(
+                        $" Could not move '{move.Source}' to '{move.Target}' (it may be locked by another program)."
+                    );
+                    return false;
                 }
 
-                logError(
-                    $" Could not move '{move.Source}' to '{move.Target}' (it may be locked by another program)."
-                );
-                return false;
+                completed.Add(move);
             }
 
-            completed.Add(move);
+            return true;
         }
+        catch (OperationCanceledException)
+        {
+            // A cancellation (window close or Cancel) must not leave a descriptor without the
+            // data files that were already moved.
+            await RollbackAsync(completed, logError).ConfigureAwait(false);
+            throw;
+        }
+    }
 
-        return true;
+    /// <summary>Puts the files moved so far back where they came from, newest first.</summary>
+    /// <param name="completed">Moves that finished before the failure or cancellation.</param>
+    /// <param name="logError">Error callback for a rollback that also failed.</param>
+    /// <returns>A task that completes when the rollback has been attempted.</returns>
+    private static async Task RollbackAsync(
+        IReadOnlyList<(string Source, string Target)> completed,
+        Action<string> logError
+    )
+    {
+        for (var i = completed.Count - 1; i >= 0; i--)
+        {
+            var movedBack = await RetryingFileOperations
+                .TryMoveAsync(
+                    completed[i].Target,
+                    completed[i].Source,
+                    CancellationToken.None
+                )
+                .ConfigureAwait(false);
+            if (!movedBack)
+            {
+                logError(
+                    $" Could not put '{completed[i].Target}' back at '{completed[i].Source}'."
+                );
+            }
+        }
     }
 
     /// <summary>
@@ -214,7 +279,7 @@ internal static class SelectedInputMover
     /// </summary>
     /// <param name="input">Primary input path.</param>
     /// <param name="token">Cancellation token.</param>
-    /// <returns>Existing paths that make up the set, primary first.</returns>
+    /// <returns>Existing paths that make up the set.</returns>
     internal static async Task<IReadOnlyList<string>> GetUploadSetAsync(
         string input,
         CancellationToken token
@@ -225,6 +290,41 @@ internal static class SelectedInputMover
             .Where(File.Exists)
             .Distinct(PathComparer)
             .ToList();
+    }
+
+    /// <summary>
+    ///     Returns the upload set with relative ZIP entry names, so a crate descriptor that
+    ///     references a subfolder keeps that folder in the diagnostic sample.
+    /// </summary>
+    /// <param name="input">Primary input path.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <returns>The files and their relative archive names.</returns>
+    internal static async Task<IReadOnlyList<(string FullPath, string EntryName)>> GetUploadSetEntriesAsync(
+        string input,
+        CancellationToken token
+    )
+    {
+        var paths = await GetUploadSetAsync(input, token).ConfigureAwait(false);
+        var inputDirectory = Path.GetDirectoryName(Path.GetFullPath(input))
+            ?? Path.GetFullPath(input);
+        return paths
+            .Select(path => (
+                FullPath: path,
+                EntryName: GetUploadEntryName(inputDirectory, path)
+            ))
+            .ToList();
+    }
+
+    /// <summary>Builds a ZIP entry name that preserves paths below the descriptor folder.</summary>
+    /// <param name="directory">Descriptor folder.</param>
+    /// <param name="path">File in the set.</param>
+    /// <returns>A forward-slash relative entry name, or the bare file name for an external path.</returns>
+    private static string GetUploadEntryName(string directory, string path)
+    {
+        var relative = Path.GetRelativePath(directory, Path.GetFullPath(path));
+        return Path.IsPathRooted(relative) || IsOutsideDirectory(relative)
+            ? Path.GetFileName(path)
+            : relative.Replace('\\', '/');
     }
 
     /// <summary>
@@ -324,6 +424,42 @@ internal static class SelectedInputMover
                 foreach (var volume in archiveVolumes)
                     yield return volume;
         }
+    }
+
+    /// <summary>Compares full paths using the host file system's case rules.</summary>
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    /// <summary>True when a path is inside a directory (or is that directory).</summary>
+    /// <param name="path">Path to test.</param>
+    /// <param name="directory">Directory to test against.</param>
+    /// <returns>True when the path is under the directory.</returns>
+    private static bool IsInsideDirectory(string path, string directory)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        if (string.Equals(fullPath, fullDirectory, PathComparison)) return true;
+
+        var prefix = fullDirectory.EndsWith(Path.DirectorySeparatorChar)
+            ? fullDirectory
+            : fullDirectory + Path.DirectorySeparatorChar;
+        return fullPath.StartsWith(prefix, PathComparison);
+    }
+
+    /// <summary>True when a relative path points at or above its base directory.</summary>
+    /// <param name="relativePath">Relative path to test.</param>
+    /// <returns>True when the path escapes the base directory.</returns>
+    private static bool IsOutsideDirectory(string relativePath)
+    {
+        return string.Equals(relativePath, "..", PathComparison)
+               || relativePath.StartsWith(
+                   ".." + Path.DirectorySeparatorChar,
+                   PathComparison
+               )
+               || relativePath.StartsWith(
+                   ".." + Path.AltDirectorySeparatorChar,
+                   PathComparison
+               );
     }
 
     /// <summary>

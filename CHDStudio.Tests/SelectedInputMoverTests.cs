@@ -132,9 +132,117 @@ public sealed class SelectedInputMoverTests : IDisposable
     }
 
     [Fact]
-    public async Task MoveAsync_DescriptorSetCollisionGetsItsOwnSubfolder()
+    public async Task MoveAsync_PreservesSubfoldersReferencedByTheDescriptor()
     {
+        var tracks = Path.Join(_source, "tracks");
+        Directory.CreateDirectory(tracks);
         var cuePath = Path.Join(_source, "Game.cue");
+        var binPath = Path.Join(tracks, "track01.bin");
+        await File.WriteAllBytesAsync(binPath, new byte[2352]);
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"tracks\\track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+
+        var result = await SelectedInputMover.MoveAsync(
+            _destination,
+            [cuePath],
+            static _ => { },
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.Single(result.MovedInputs);
+        Assert.Empty(result.FailedInputs);
+        Assert.True(File.Exists(Path.Join(_destination, "Game", "Game.cue")));
+        Assert.True(File.Exists(Path.Join(_destination, "Game", "tracks", "track01.bin")));
+        Assert.False(File.Exists(cuePath));
+        Assert.False(File.Exists(binPath));
+    }
+
+    [Fact]
+    public async Task MoveAsync_LeavesAFileAlreadyInTheFailedFolderInPlace()
+    {
+        var isoPath = Path.Join(_destination, "Game.iso");
+        await File.WriteAllBytesAsync(isoPath, new byte[2048]);
+
+        var result = await SelectedInputMover.MoveAsync(
+            _destination,
+            [isoPath],
+            static _ => { },
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.Empty(result.MovedInputs);
+        Assert.Contains(
+            result.FailedInputs,
+            item => string.Equals(item, isoPath, StringComparison.OrdinalIgnoreCase)
+        );
+        Assert.True(File.Exists(isoPath));
+        Assert.False(File.Exists(Path.Join(_destination, "Game (2).iso")));
+    }
+
+    [Fact]
+    public async Task MoveAsync_RefusesASetThatReferencesAFileOutsideItsFolder()
+    {
+        var shared = Path.Join(_tempDir, "shared");
+        Directory.CreateDirectory(shared);
+        var cuePath = Path.Join(_source, "Game.cue");
+        var binPath = Path.Join(shared, "track01.bin");
+        await File.WriteAllBytesAsync(binPath, new byte[2352]);
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"..\\shared\\track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+
+        var result = await SelectedInputMover.MoveAsync(
+            _destination,
+            [cuePath],
+            static _ => { },
+            static _ => { },
+            CancellationToken.None
+        );
+
+        Assert.Empty(result.MovedInputs);
+        Assert.Contains(
+            result.FailedInputs,
+            item => string.Equals(item, cuePath, StringComparison.OrdinalIgnoreCase)
+        );
+        Assert.True(File.Exists(cuePath));
+        Assert.True(File.Exists(binPath));
+        Assert.False(Directory.Exists(Path.Join(_destination, "Game")));
+    }
+
+    [Fact]
+    public async Task GetUploadSetEntriesAsync_PreservesSubfolderEntryNames()
+    {
+        var tracks = Path.Join(_source, "tracks");
+        Directory.CreateDirectory(tracks);
+        var cuePath = Path.Join(_source, "Game.cue");
+        var binPath = Path.Join(tracks, "track01.bin");
+        await File.WriteAllBytesAsync(binPath, new byte[2352]);
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"tracks\\track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+
+        var entries = await SelectedInputMover.GetUploadSetEntriesAsync(
+            cuePath,
+            CancellationToken.None
+        );
+
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, entry => string.Equals(entry.EntryName, "Game.cue", StringComparison.Ordinal));
+        Assert.Contains(
+            entries,
+            entry => string.Equals(entry.EntryName, "tracks/track01.bin", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public async Task MoveAsync_DescriptorSetCollisionGetsItsOwnSubfolder()
+    {        var cuePath = Path.Join(_source, "Game.cue");
         var binPath = Path.Join(_source, "Game.bin");
         await File.WriteAllBytesAsync(binPath, new byte[2352]);
         await File.WriteAllTextAsync(

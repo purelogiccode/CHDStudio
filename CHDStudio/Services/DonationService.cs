@@ -69,11 +69,14 @@ internal static class DonationService
     {
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        if (string.IsNullOrWhiteSpace(email)
-            || string.IsNullOrWhiteSpace(apiUrl)
-            || string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(email))
         {
             return new DonationVerificationResult(DonationVerificationStatus.NotDonated);
+        }
+
+        if (string.IsNullOrWhiteSpace(apiUrl) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new DonationVerificationResult(DonationVerificationStatus.Unavailable);
         }
 
         try

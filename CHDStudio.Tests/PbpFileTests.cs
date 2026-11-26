@@ -291,9 +291,19 @@ public class PbpFileTests : IDisposable
         // and must not fail the extraction of a complete image.
         var bytes = new PbpTestFileBuilder().WithBlockCount(2).Build();
         var psarOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x24, 4));
+        var lastBlockEntry = psarOffset + 0x4000 + 1 * 32;
+        var lastBlockOffset = BinaryPrimitives.ReadUInt32LittleEndian(
+            bytes.AsSpan(lastBlockEntry, 4)
+        );
+        var lastBlockLength = BinaryPrimitives.ReadUInt32LittleEndian(
+            bytes.AsSpan(lastBlockEntry + 4, 4)
+        );
         var trailingEntry = psarOffset + 0x4000 + 2 * 32;
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry, 4), 0u);
-        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(trailingEntry + 4, 2), 0xFFFF);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            bytes.AsSpan(trailingEntry, 4),
+            lastBlockOffset + lastBlockLength
+        );
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry + 4, 4), 0x20);
 
         var path = Path.Combine(_tempDir, $"trailingindex_{Guid.NewGuid():N}.pbp");
         File.WriteAllBytes(path, bytes);
@@ -318,9 +328,19 @@ public class PbpFileTests : IDisposable
         // expected size must still come from the declared ISO size, not from its table position.
         var bytes = new PbpTestFileBuilder().WithBlockCount(3).WithFinalBlockSectors(7).Build();
         var psarOffset = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(0x24, 4));
+        var lastBlockEntry = psarOffset + 0x4000 + 2 * 32;
+        var lastBlockOffset = BinaryPrimitives.ReadUInt32LittleEndian(
+            bytes.AsSpan(lastBlockEntry, 4)
+        );
+        var lastBlockLength = BinaryPrimitives.ReadUInt32LittleEndian(
+            bytes.AsSpan(lastBlockEntry + 4, 4)
+        );
         var trailingEntry = psarOffset + 0x4000 + 3 * 32;
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry, 4), 0u);
-        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(trailingEntry + 4, 2), 0xFFFF);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            bytes.AsSpan(trailingEntry, 4),
+            lastBlockOffset + lastBlockLength
+        );
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(trailingEntry + 4, 4), 0x20);
 
         var path = Path.Join(_tempDir, $"shortfinaltrailing_{Guid.NewGuid():N}.pbp");
         File.WriteAllBytes(path, bytes);

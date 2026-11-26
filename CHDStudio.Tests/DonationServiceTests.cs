@@ -142,9 +142,33 @@ public class DonationServiceTests
     }
 
     [Fact]
-    public async Task VerifyAsyncSkipsTheRequestForAnEmptyEmail()
+    public async Task VerifyAsyncReportsUnavailableWhenTheApiIsNotConfigured()
     {
         var requestCount = 0;
+        var handler = FakeHttpMessageHandler.WithAsyncHandler(
+            _ =>
+            {
+                requestCount++;
+                throw new InvalidOperationException("The request should not have been sent.");
+            }
+        );
+        using var client = new HttpClient(handler);
+
+        var result = await DonationService.VerifyAsync(
+            "user@example.com",
+            string.Empty,
+            TestApiKey,
+            client,
+            CancellationToken.None
+        );
+
+        Assert.Equal(DonationVerificationStatus.Unavailable, result.Status);
+        Assert.Equal(0, requestCount);
+    }
+
+    [Fact]
+    public async Task VerifyAsyncSkipsTheRequestForAnEmptyEmail()
+    {        var requestCount = 0;
         var handler = FakeHttpMessageHandler.WithAsyncHandler(
             _ =>
             {

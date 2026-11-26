@@ -5,9 +5,9 @@ nav_order: 12
 
 # 11. Testing
 
-The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net11.0-windows`), with **1,333 tests across 64 test classes**: 1,304 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers.
+The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net11.0-windows`), with **1,398 tests across 69 test classes**: 1,369 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers. The unit suite includes 28 headless Avalonia UI tests and 5 diagnostic sample upload tests.
 
-> **Expected result on a machine without the local sample folders:** the 1,304 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
+> **Expected result on a machine without the local sample folders:** the 1,369 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
 
 ## 11.1 Running the Tests
 
@@ -26,6 +26,7 @@ Requirements: the tests are run on Windows (the app project is `net11.0-windows`
 - HTTP-dependent tests inject an `HttpClient` backed by `FakeHttpMessageHandler` (the only shared helper): a `Func<HttpRequestMessage, HttpResponseMessage>` or a convenience `(HttpStatusCode, string content, string contentType)` constructor, plus a static `WithAsyncHandler` helper.
 - Internals are tested because the Avalonia project (`CHDStudio.csproj`) grants `InternalsVisibleTo("CHDStudio.Tests")`.
 - **Integration tests** are tagged `[Trait("Category", "Integration")]` and read real sample files from fixed absolute directories (`D:\Emulators\...`). They **early-return when the samples are absent**, so on machines without the sample folders they are effectively skipped (reported as passed) — see [§11.5](#115-integration-sample-folders).
+- **Headless UI tests** (`MainWindowUiTests`) run the real compiled XAML through `Avalonia.Headless`. `UiTestApplication` builds the actual `App` with `UseHeadless`, and `UiTestSession` dispatches every test body onto one headless UI thread; the tests are in the `Avalonia UI` collection with parallelization disabled. They assert the donation banner states and dismiss button, donation email validation/keyboard paths, wrapped failure-action buttons and tooltips, button enablement, Select Failed, an end-to-end Move Failed set move, and the About donation link. The project stays on xUnit 2.9.3, so it uses `Avalonia.Headless` with a small dispatcher helper rather than the xUnit v3-only `Avalonia.Headless.XUnit` adapter.
 - **Committed fixtures** live in `CHDStudio.Tests/Fixtures/` and are copied to the output directory by the csproj. There are four groups: `ecm-sample.ecm`, so the ECM decoder can be verified against the reference implementation's own output without that tool being installed; `rar-multipart/set.part1.rar`…`set.part5.rar`, a real WinRAR store-mode volume set holding a known 3500-byte payload, so multi-volume RAR extraction can be tested without WinRAR at test time; `MdsV2/` (the MIT-licensed mdsx test images: plain, compressed, single-file `.mdx`, and password-encrypted), so the v2/MDX decryption pipeline is pinned to real files; and `laserdisc-small.avi`, a 4-frame YUY2 + PCM AVI written with CHDSharp's own test writer, so the `createld` path is exercised without needing a real laserdisc dump.
 - **Format fixtures are built in code** rather than committed where the format allows it: `IszImageBuilder` writes ISZ files the way real UltraISO files are laid out (spec-conformant headers, obfuscated tables, stripped bzip2 headers, optional UltraISO checksums), and `MdsTests`/`RawCdImageDetectorTests`/`SplitImageJoinerTests` synthesise their descriptors and sector data. This keeps the repository free of disc-sized binaries.
 
@@ -62,6 +63,8 @@ Requirements: the tests are run on Windows (the app project is `net11.0-windows`
 | `GitHubReleaseTests.cs` | Model defaults, JSON (de)serialization |
 | `IsoSectorValidatorTests.cs` | Sector-size alignment warnings; descriptors/empty/missing not validated |
 | `MainWindowHelperTests.cs` | `StripUtf8BomIfPresentAsync`, `SelectChdmanErrorLine` (skips progress lines, picks last real error), staged delta validation against its parent, CHD write/PBP damage classification |
+| `MainWindowUiTests.cs` | Headless Avalonia UI: donation banner visible/dismissed/donor states, banner and button tooltips, failure action wrapping and enablement, Select Failed, Move Failed end-to-end, donation dialog prefill/validation/Enter/Escape/typing, About donation link |
+| `SampleUploadServiceTests.cs` | Multipart create/parts/PUT/complete sequence, request bodies, ETag and SHA-256 handoff, progress reporting, server error messages, unsupported part sizes, empty files, abort on part failure |
 | `PathUtilsTests.cs` | `SanitizeFileName`, `GetSafeTempFileName`, path validation, relative paths, best-temp-directory selection, and `CreateTempDirectoryOnSameVolume` — including the property that actually matters: a cue written in the returned directory can reach the image by a **non-rooted** relative path, checked for every ready fixed volume |
 | `PbpExtractionResultTests.cs` | Result-model defaults/setters |
 | `RetryingFileOperationsTests.cs` | `TryDeleteAsync`/`TryMoveAsync` with real file locks (`FileShare.None`), read-only attribute clearing, retry-then-give-up, success-after-lock-release, missing-source/missing-destination semantics |
@@ -119,7 +122,7 @@ Requirements: the tests are run on Windows (the app project is `net11.0-windows`
 4. For chdman-dependent tests, early-return when `chdman.exe` is absent from `AppContext.BaseDirectory`.
 5. Prefer building binary fixtures in code (see `IszImageBuilder`) over committing them. Commit one only when the format cannot be generated trustworthily in-repo, as with `ecm-sample.ecm` (the reference encoder's own output) or the WinRAR-produced RAR volume set (there is no RAR writer in the repository).
 6. When a fixture asserts agreement with an outside implementation, add a **guard test** that the fixture still covers the cases it is meant to. A fixture can be regenerated more simply and silently stop testing anything.
-7. Run the full suite before pushing. On the maintainer's machine a full run is **1,333 passed / 0 failed** (1,304 unit + 29 integration); CI runs the unit tests only, via `--filter "Category!=Integration"` (1,285 tests). The integration classes' behaviour without samples is described in §11.5.
+7. Run the full suite before pushing. On the maintainer's machine a full run is **1,398 passed / 0 failed** (1,369 unit including the headless UI tests + 29 integration); CI runs the unit tests only, via `--filter "Category!=Integration"` (1,369 tests). The integration classes' behaviour without samples is described in §11.5.
 
 ### Analyzer constraints worth knowing
 

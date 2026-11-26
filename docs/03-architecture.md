@@ -58,7 +58,7 @@ CSharp_CHDStudio.sln
 │           ├── CdSectorEccEdc.cs          → regenerates sector EDC + Reed-Solomon parity
 │           ├── EcmImageDecoder.cs         → ECM block-stream decoder
 │           └── EcmDecodeResult.cs
-├── CHDStudio.Tests/               (xUnit; Fixtures/ holds ecm-sample.ecm, rar-multipart/, MdsV2/ and laserdisc-small.avi)
+├── CHDStudio.Tests/               (xUnit + Avalonia.Headless UI tests; Fixtures/ holds ecm-sample.ecm, rar-multipart/, MdsV2/ and laserdisc-small.avi)
 ├── MDSSharp/                                (Alcohol 120% .mds/.mdf parsing; net8.0;net9.0;net10.0;net11.0)
 ├── CCDSharp/                                (CloneCD .ccd/.img/.sub parsing; net8.0;net9.0;net10.0;net11.0)
 ├── CSOSharp/                                (CSO/CISO decompression; net8.0;net9.0;net10.0;net11.0)
@@ -80,7 +80,7 @@ CSharp_CHDStudio.sln
          ┌──────────────────────┐  ┌─────────────────────┐
          │       MDSSharp       │  │       ISZSharp      │
          └──────────────────────┘  └─────────────────────┘
-     NuGet: CHDSharp 1.7.1, Avalonia, SharpCompress, NAudio, Serilog
+     NuGet: CHDSharp 1.7.2, Avalonia, SharpCompress, NAudio, Serilog
 ```
 
 - The app references `MDSSharp`, `CCDSharp`, `CSOSharp`, `PBPSharp` and `ISZSharp` as project references.
