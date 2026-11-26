@@ -11,6 +11,7 @@ Everything the application persists lives under the per-user AppData folder:
 %LocalAppData%\CHDStudio\
 ├── logs\                          # Serilog rolling log files
 │   └── CHDStudio-YYYYMMDD.log   (daily roll, 10 MB size roll, 7 files retained)
+├── donation.json                  # donation email and last recognized status
 └── screenshots\                   # F8 captures
     └── screenshot_yyyy-MM-dd_HH-mm-ss-fff.png
 ```
@@ -30,7 +31,13 @@ Everything the application persists lives under the per-user AppData folder:
 - When that folder cannot be written, the capture falls back to a `screenshots` folder next to the executable.
 - The saved path is logged in the app ("Screenshot saved: ...").
 
-## 12.3 Temporary Directories
+## 12.3 Donation State
+
+- `donation.json` stores the email entered in the donation banner, whether a completed donation was recognized (`HasDonated`) and the UTC time of the last check. It is read by `DonationStateStore` and is never written when the file cannot be read.
+- The email is sent to the website only when the user clicks **I already donated** or when a previously saved email is refreshed silently at startup. It is never included in log messages.
+- Deleting the file removes the saved email and makes the banner visible again on the next launch.
+
+## 12.4 Temporary Directories
 
 Temp directories use the **system temp folder** by default; a folder at a drive root is only created when the system temp path is unsafe to hand to chdman (non-ASCII or near MAX_PATH) or its volume cannot hold the operation:
 
@@ -39,7 +46,7 @@ Temp directories use the **system temp folder** by default; a folder at a drive 
 - Used for: archive extraction, CSO decompression, PBP/CCD cue generation, retry-via-temp-copy fallback, and cue work directories.
 - **Cleanup**: temp dirs are deleted after each file is processed; an emptied `CHDStudio_Temp` folder is removed with them, and at startup leftover `CHDStudio_Temp_*` folders older than one hour (plus stale Explorer extractions older than a day) are removed (`CleanupLeftoverTempDirectories`, `MainWindow.axaml.cs`). Fresh folders are kept so an in-flight conversion's output is never unlinked.
 
-## 12.4 What Lives Next to the Executable
+## 12.5 What Lives Next to the Executable
 
 | Item | Purpose |
 |------|---------|
@@ -52,12 +59,13 @@ Temp directories use the **system temp folder** by default; a folder at a drive 
 
 Legacy leftovers (`logs` and `Resources` folders; `maxcso.exe`, `psxpackager.exe`) are deleted automatically at startup by `LegacyCleanupService` (see [Services Reference](07-services-reference.md#76-legacycleanupservice)). A `Screenshot` folder next to the executable is left alone because it is the fallback location for F8 captures.
 
-## 12.5 Network Endpoints
+## 12.6 Network Endpoints
 
 | Endpoint | Purpose |
 |----------|---------|
 | `https://www.purelogiccode.com/bugreport/api/send-bug-report` | Bug reports (POST, `X-API-KEY` header) |
 | `https://www.purelogiccode.com/ApplicationStats/stats` | Anonymous usage stats (POST, Bearer token) |
+| `https://www.purelogiccode.com/api/donations/verify` | Donation recognition (POST, `X-API-KEY` header and the saved email) |
 | `https://api.github.com/repos/purelogiccode/CHDStudio/releases/latest` | Update checks (GET, User-Agent) |
 
 All HTTP traffic goes through the shared `AppHttpClient` singleton (TLS 1.2/1.3, see [Services Reference](07-services-reference.md#71-apphttpclient)).

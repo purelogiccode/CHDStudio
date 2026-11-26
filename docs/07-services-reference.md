@@ -254,3 +254,14 @@ Maps a `ChdCompressionPreset` to codec tags and chdman `-c` arguments. Defaults 
 - SHA-256 is computed while reading, the ETag returned for each part is collected, and the final `/complete` call seals the multipart upload.
 - Cancellation aborts the upload (`/abort`); a failure also aborts best-effort. The UI shows determinate progress and the shared Cancel button while the upload runs.
 - `SampleUploadException` carries the user-facing reason (API error text, storage status or a changed local file) so the caller can log and show it without exposing a stack trace.
+
+---
+
+## 7.16 DonationService and DonationStateStore
+
+`DonationService` (`Services/DonationService.cs`) builds the donation page link and checks the saved email through the website's existing `POST /api/donations/verify` endpoint:
+
+- The page URL carries `app=chd-studio` and, when a saved email exists, an `email` hint so the donor signs in with the same address.
+- Verification posts `{ email, applicationSlug }` with the shared API key in `X-API-KEY`. A successful response reports `donated`, `totalAmount` and `lastDonationAtUtc`; network and service failures are reported as **unavailable** rather than as application errors.
+- `DonationStateStore` (`Services/DonationStateStore.cs`) persists the email, the recognized flag and the last-check time in `%LocalAppData%\CHDStudio\donation.json`. Read and write failures are logged at warning level and treated as an empty state, so a read-only or missing AppData folder never blocks the UI.
+- The banner refreshes a saved email silently at startup and on demand. A confirmed donation hides the banner permanently; **Dismiss** hides it until the next launch.

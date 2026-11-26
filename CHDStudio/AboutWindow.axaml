@@ -124,12 +124,12 @@
                         ToolTip.Tip="Visit the official website" />
                     <Button
                         Classes="link"
-                        Content="https://www.purelogiccode.com/donate"
-                        Tag="https://www.purelogiccode.com/donate"
+                        Content="https://www.purelogiccode.com/donate?app=chd-studio"
+                        Tag="https://www.purelogiccode.com/donate?app=chd-studio"
                         Click="OpenUrl_Click"
                         HorizontalAlignment="Left"
                         Margin="0,8,0,0"
-                        ToolTip.Tip="Support the project with a donation" />
+                        ToolTip.Tip="Support CHD Studio with a donation" />
                 </StackPanel>
             </Border>
 

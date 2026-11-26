@@ -120,6 +120,14 @@ internal partial class MainWindow : Window, IDisposable
     private volatile int _failedCount;
     private readonly bool _uiInitialized;
 
+    // Donation recognition. The state file keeps the donor's email and whether a completed donation
+    // was recognized; the banner stays hidden for the rest of this session when dismissed.
+    private readonly DonationState _donationState;
+    private bool _donationBannerDismissed;
+    private bool _donationCheckInProgress;
+    private string? _donationBannerMessage;
+    private DateTime _lastDonationCheckUtc = DateTime.MinValue;
+
     // Operation state tracking (0 = idle, >0 = running) - using Interlocked for thread safety
     private int _operationRunningState;
 
@@ -230,6 +238,9 @@ internal partial class MainWindow : Window, IDisposable
         };
         _archiveService = new ArchiveService(sevenZipExePath, isSevenZipAvailable);
 
+        _donationState = DonationStateStore.Load();
+        UpdateDonationBanner();
+
         // F8 screenshot hotkey (window-scoped on every platform)
         KeyDown += MainWindow_KeyDown;
 
@@ -248,7 +259,7 @@ internal partial class MainWindow : Window, IDisposable
                     /* ignore */
                 }
             },
-            _cts.Token
+            GetCancellationToken()
         );
         DisplayConversionInstructionsInLog();
         ResetOperationStats();
@@ -296,6 +307,8 @@ internal partial class MainWindow : Window, IDisposable
     {
         try
         {
+            var token = GetCancellationToken();
+
             // Initialize performance counters off the UI thread (WMI queries are slow)
             await Task.Run(
                 () =>
@@ -303,7 +316,7 @@ internal partial class MainWindow : Window, IDisposable
                     _writeBytesCounter = CreateWritePerformanceCounter();
                     _readBytesCounter = CreateReadPerformanceCounter();
                 },
-                _cts.Token
+                token
             );
 
             // Apply command-line argument for input folder path if provided
@@ -322,7 +335,7 @@ internal partial class MainWindow : Window, IDisposable
             await CheckDependenciesAndNotifyUserAsync();
 
             // Defer update check until window is responsive
-            await Task.Delay(100, _cts.Token); // Allow UI to render first
+            await Task.Delay(100, token); // Allow UI to render first
             SafeFireAndForget(
                 _updateService.CheckForNewVersionAsync(
                     LogMessage,
@@ -330,6 +343,10 @@ internal partial class MainWindow : Window, IDisposable
                     ReportBugAsync
                 )
             );
+
+            // Refresh a previously saved donation email in the background so a returning donor is
+            // recognized without opening the banner form again.
+            SafeFireAndForget(RefreshDonationStatusAsync(showMessages: false));
         }
         catch (OperationCanceledException)
         {
@@ -2386,6 +2403,16 @@ internal partial class MainWindow : Window, IDisposable
         ClearProgressDisplay();
 
         if (_pendingClose) Close();
+    }
+
+    /// <summary>Captures the current cancellation token under the source lock.</summary>
+    /// <returns>The token tied to the current operation lifetime.</returns>
+    private CancellationToken GetCancellationToken()
+    {
+        lock (_ctsLock)
+        {
+            return _cts.Token;
+        }
     }
 
     /// <summary>Replaces the cancellation token source with a fresh one for the next operation.</summary>
@@ -10792,11 +10819,207 @@ internal partial class MainWindow : Window, IDisposable
         Close();
     }
 
-    /// <summary>Opens the project's donation page in the default browser.</summary>
-    private void DonateMenuItem_Click(object? sender, RoutedEventArgs e)
+    /// <summary>Opens the CHD Studio donation page in the default browser.</summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The click event arguments.</param>
+    private void DonationDonateButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (!UrlLauncher.TryOpen(AppConfig.DonationUrl, out var error))
-            LogMessage($"Failed to open the donation page: {error}");
+        try
+        {
+            var uri = DonationService.CreateDonationPageUri(_donationState.Email);
+            if (!UrlLauncher.TryOpen(uri.AbsoluteUri, out var error))
+            {
+                LogMessage($"Failed to open the donation page: {error}");
+                return;
+            }
+
+            _lastDonationCheckUtc = DateTime.MinValue;
+            if (_donationState.HasDonated)
+            {
+                return;
+            }
+
+            _donationBannerDismissed = false;
+            _donationBannerMessage =
+                "After donating, click 'I already donated' to check your support.";
+            UpdateDonationBanner();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogError("Failed to open the donation page", ex);
+        }
+    }
+
+    /// <summary>Asks for the donation email and checks whether a completed donation exists.</summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The click event arguments.</param>
+    private void DonationStatusButton_Click(object? sender, RoutedEventArgs e)
+    {
+        SafeFireAndForget(ShowDonationStatusAsync());
+    }
+
+    /// <summary>Hides the donation banner for the rest of this session.</summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The click event arguments.</param>
+    private void DismissDonationBanner_Click(object? sender, RoutedEventArgs e)
+    {
+        _donationBannerDismissed = true;
+        UpdateDonationBanner();
+    }
+
+    /// <summary>Shows the donation email dialog and checks the entered address.</summary>
+    /// <returns>A task that completes when the check has finished.</returns>
+    private async Task ShowDonationStatusAsync()
+    {
+        if (_donationCheckInProgress)
+        {
+            return;
+        }
+
+        string? email;
+        try
+        {
+            email = await DonationEmailWindow
+                .ShowAsync(this, _donationState.Email)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogError("The donation email dialog failed", ex);
+            return;
+        }
+
+        if (email is null)
+        {
+            return;
+        }
+
+        SaveDonationEmail(email);
+        _donationBannerDismissed = false;
+        await RefreshDonationStatusAsync(showMessages: true).ConfigureAwait(true);
+    }
+
+    /// <summary>Stores a new donation email and clears the previous recognition result.</summary>
+    /// <param name="email">Email address used on purelogiccode.com.</param>
+    private void SaveDonationEmail(string email)
+    {
+        var trimmed = email.Trim();
+        if (string.Equals(_donationState.Email, trimmed, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _donationState.Email = trimmed;
+        _donationState.HasDonated = false;
+        _donationState.LastCheckedUtc = null;
+        _donationBannerMessage = null;
+        DonationStateStore.Save(_donationState);
+        UpdateDonationBanner();
+    }
+
+    /// <summary>Checks the saved email against the website's donation verification API.</summary>
+    /// <param name="showMessages">True to report the result in the banner; false for silent refreshes.</param>
+    /// <returns>A task that completes when the check has finished.</returns>
+    private async Task RefreshDonationStatusAsync(bool showMessages)
+    {
+        if (_donationCheckInProgress)
+        {
+            return;
+        }
+
+        var email = _donationState.Email;
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return;
+        }
+
+        if (!showMessages
+            && DateTime.UtcNow - _lastDonationCheckUtc < TimeSpan.FromMinutes(2))
+        {
+            return;
+        }
+
+        _donationCheckInProgress = true;
+        _lastDonationCheckUtc = DateTime.UtcNow;
+        if (showMessages)
+        {
+            _donationBannerMessage = "Checking donation status...";
+        }
+
+        UpdateDonationBanner();
+        var token = GetCancellationToken();
+        try
+        {
+            var result = await DonationService
+                .VerifyAsync(email, token)
+                .ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case DonationVerificationStatus.Donated:
+                    _donationState.HasDonated = true;
+                    _donationState.LastCheckedUtc = DateTime.UtcNow;
+                    DonationStateStore.Save(_donationState);
+                    _donationBannerMessage = null;
+                    LogMessage("Donation confirmed. Thank you for supporting CHD Studio!");
+                    UpdateStatusBarMessage("Thank you for supporting CHD Studio!");
+                    break;
+
+                case DonationVerificationStatus.NotDonated:
+                    _donationState.HasDonated = false;
+                    _donationState.LastCheckedUtc = DateTime.UtcNow;
+                    DonationStateStore.Save(_donationState);
+                    if (showMessages)
+                    {
+                        _donationBannerMessage =
+                            "No donation was found for that email yet. If you just donated, try again in a moment.";
+                    }
+
+                    break;
+
+                default:
+                    if (showMessages)
+                    {
+                        _donationBannerMessage =
+                            "Could not check donation status. Please try again later.";
+                    }
+
+                    break;
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The window is closing; the result no longer matters.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogWarning("Unexpected donation verification failure", ex);
+            if (showMessages)
+            {
+                _donationBannerMessage =
+                    "Could not check donation status. Please try again later.";
+            }
+        }
+        finally
+        {
+            _donationCheckInProgress = false;
+            UpdateDonationBanner();
+        }
+    }
+
+    /// <summary>Shows or hides the donation banner and refreshes its state-dependent controls.</summary>
+    private void UpdateDonationBanner()
+    {
+        DonationBanner.IsVisible = !_donationState.HasDonated && !_donationBannerDismissed;
+        if (!DonationBanner.IsVisible)
+        {
+            return;
+        }
+
+        DonationBannerText.Text = string.IsNullOrWhiteSpace(_donationBannerMessage)
+            ? "CHD Studio is free donationware. If it helps you, please consider supporting development."
+            : _donationBannerMessage;
+        DonationDonateButton.IsEnabled = !_donationCheckInProgress;
+        DonationStatusButton.IsEnabled = !_donationCheckInProgress;
     }
 
     /// <summary>Opens the About window.</summary>

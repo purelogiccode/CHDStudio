@@ -7,7 +7,7 @@ nav_order: 5
 
 The main window has five tabs: **Convert to CHD**, **Verify CHD Files**, **Extract CHD Files**, **Recompress CHD**, and **Explorer**. A terminal-style log view sits on the right, stat cards and the progress bar at the bottom, and a status bar with the CHDSharp and CHDMAN encoder indicators at the very bottom.
 
-Title-bar buttons: **Donate** (opens the project's donation page), **About** (info dialog, scrollable), **AppData** (opens `%LocalAppData%\CHDStudio`), **Exit**.
+Title-bar buttons: **About** (info dialog, scrollable), **AppData** (opens `%LocalAppData%\CHDStudio`), **Exit**. A dismissible donation banner below the title bar offers **Donate** and **I already donated**; the latter stores your donation email locally and checks it against the website's donation API. A confirmed donation hides the banner.
 
 ---
 
@@ -36,7 +36,7 @@ Title-bar buttons: **Donate** (opens the project's donation page), **About** (in
 ### File list
 
 - Every file matching the supported extensions (see [Overview → Supported Formats](01-overview.md#12-supported-formats)) is listed pre-selected.
-- **Select All** / **Deselect All** toggle the whole list; **Select Failed** selects only the rows marked `Failed` after a batch so they can be retried without reconverting the successful files. **Move Failed** moves every failed input to a `Failed` folder inside the source folder; cue/gdi/toc/ccd/mds data files and split volume sets move with their input, and descriptor sets go into a subfolder named after the input so they stay together. **Copy Failure Details** copies the failed paths and reasons to the clipboard for pasting into an issue or message.
+- **Select All** / **Deselect All** toggle the whole list; **Select Failed** selects only the rows marked `Failed` after a batch so they can be retried without reconverting the successful files. **Move Failed** moves every failed input to a `Failed` folder inside the source folder; cue/gdi/toc/ccd/mds data files and split volume sets move with their input, and descriptor sets go into a subfolder named after the input so they stay together. **Copy Failure Details** copies the failed paths, their reasons and the application version to the clipboard for pasting into an issue or message. **Submit Sample** packages exactly one checked failed input (including its descriptor set and split volumes) into a ZIP and uploads it to the developer's private storage so the failure can be reproduced.
 - The **Status** column shows the outcome of the current or last batch: `Pending`, `Converting`, `OK`, `Failed`, or `Skipped` (a companion data file covered by a descriptor, or a duplicate output). The **Reason** column shows the last error or warning logged for a failed row, with the full text in its tooltip.
 - The list is loaded in chunks (100 items at background priority) to stay responsive on huge folders.
 - When recursive search is on, the **File Name** column shows the path relative to the source folder.

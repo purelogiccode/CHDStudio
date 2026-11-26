@@ -100,9 +100,19 @@ internal static class AppConfig
     internal const string ApplicationName = "CHDStudio";
 
     /// <summary>
-    ///     The donation page opened by the main window's Donate button.
+    ///     The donation page opened by the main window's donation banner.
     /// </summary>
     internal const string DonationUrl = "https://www.purelogiccode.com/donate";
+
+    /// <summary>
+    ///     The API endpoint used to check whether an email has a completed donation for CHD Studio.
+    /// </summary>
+    internal const string DonationApiUrl = "https://www.purelogiccode.com/api/donations/verify";
+
+    /// <summary>
+    ///     The website slug of the CHD Studio donationware product.
+    /// </summary>
+    internal const string DonationApplicationSlug = "chd-studio";
 
     /// <summary>
     ///     The environment identifier sent with bug reports ("Production" or "Development").

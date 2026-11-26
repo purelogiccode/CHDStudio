@@ -18,7 +18,7 @@
     WindowDecorations="BorderOnly"
     Closing="Window_Closing"
     ToolTip.Tip="CHD Studio main window">
-    <Grid RowDefinitions="Auto,*" ToolTip.Tip="Main application window layout">
+    <Grid RowDefinitions="Auto,Auto,*" ToolTip.Tip="Main application window layout">
         <!--  Custom title bar  -->
         <Grid
             x:Name="TitleBarGrid"
@@ -47,21 +47,6 @@
                 Margin="0,0,10,0"
                 VerticalAlignment="Center"
                 ToolTip.Tip="Information and application commands">
-                <Button
-                    Classes="info"
-                    Click="DonateMenuItem_Click"
-                    ToolTip.Tip="Support the project with a donation">
-                    <StackPanel Orientation="Horizontal" Spacing="7" ToolTip.Tip="Donate button contents">
-                        <Path
-                            Width="16"
-                            Height="16"
-                            Fill="White"
-                            VerticalAlignment="Center"
-                            ToolTip.Tip="Heart icon"
-                            Data="M8,14 C8,14 1,9.5 1,5.2 C1,3 2.8,1.5 4.8,1.5 C6.1,1.5 7.3,2.2 8,3.3 C8.7,2.2 9.9,1.5 11.2,1.5 C13.2,1.5 15,3 15,5.2 C15,9.5 8,14 8,14 Z" />
-                        <TextBlock Text="Donate" VerticalAlignment="Center" ToolTip.Tip="Open the donation page" />
-                    </StackPanel>
-                </Button>
                 <Button
                     Classes="info"
                     Click="AboutMenuItem_Click"
@@ -144,7 +129,68 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" Margin="15,15,15,10" RowDefinitions="*,Auto" ToolTip.Tip="Main application content">
+        <Border
+            x:Name="DonationBanner"
+            Grid.Row="1"
+            Margin="15,10,15,0"
+            Padding="12,7"
+            Background="#2B2B2B"
+            BorderBrush="#3A3A3A"
+            BorderThickness="1"
+            CornerRadius="6"
+            ToolTip.Tip="Optional support for CHD Studio development">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ToolTip.Tip="Donation banner contents">
+                <Path
+                    Width="16"
+                    Height="16"
+                    Margin="0,0,9,0"
+                    Fill="#ff69b4"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="Heart icon"
+                    Data="M8,14 C8,14 1,9.5 1,5.2 C1,3 2.8,1.5 4.8,1.5 C6.1,1.5 7.3,2.2 8,3.3 C8.7,2.2 9.9,1.5 11.2,1.5 C13.2,1.5 15,3 15,5.2 C15,9.5 8,14 8,14 Z" />
+                <TextBlock
+                    x:Name="DonationBannerText"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    TextWrapping="Wrap"
+                    Foreground="#e6edf3"
+                    Text="CHD Studio is free donationware. If it helps you, please consider supporting development."
+                    ToolTip.Tip="CHD Studio is free to use. Donations are optional and support development." />
+                <Button
+                    x:Name="DonationDonateButton"
+                    Grid.Column="2"
+                    Classes="primary"
+                    Content="Donate"
+                    Padding="12,4"
+                    Margin="10,0,0,0"
+                    Click="DonationDonateButton_Click"
+                    ToolTip.Tip="Open the CHD Studio donation page on purelogiccode.com" />
+                <Button
+                    x:Name="DonationStatusButton"
+                    Grid.Column="3"
+                    Classes="secondary"
+                    Content="I already donated"
+                    Padding="12,4"
+                    Margin="8,0,0,0"
+                    Click="DonationStatusButton_Click"
+                    ToolTip.Tip="Enter the email used for your donation and check whether it was recognized" />
+                <Button
+                    Grid.Column="4"
+                    Classes="caption"
+                    Width="32"
+                    Margin="6,0,0,0"
+                    Click="DismissDonationBanner_Click"
+                    ToolTip.Tip="Hide the donation banner until the next launch">
+                    <Path
+                        Data="M0,0 L10,10 M10,0 L0,10"
+                        Stroke="#8b949e"
+                        StrokeThickness="1.2"
+                        ToolTip.Tip="Close icon" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="15,15,15,10" RowDefinitions="*,Auto" ToolTip.Tip="Main application content">
             <!--  Main Content Area  -->
             <Grid Grid.Row="0" RowDefinitions="*,Auto,Auto" ToolTip.Tip="Tabs, statistics and progress area">
                 <Grid Grid.Row="0" x:Name="ContentColumnsGrid" ColumnDefinitions="*,10,*" ToolTip.Tip="Tab content beside the activity log">
@@ -411,21 +457,21 @@
                                             Content="_Move Failed"
                                             IsEnabled="False"
                                             Click="MoveFailedConversion_ClickAsync"
-                                            ToolTip.Tip="Move every file marked Failed (with its cue/gdi/toc/ccd/mds data files) into a 'Failed' folder inside the source folder, so the rest of the collection is left alone" />
+                                            ToolTip.Tip="Move every file marked Failed, with its cue/gdi/toc/ccd/mds data files and split image or archive volumes, into a 'Failed' folder inside the source folder. Multi-file sets keep their own subfolder, and the rest of the collection is left alone" />
                                         <Button
                                             x:Name="CopyFailureDetailsButton"
                                             Classes="primary"
                                             Content="Copy Failure _Details"
                                             IsEnabled="False"
                                             Click="CopyFailureDetails_ClickAsync"
-                                            ToolTip.Tip="Copy the failed file paths and their reasons to the clipboard so they can be pasted into an issue or message" />
+                                            ToolTip.Tip="Copy all failed file paths and their recorded reasons, plus the application version, to the clipboard so they can be pasted into an issue or message" />
                                         <Button
                                             x:Name="SubmitSampleButton"
                                             Classes="primary"
                                             Content="Su_bmit Sample..."
                                             IsEnabled="False"
                                             Click="SubmitSample_ClickAsync"
-                                            ToolTip.Tip="Upload the checked failed file to the developer's private storage so the conversion failure can be investigated" />
+                                            ToolTip.Tip="Check exactly one file marked Failed and upload it, with its descriptor set and split volumes, as a ZIP to the developer's private storage so the conversion failure can be investigated" />
                                     </StackPanel>
 
                                     <Button

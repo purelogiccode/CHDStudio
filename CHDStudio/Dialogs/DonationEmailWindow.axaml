@@ -1,0 +1,96 @@
+<Window
+    x:Class="CHDStudio.Dialogs.DonationEmailWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Donation Status"
+    Width="520"
+    SizeToContent="Height"
+    CanResize="False"
+    ShowInTaskbar="False"
+    WindowStartupLocation="CenterOwner"
+    Background="#202020"
+    Icon="/Assets/chd.png"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="-1"
+    WindowDecorations="BorderOnly"
+    ToolTip.Tip="Donation status dialog">
+    <Grid RowDefinitions="Auto,*" ToolTip.Tip="Donation status dialog layout">
+        <Grid
+            Grid.Row="0"
+            Height="42"
+            Background="#202020"
+            ColumnDefinitions="Auto,*,Auto"
+            PointerPressed="TitleBar_PointerPressed"
+            ToolTip.Tip="Donation status title bar. Drag to move the window.">
+            <StackPanel
+                Grid.Column="0"
+                Orientation="Horizontal"
+                Spacing="10"
+                Margin="15,0,0,0"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Dialog identity">
+                <Image Source="/Assets/chd.png" Width="20" Height="20" ToolTip.Tip="CHD Studio logo" />
+                <TextBlock Text="Donation Status" Classes="headerTitle" ToolTip.Tip="Window title" />
+            </StackPanel>
+            <Button
+                Grid.Column="2"
+                Classes="caption captionClose"
+                Click="CloseButton_Click"
+                ToolTip.Tip="Close without checking a donation">
+                <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="White" StrokeThickness="1.2" ToolTip.Tip="Close icon" />
+            </Button>
+        </Grid>
+
+        <StackPanel Grid.Row="1" Margin="20" Spacing="12" ToolTip.Tip="Donation recognition form">
+            <TextBlock
+                Text="Support CHD Studio"
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="#FFFFFF"
+                ToolTip.Tip="Optional donation recognition for CHD Studio" />
+            <TextBlock
+                TextWrapping="Wrap"
+                Foreground="#8b949e"
+                LineHeight="19"
+                Text="CHD Studio is free donationware. Enter the email address you use on purelogiccode.com so the app can check whether your donation was recognized. The address is stored only on this computer."
+                ToolTip.Tip="The email is used only to look up a CHD Studio donation" />
+            <TextBox
+                x:Name="EmailBox"
+                MaxLength="254"
+                PlaceholderText="Email address"
+                AutomationProperties.Name="Donation email address"
+                ToolTip.Tip="Email address used on purelogiccode.com for your donation" />
+            <TextBlock
+                x:Name="ValidationText"
+                IsVisible="False"
+                Foreground="#F85149"
+                FontSize="11"
+                Text="Please enter a valid email address."
+                ToolTip.Tip="Validation message shown when the email address is invalid" />
+
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4,0,0" ToolTip.Tip="Donation status dialog actions">
+                <TextBlock
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    Foreground="#8b949e"
+                    FontSize="11"
+                    TextWrapping="Wrap"
+                    Text="The address is sent only when checking donation status."
+                    ToolTip.Tip="The app contacts purelogiccode.com only to check the saved email" />
+                <Button
+                    Grid.Column="1"
+                    Classes="secondary"
+                    Content="Cancel"
+                    Margin="8,0,6,0"
+                    Click="CancelButton_Click"
+                    ToolTip.Tip="Close without checking a donation" />
+                <Button
+                    Grid.Column="2"
+                    Classes="primary"
+                    Content="Check Donation"
+                    Click="CheckButton_Click"
+                    ToolTip.Tip="Check this email for a completed CHD Studio donation" />
+            </Grid>
+        </StackPanel>
+    </Grid>
+</Window>

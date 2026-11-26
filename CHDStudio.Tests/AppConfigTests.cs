@@ -171,6 +171,27 @@ public class AppConfigTests
     }
 
     [Fact]
+    public void DonationApiUrlPointsToVerificationEndpoint()
+    {
+        Assert.Equal(
+            "https://www.purelogiccode.com/api/donations/verify",
+            AppConfig.DonationApiUrl
+        );
+    }
+
+    [Fact]
+    public void DonationApplicationSlugIsLowercaseAndStable()
+    {
+        Assert.Equal("chd-studio", AppConfig.DonationApplicationSlug);
+    }
+
+    [Fact]
+    public void DonationPageUrlPointsToTheStore()
+    {
+        Assert.Equal("https://www.purelogiccode.com/donate", AppConfig.DonationUrl);
+    }
+
+    [Fact]
     public void BugReportEnvironmentIsProductionOrDevelopment()
     {
         Assert.Contains(
