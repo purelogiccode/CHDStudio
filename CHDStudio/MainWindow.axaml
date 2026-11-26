@@ -449,29 +449,53 @@
                                             Classes="primary"
                                             Content="Select _Failed"
                                             IsEnabled="False"
-                                            Click="SelectFailedConversion_Click"
-                                            ToolTip.Tip="Select only the files that failed in the last conversion batch so they can be retried" />
+                                            Click="SelectFailedConversion_Click">
+                                            <ToolTip.Tip>
+                                                <TextBlock
+                                                    MaxWidth="420"
+                                                    TextWrapping="Wrap"
+                                                    Text="Select only the rows marked Failed after a conversion and clear every other selection, so Start Conversion retries just those files." />
+                                            </ToolTip.Tip>
+                                        </Button>
                                         <Button
                                             x:Name="MoveFailedConversionButton"
                                             Classes="primary"
                                             Content="_Move Failed"
                                             IsEnabled="False"
-                                            Click="MoveFailedConversion_ClickAsync"
-                                            ToolTip.Tip="Move every file marked Failed, with its cue/gdi/toc/ccd/mds data files and split image or archive volumes, into a 'Failed' folder inside the source folder. Multi-file sets keep their own subfolder, and the rest of the collection is left alone" />
+                                            Click="MoveFailedConversion_ClickAsync">
+                                            <ToolTip.Tip>
+                                                <TextBlock
+                                                    MaxWidth="420"
+                                                    TextWrapping="Wrap"
+                                                    Text="Move every row marked Failed (not just the checked rows), together with its cue/gdi/toc/ccd/mds data files and split image or archive volumes, into a 'Failed' folder inside the source folder. Multi-file sets get their own subfolder." />
+                                            </ToolTip.Tip>
+                                        </Button>
                                         <Button
                                             x:Name="CopyFailureDetailsButton"
                                             Classes="primary"
                                             Content="Copy Failure _Details"
                                             IsEnabled="False"
-                                            Click="CopyFailureDetails_ClickAsync"
-                                            ToolTip.Tip="Copy all failed file paths and their recorded reasons, plus the application version, to the clipboard so they can be pasted into an issue or message" />
+                                            Click="CopyFailureDetails_ClickAsync">
+                                            <ToolTip.Tip>
+                                                <TextBlock
+                                                    MaxWidth="420"
+                                                    TextWrapping="Wrap"
+                                                    Text="Copy every failed file path and its recorded reason, plus the CHD Studio version, to the clipboard. Checked rows do not matter; all rows marked Failed are included." />
+                                            </ToolTip.Tip>
+                                        </Button>
                                         <Button
                                             x:Name="SubmitSampleButton"
                                             Classes="primary"
                                             Content="Su_bmit Sample..."
                                             IsEnabled="False"
-                                            Click="SubmitSample_ClickAsync"
-                                            ToolTip.Tip="Check exactly one file marked Failed and upload it, with its descriptor set and split volumes, as a ZIP to the developer's private storage so the conversion failure can be investigated" />
+                                            Click="SubmitSample_ClickAsync">
+                                            <ToolTip.Tip>
+                                                <TextBlock
+                                                    MaxWidth="420"
+                                                    TextWrapping="Wrap"
+                                                    Text="Requires exactly one checked row marked Failed. Multi-file sets (descriptor data files or split volumes) are packed into one ZIP first, then uploaded to the developer's private storage for investigation." />
+                                            </ToolTip.Tip>
+                                        </Button>
                                     </StackPanel>
 
                                     <Button
