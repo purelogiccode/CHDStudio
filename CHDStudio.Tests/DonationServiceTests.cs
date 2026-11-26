@@ -149,16 +149,7 @@ public class DonationServiceTests
             _ =>
             {
                 requestCount++;
-                return Task.FromResult(
-                    new HttpResponseMessage(HttpStatusCode.OK)
-                    {
-                        Content = new StringContent(
-                            """{"donated":false,"totalAmount":0}""",
-                            Encoding.UTF8,
-                            "application/json"
-                        )
-                    }
-                );
+                throw new InvalidOperationException("The request should not have been sent.");
             }
         );
         using var client = new HttpClient(handler);

@@ -145,7 +145,7 @@ internal static class SelectedInputMover
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 failed.Add(input);
                 logError($" Could not move '{input}': {ex.Message}");

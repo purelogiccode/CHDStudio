@@ -253,9 +253,9 @@ internal partial class MainWindow : Window, IDisposable
                     CleanupLeftoverTempDirectories();
                     LegacyCleanupService.RunInBackground();
                 }
-                catch
+                catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    /* ignore */
+                    Log.Debug(ex, "Startup cleanup failed.");
                 }
             },
             GetCancellationToken()
@@ -1772,9 +1772,9 @@ internal partial class MainWindow : Window, IDisposable
                         ? StringComparer.OrdinalIgnoreCase
                         : StringComparer.Ordinal
                 );
-                foreach (var item in _conversionFiles.ToList())
+                foreach (var item in _conversionFiles.Where(item => moved.Contains(item.FullPath)).ToList())
                 {
-                    if (moved.Contains(item.FullPath)) _conversionFiles.Remove(item);
+                    _conversionFiles.Remove(item);
                 }
 
                 TotalFilesValue.Text = _conversionFiles.Count.ToString(

@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CHDStudio.Models;
+using Serilog;
 
 namespace CHDStudio.Services;
 
@@ -80,7 +81,6 @@ internal static class SampleUploadService
             sizeBytes = fileInfo.Length,
             reason,
             note,
-            sha256 = (string?)null,
             consent = true
         };
 
@@ -113,7 +113,7 @@ internal static class SampleUploadService
 
         var parts = new List<PartETagDto>(partCount);
         var buffer = ArrayPool<byte>.Shared.Rent(partSize);
-        var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
         try
         {
@@ -226,7 +226,6 @@ internal static class SampleUploadService
         }
         finally
         {
-            sha256.Dispose();
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
@@ -277,9 +276,10 @@ internal static class SampleUploadService
                 .ConfigureAwait(false);
             _ = response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // The upload will expire on the server; the user already receives the real error.
+            Log.Debug(ex, "Could not abort the diagnostic sample upload.");
         }
     }
 
