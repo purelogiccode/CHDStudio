@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -160,7 +162,16 @@ internal partial class MainWindow : Window, IDisposable
     private long _conversionSourceBytes;
     private long _conversionOutputBytes;
     private bool _conversionDeleteOriginals;
-    private readonly List<string> _conversionFailedInputs = [];
+    private readonly List<ConversionReport.FailedConversion> _conversionFailedInputs = [];
+
+    // Per-file diagnostics captured from the log while a conversion input is in flight. The
+    // activity log remains the full record; these fields let the file list and the failure report
+    // show why each failed input failed without asking the user to hunt through the log.
+    private readonly Lock _conversionDiagnosticsLock = new();
+    private string? _activeConversionDiagnosticsFile;
+    private string? _activeConversionLastError;
+    private string? _activeConversionLastWarning;
+    private string? _activeConversionLastInfo;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="MainWindow" /> class.
@@ -1075,6 +1086,7 @@ internal partial class MainWindow : Window, IDisposable
     {
         Log.Information("{Message}", message);
         AppendToUiLog(message);
+        RecordConversionDiagnostic(message, ConversionDiagnosticKind.Info);
     }
 
     /// <summary>Writes an error message to the Serilog log and the on-screen activity log.</summary>
@@ -1084,6 +1096,7 @@ internal partial class MainWindow : Window, IDisposable
     {
         Log.Error(ex, "{Message}", message.TrimStart());
         AppendToUiLog($"ERROR: {message.TrimStart()}");
+        RecordConversionDiagnostic(message, ConversionDiagnosticKind.Error);
     }
 
     /// <summary>Writes a warning message to the Serilog log and the on-screen activity log.</summary>
@@ -1093,6 +1106,7 @@ internal partial class MainWindow : Window, IDisposable
     {
         Log.Warning(ex, "{Message}", message.TrimStart());
         AppendToUiLog($"WARNING: {message.TrimStart()}");
+        RecordConversionDiagnostic(message, ConversionDiagnosticKind.Warning);
     }
 
     /// <summary>
@@ -1693,6 +1707,364 @@ internal partial class MainWindow : Window, IDisposable
         UpdateStatusBarMessage("Ready to retry failed files");
     }
 
+    /// <summary>
+    ///     Moves every conversion input marked <c>Failed</c>, plus the data files its descriptor
+    ///     references and every volume of a split set, into a <c>Failed</c> folder inside the source
+    ///     folder. This is the one-click way to separate a difficult set from the rest of a large
+    ///     collection.
+    /// </summary>
+    private async void MoveFailedConversion_ClickAsync(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var failed = _conversionFiles
+                .Where(static f => string.Equals(f.Status, "Failed", StringComparison.Ordinal))
+                .Select(static f => f.FullPath)
+                .ToArray();
+            if (failed.Length == 0)
+            {
+                ShowError("No conversion failures are available to move.");
+                return;
+            }
+
+            var inputFolder = PathUtils.ValidateAndNormalizePath(
+                ConversionInputFolderTextBox.Text,
+                "Source Files Folder",
+                ShowError,
+                LogMessage
+            );
+            if (inputFolder == null) return;
+
+            var destination = Path.Combine(inputFolder, "Failed");
+            MoveFailedConversionButton.IsEnabled = false;
+            StartConversionButton.IsEnabled = false;
+            UpdateStatusBarMessage("Moving failed files...");
+
+            var result = await SelectedInputMover.MoveAsync(
+                destination,
+                failed,
+                LogMessage,
+                message => LogError(message),
+                CancellationToken.None
+            );
+
+            if (result.MovedInputs.Count > 0)
+            {
+                var moved = new HashSet<string>(
+                    result.MovedInputs,
+                    OperatingSystem.IsWindows()
+                        ? StringComparer.OrdinalIgnoreCase
+                        : StringComparer.Ordinal
+                );
+                foreach (var item in _conversionFiles.ToList())
+                {
+                    if (moved.Contains(item.FullPath)) _conversionFiles.Remove(item);
+                }
+
+                TotalFilesValue.Text = _conversionFiles.Count.ToString(
+                    CultureInfo.InvariantCulture
+                );
+                LogMessage(
+                    $" Moved {result.MovedInputs.Count} failed file(s) to: {destination}"
+                );
+            }
+
+            if (result.FailedInputs.Count > 0)
+            {
+                LogError($" {result.FailedInputs.Count} failed file(s) could not be moved.");
+                UpdateStatusBarMessage("Some failed files could not be moved");
+            }
+            else
+            {
+                UpdateStatusBarMessage("Failed files moved");
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogError($"Could not move the failed files: {ex.Message}", ex);
+            ShowError($"The failed files could not be moved:\n\n{ex.Message}");
+        }
+        finally
+        {
+            StartConversionButton.IsEnabled = true;
+            var hasFailures = _conversionFiles.Any(static f =>
+                string.Equals(f.Status, "Failed", StringComparison.Ordinal)
+            );
+            MoveFailedConversionButton.IsEnabled = hasFailures;
+            SelectFailedConversionButton.IsEnabled = hasFailures;
+            CopyFailureDetailsButton.IsEnabled = hasFailures;
+            SubmitSampleButton.IsEnabled = hasFailures;
+        }
+    }
+
+    /// <summary>
+    ///     Copies the failed conversion rows with their reasons to the clipboard, so the user can
+    ///     paste them into an issue or a message when asking for help with a file.
+    /// </summary>
+    private async void CopyFailureDetails_ClickAsync(object? sender, RoutedEventArgs e)
+    {
+        var failed = _conversionFiles
+            .Where(static f => string.Equals(f.Status, "Failed", StringComparison.Ordinal))
+            .ToList();
+        if (failed.Count == 0)
+        {
+            ShowError("No conversion failures are available to copy.");
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder
+            .AppendLine(
+                CultureInfo.InvariantCulture,
+                $"{AppConfig.ApplicationName} {typeof(AppConfig).Assembly.GetName().Version}"
+            )
+            .AppendLine(
+                CultureInfo.InvariantCulture,
+                $"Failed conversions: {failed.Count}"
+            )
+            .AppendLine();
+        foreach (var file in failed)
+        {
+            builder.AppendLine(file.FullPath);
+            builder.AppendLine(
+                string.IsNullOrWhiteSpace(file.FailureReason)
+                    ? "    Reason: (none recorded; see the activity log)"
+                    : $"    Reason: {file.FailureReason}"
+            );
+        }
+
+        var clipboard = GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowError("The clipboard is not available.");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(builder.ToString());
+            LogMessage($" Copied {failed.Count} failure detail(s) to the clipboard.");
+            UpdateStatusBarMessage("Failure details copied");
+        }
+        catch (Exception ex)
+            when (ex is InvalidOperationException or NotSupportedException
+                or ObjectDisposedException or ExternalException or IOException
+            )
+        {
+            LogError($"Could not copy the failure details: {ex.Message}", ex);
+            ShowError($"The failure details could not be copied:\n\n{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Uploads the checked failed input to the developer's private sample storage so the
+    ///     conversion failure can be reproduced and investigated.
+    /// </summary>
+    private async void SubmitSample_ClickAsync(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var checkedFailed = _conversionFiles
+                .Where(static f =>
+                    string.Equals(f.Status, "Failed", StringComparison.Ordinal) && f.IsSelected
+                )
+                .ToList();
+
+            if (checkedFailed.Count != 1)
+            {
+                ShowError("Check exactly one file marked Failed to submit as a diagnostic sample.");
+                return;
+            }
+
+            var chosen = checkedFailed[0];
+            IReadOnlyList<string> uploadSet;
+            try
+            {
+                uploadSet = await SelectedInputMover.GetUploadSetAsync(
+                    chosen.FullPath,
+                    CancellationToken.None
+                );
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                ShowError($"The file set could not be read:\n\n{ex.Message}");
+                return;
+            }
+
+            if (uploadSet.Count == 0 || !File.Exists(chosen.FullPath))
+            {
+                ShowError($"The file no longer exists:\n\n{chosen.FullPath}");
+                return;
+            }
+
+            long totalBytes = 0;
+            foreach (var file in uploadSet)
+            {
+                try
+                {
+                    totalBytes += new FileInfo(file).Length;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A member that vanished is reported by the ZIP/upload step if it is needed.
+                }
+            }
+
+            if (totalBytes <= 0)
+            {
+                ShowError("The sample has no readable data to submit.");
+                return;
+            }
+
+            var isSet = uploadSet.Count > 1;
+            var reason = string.IsNullOrWhiteSpace(chosen.FailureReason)
+                ? "No error detail was recorded."
+                : chosen.FailureReason;
+            if (reason.Length > 1500) reason = reason[..1500] + "...";
+
+            var sizeDescription = isSet
+                ? $"{ChdExplorerItem.FormatSize((ulong)totalBytes)} across {uploadSet.Count} files"
+                : ChdExplorerItem.FormatSize((ulong)totalBytes);
+            var setNote = isSet
+                ? "\n\nThe set's cue/gdi/toc/ccd/mds data files and split volumes will be packed into one ZIP for the upload."
+                : string.Empty;
+
+            var answer = await ShowMessageBoxAsync(
+                $"Submit '{chosen.FileName}' ({sizeDescription}) to the developer for investigation?\n\n"
+                    + "The file is uploaded to private storage and used only to diagnose conversion failures. "
+                    + "Only submit a file you have the right to share. Do not submit personal data."
+                    + setNote
+                    + $"\n\nRecorded reason:\n{reason}",
+                "Submit Diagnostic Sample",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question
+            );
+            if (answer != MessageBoxResult.Yes) return;
+
+            RenewCancellationTokenSource();
+            CancellationToken token;
+            lock (_ctsLock)
+            {
+                token = _cts.Token;
+            }
+
+            SetControlsState(false);
+            var uploadPath = chosen.FullPath;
+            string? temporaryZip = null;
+            try
+            {
+                if (isSet)
+                {
+                    ProgressBar.IsIndeterminate = true;
+                    ProgressBar.Value = 0;
+                    ProgressText.Text = "Preparing diagnostic sample ZIP...";
+                    UpdateStatusBarMessage("Preparing diagnostic sample ZIP...");
+
+                    var baseName = PathUtils.SanitizeFileName(
+                        Path.GetFileNameWithoutExtension(chosen.FileName)
+                    );
+                    if (baseName.Length > 40) baseName = baseName[..40];
+                    temporaryZip = Path.Combine(
+                        Path.GetTempPath(),
+                        $"{baseName}.sample.{Guid.NewGuid().ToString("N")[..8]}.zip"
+                    );
+                    var zipPath = temporaryZip;
+                    await Task.Run(
+                        () =>
+                        {
+                            using var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+                            foreach (var file in uploadSet)
+                            {
+                                token.ThrowIfCancellationRequested();
+                                archive.CreateEntryFromFile(
+                                    file,
+                                    Path.GetFileName(file),
+                                    CompressionLevel.Fastest
+                                );
+                            }
+                        },
+                        token
+                    );
+
+                    uploadPath = temporaryZip;
+                    totalBytes = new FileInfo(uploadPath).Length;
+                }
+
+                ProgressBar.IsIndeterminate = false;
+                ProgressBar.Maximum = Math.Max(totalBytes, 1);
+                ProgressBar.Value = 0;
+                ProgressText.Text = "Uploading diagnostic sample...";
+                UpdateStatusBarMessage("Uploading diagnostic sample...");
+
+                var progress = new Progress<SampleUploadProgress>(state =>
+                {
+                    ProgressBar.IsIndeterminate = false;
+                    ProgressBar.Maximum = Math.Max(state.TotalBytes, 1);
+                    ProgressBar.Value = state.BytesUploaded;
+                    ProgressText.Text =
+                        $"Uploading diagnostic sample: {state.PercentComplete:0}% ({ChdExplorerItem.FormatSize((ulong)state.BytesUploaded)} of {ChdExplorerItem.FormatSize((ulong)state.TotalBytes)})";
+                });
+
+                var note = isSet
+                    ? $"Set of {uploadSet.Count} files: {string.Join(", ", uploadSet.Select(Path.GetFileName))}"
+                    : null;
+                if (note is { Length: > 1500 }) note = note[..1500];
+
+                var result = await SampleUploadService.UploadAsync(
+                    uploadPath,
+                    reason,
+                    note,
+                    progress,
+                    token
+                );
+
+                LogMessage($" Diagnostic sample submitted: {result.FileName} (id {result.Id}).");
+                await ShowMessageBoxAsync(
+                    $"The sample '{result.FileName}' was uploaded successfully.\n\n"
+                        + $"Sample id: {result.Id}\n\n"
+                        + "Thank you - it will help us reproduce and fix the conversion failure.",
+                    "Sample Submitted",
+                    MessageBoxButton.Ok,
+                    MessageBoxImage.Information
+                );
+            }
+            finally
+            {
+                if (temporaryZip is not null)
+                {
+                    try
+                    {
+                        if (File.Exists(temporaryZip)) File.Delete(temporaryZip);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        LogWarning($" Could not delete the temporary sample ZIP: {ex.Message}");
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            LogMessage(" Diagnostic sample upload canceled.");
+        }
+        catch (SampleUploadException ex)
+        {
+            LogError($" Could not submit the diagnostic sample: {ex.Message}");
+            ShowError($"The sample could not be submitted:\n\n{ex.Message}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException)
+        {
+            LogError($" Could not submit the diagnostic sample: {ex.Message}", ex);
+            ShowError($"The sample could not be submitted:\n\n{ex.Message}");
+        }
+        finally
+        {
+            ClearProgressDisplay();
+            SetControlsState(true);
+            UpdateStatusBarMessage("Ready for conversion");
+        }
+    }
+
     /// <summary>Selects every verification CHD file.</summary>
     private void SelectAllVerification_Click(object sender, RoutedEventArgs e)
     {
@@ -1870,7 +2242,10 @@ internal partial class MainWindow : Window, IDisposable
                 )
                 {
                     item.Status = "Pending";
+                    item.FailureReason = string.Empty;
                 }
+
+                ClearConversionFileDiagnostics();
 
                 if (_conversionFailedInputs.Count > 0)
                 {
@@ -2058,6 +2433,17 @@ internal partial class MainWindow : Window, IDisposable
             && _conversionFiles.Any(static f =>
                 string.Equals(f.Status, "Failed", StringComparison.Ordinal)
             );
+        MoveFailedConversionButton.IsEnabled =
+            enabled
+            && _conversionFiles.Any(static f =>
+                string.Equals(f.Status, "Failed", StringComparison.Ordinal)
+            );
+        CopyFailureDetailsButton.IsEnabled =
+            enabled
+            && _conversionFiles.Any(static f =>
+                string.Equals(f.Status, "Failed", StringComparison.Ordinal)
+            );
+        SubmitSampleButton.IsEnabled = CopyFailureDetailsButton.IsEnabled;
         ForceCreateCdCheckBox.IsEnabled = enabled;
         ForceCreateDvdCheckBox.IsEnabled = enabled;
         PspHunkSizeCheckBox.IsEnabled = enabled;
@@ -2316,6 +2702,7 @@ internal partial class MainWindow : Window, IDisposable
         var keptPaths = new HashSet<string>(filesToConvert, statusComparer);
         foreach (var item in _conversionFiles)
         {
+            item.FailureReason = string.Empty;
             if (!item.IsSelected)
             {
                 item.Status = string.Empty;
@@ -2419,6 +2806,7 @@ internal partial class MainWindow : Window, IDisposable
             );
 
             SetConversionFileStatus(file, "Converting");
+            BeginConversionFileDiagnostics(file);
 
             var success = await ProcessSingleFileForConversionAsync(
                 chdmanPath,
@@ -2432,7 +2820,13 @@ internal partial class MainWindow : Window, IDisposable
                 timeoutMinutes,
                 token
             );
-            SetConversionFileStatus(file, success ? "OK" : "Failed");
+
+            var failureReason = EndConversionFileDiagnostics();
+            SetConversionFileStatus(
+                file,
+                success ? "OK" : "Failed",
+                success ? null : failureReason
+            );
 
             if (success)
             {
@@ -2443,7 +2837,9 @@ internal partial class MainWindow : Window, IDisposable
             else
             {
                 Interlocked.Increment(ref _failedCount);
-                _conversionFailedInputs.Add(file);
+                _conversionFailedInputs.Add(
+                    new ConversionReport.FailedConversion(file, failureReason)
+                );
             }
 
             processedCount++;
@@ -2477,10 +2873,15 @@ internal partial class MainWindow : Window, IDisposable
         }
     }
 
-    /// <summary>Marks a listed conversion input with its batch outcome.</summary>
+    /// <summary>Marks a listed conversion input with its batch outcome and failure reason.</summary>
     /// <param name="file">Full path of the input.</param>
     /// <param name="status">Short status shown in the file list.</param>
-    private void SetConversionFileStatus(string file, string status)
+    /// <param name="failureReason">Why the file failed, or null/empty for a success.</param>
+    private void SetConversionFileStatus(
+        string file,
+        string status,
+        string? failureReason = null
+    )
     {
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
@@ -2488,7 +2889,96 @@ internal partial class MainWindow : Window, IDisposable
         var item = _conversionFiles.FirstOrDefault(f =>
             string.Equals(f.FullPath, file, comparison)
         );
-        if (item is not null) item.Status = status;
+        if (item is null) return;
+
+        item.Status = status;
+        item.FailureReason = failureReason ?? string.Empty;
+    }
+
+    /// <summary>Starts collecting the log lines a single conversion input produces.</summary>
+    /// <param name="file">Full path of the input about to be processed.</param>
+    private void BeginConversionFileDiagnostics(string file)
+    {
+        lock (_conversionDiagnosticsLock)
+        {
+            _activeConversionDiagnosticsFile = file;
+            _activeConversionLastError = null;
+            _activeConversionLastWarning = null;
+            _activeConversionLastInfo = null;
+        }
+    }
+
+    /// <summary>
+    ///     Stops collecting diagnostics for the current input and returns the most useful reason it
+    ///     failed: the last error, then the last warning, then the last informational line.
+    /// </summary>
+    /// <returns>The failure reason, or a fallback when no line was captured.</returns>
+    private string EndConversionFileDiagnostics()
+    {
+        lock (_conversionDiagnosticsLock)
+        {
+            var reason = _activeConversionLastError
+                         ?? _activeConversionLastWarning
+                         ?? _activeConversionLastInfo;
+            _activeConversionDiagnosticsFile = null;
+            _activeConversionLastError = null;
+            _activeConversionLastWarning = null;
+            _activeConversionLastInfo = null;
+
+            return string.IsNullOrWhiteSpace(reason)
+                ? "No error detail was logged; see the activity log."
+                : reason.Trim();
+        }
+    }
+
+    /// <summary>Discards any diagnostics collected for the current input.</summary>
+    private void ClearConversionFileDiagnostics()
+    {
+        lock (_conversionDiagnosticsLock)
+        {
+            _activeConversionDiagnosticsFile = null;
+            _activeConversionLastError = null;
+            _activeConversionLastWarning = null;
+            _activeConversionLastInfo = null;
+        }
+    }
+
+    /// <summary>
+    ///     Records a log line against the conversion input currently in flight, if any. Lines logged
+    ///     at batch level (before the first file or between files) are deliberately ignored.
+    /// </summary>
+    /// <param name="message">The logged message.</param>
+    /// <param name="kind">Severity of the line.</param>
+    private void RecordConversionDiagnostic(string message, ConversionDiagnosticKind kind)
+    {
+        lock (_conversionDiagnosticsLock)
+        {
+            if (_activeConversionDiagnosticsFile is null) return;
+
+            var line = message.Trim();
+            if (line.Length == 0) return;
+
+            switch (kind)
+            {
+                case ConversionDiagnosticKind.Error:
+                    _activeConversionLastError = line;
+                    break;
+                case ConversionDiagnosticKind.Warning:
+                    _activeConversionLastWarning = line;
+                    break;
+                default:
+                    _activeConversionLastInfo = line;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Severity of a conversion diagnostic captured from the activity log.</summary>
+    private enum ConversionDiagnosticKind
+    {
+        Info,
+        Warning,
+        Error
     }
 
     /// <summary>Returns the total size of the CHD files produced by the running batch.</summary>
@@ -10130,8 +10620,10 @@ internal partial class MainWindow : Window, IDisposable
         )
         {
             var failedNotice =
-                $"{_conversionFailedInputs.Count} failed file(s) are marked 'Failed' in the list. "
-                + "Use 'Select Failed' to retry only those, or see 'failed-conversions.txt' in the output folder.";
+                $"{_conversionFailedInputs.Count} failed file(s) are marked 'Failed' in the list; "
+                + "the Reason column shows why each one failed. Use 'Select Failed' to retry only "
+                + "those, 'Move Selected...' to set them aside, or see 'failed-conversions.txt' in "
+                + "the output folder for the full list with reasons.";
             LogMessage($" {failedNotice}");
             summary += $"\n\n{failedNotice}";
         }

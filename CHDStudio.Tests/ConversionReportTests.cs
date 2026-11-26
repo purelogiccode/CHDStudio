@@ -114,7 +114,10 @@ public class ConversionReportTests : IDisposable
         var reportPath = await ConversionReport.WriteFailureReportAsync(
             _tempDir,
             _tempDir,
-            [second, first],
+            [
+                new ConversionReport.FailedConversion(second, "the ISO is not a whole number of sectors"),
+                new ConversionReport.FailedConversion(first, null)
+            ],
             CancellationToken.None
         );
 
@@ -124,6 +127,16 @@ public class ConversionReportTests : IDisposable
         Assert.Contains("Failed: 2", lines, StringComparer.Ordinal);
         Assert.Contains(first, lines, StringComparer.Ordinal);
         Assert.Contains(second, lines, StringComparer.Ordinal);
+        Assert.Contains(
+            "    Reason: the ISO is not a whole number of sectors",
+            lines,
+            StringComparer.Ordinal
+        );
+        Assert.Contains(
+            "    Reason: (none recorded; see the activity log)",
+            lines,
+            StringComparer.Ordinal
+        );
     }
 
     [Fact]

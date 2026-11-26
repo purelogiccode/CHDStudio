@@ -372,7 +372,17 @@ Measures and reports what a conversion batch did:
 
 - `GetSourceBytesAsync(files, token)` adds each input and the data files its cue/gdi/toc/ccd/mds descriptor references, expanding split-image volumes, and sums the distinct paths. `GetSourceBytesByInputAsync(files, token)` returns the same measurement per input, which lets the batch add only successful inputs while **Delete originals** is removing sources. Descriptor parse failures are ignored; the descriptor's own length still counts.
 - `FormatSavings(sourceBytes, outputBytes)` returns `saved 1.5 GB (29.2%)`, `500 MB larger (5.1%)` or `no change` for the batch summary.
-- `WriteFailureReportAsync(outputFolder, inputFolder, failedFiles, token)` writes `failed-conversions.txt` with the timestamp, source/output folders and one path per failed input; it returns the report path, or `null` when there are no failures or the file cannot be written. `DeleteFailureReport(outputFolder)` removes the previous batch's report so a clean run does not leave a stale list.
+- `WriteFailureReportAsync(outputFolder, inputFolder, failedFiles, token)` writes `failed-conversions.txt` with the timestamp, application version, source/output folders and one `FailedConversion(File, Reason)` per failed input (the path followed by the last error/warning line logged for it); it returns the report path, or `null` when there are no failures or the file cannot be written. `DeleteFailureReport(outputFolder)` removes the previous batch's report so a clean run does not leave a stale list.
+
+### SelectedInputMover (`Utilities/SelectedInputMover.cs`)
+
+Moves the conversion inputs marked `Failed` into a `Failed` folder inside the source folder (the Convert tab's **Move Failed** button):
+
+- A descriptor input takes its referenced data files with it (cue/gdi/toc through `GameFileParser`, ccd via `CcdConverter` plus `.cdt`, mds via `MdsParser`); a bare `.mdf`/`.mdx` takes its `.mds`, and a bare `.img`/`.sub` takes its `.ccd`.
+- Split images (`SplitImageJoiner.TryGetVolumeSet`) and multi-part archives (`RarVolumeSet.GetVolumePaths`) are expanded so every volume moves with the set.
+- A single image moves directly into the chosen folder; a descriptor set moves into a subfolder named after the input (unique ` (2)`, ` (3)`, ... on collision) so cue/bin and mds/mdf pairs stay together.
+- Companions move first and the primary input last. If any move fails, the files already moved are put back, so a descriptor never loses its data files; a locked source reports which file blocked the set.
+- `MoveSelectedResult` reports the primary inputs that moved and those that failed; the caller removes the moved rows from the conversion list.
 
 ---
 

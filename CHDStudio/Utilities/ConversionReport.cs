@@ -17,6 +17,11 @@ internal static class ConversionReport
     /// <summary>Name of the report written next to the converted CHDs when a batch has failures.</summary>
     internal const string FailureReportFileName = "failed-conversions.txt";
 
+    /// <summary>An input that did not convert, with the reason the converter logged for it.</summary>
+    /// <param name="File">Full path of the failed input.</param>
+    /// <param name="Reason">Last error/warning line for the input, or null when none was logged.</param>
+    internal sealed record FailedConversion(string File, string? Reason);
+
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
@@ -143,13 +148,13 @@ internal static class ConversionReport
     /// </summary>
     /// <param name="outputFolder">Folder that receives the report.</param>
     /// <param name="inputFolder">Source folder recorded in the report header.</param>
-    /// <param name="failedFiles">Inputs that did not convert.</param>
+    /// <param name="failedFiles">Inputs that did not convert, with their logged reasons.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The report path, or <c>null</c> when there were no failures or it could not be written.</returns>
     internal static async Task<string?> WriteFailureReportAsync(
         string outputFolder,
         string inputFolder,
-        IReadOnlyCollection<string> failedFiles,
+        IReadOnlyCollection<FailedConversion> failedFiles,
         CancellationToken token
     )
     {
@@ -160,15 +165,30 @@ internal static class ConversionReport
         {
             "CHD Studio - failed conversions",
             $"Generated: {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}",
+            $"Application: {AppConfig.ApplicationName} {typeof(AppConfig).Assembly.GetName().Version}",
             $"Source folder: {inputFolder}",
             $"Output folder: {outputFolder}",
             $"Failed: {failedFiles.Count}",
             string.Empty,
-            "See the CHD Studio activity log for the error reported for each file.",
+            "The reason recorded for each file is the last error or warning the converter logged.",
+            "The full activity log is in:",
+            Path.Join(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                AppConfig.ApplicationName,
+                "logs"
+            ),
             string.Empty
         };
 
-        lines.AddRange(failedFiles.OrderBy(static f => f, PathComparer));
+        foreach (var failed in failedFiles.OrderBy(static f => f.File, PathComparer))
+        {
+            lines.Add(failed.File);
+            lines.Add(
+                string.IsNullOrWhiteSpace(failed.Reason)
+                    ? "    Reason: (none recorded; see the activity log)"
+                    : $"    Reason: {OneLine(failed.Reason)}"
+            );
+        }
 
         try
         {
@@ -181,6 +201,14 @@ internal static class ConversionReport
         {
             return null;
         }
+    }
+
+    /// <summary>Collapses a multi-line diagnostic into one report line.</summary>
+    /// <param name="text">Text to collapse.</param>
+    /// <returns>The text with line breaks replaced by spaces.</returns>
+    private static string OneLine(string text)
+    {
+        return text.Replace('\r', ' ').Replace('\n', ' ').Trim();
     }
 
     /// <summary>Adds one input and the data files it references to the source-size set.</summary>

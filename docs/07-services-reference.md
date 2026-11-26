@@ -242,3 +242,15 @@ Maps a `ChdCompressionPreset` to codec tags and chdman `-c` arguments. Defaults 
 ## 7.14 Archive extraction progress
 
 `ArchiveProgressLogger` (`Utilities/ArchiveProgressLogger.cs`) implements `IProgress<ArchiveProgress>` and logs archive extraction at ten-percent steps. `ArchiveService.ExtractArchiveAsync` reports bytes and entry counts from `ExtractZipWithOpenRead`; ZIP entry copies check the cancellation token and report progress while writing, so a long archive no longer looks frozen between the start and end log lines. — see [Testing §11.6](11-testing.md#116-chdbattletest-battleground-historical).
+
+---
+
+## 7.15 SampleUploadService
+
+`internal static class SampleUploadService` (`Services/SampleUploadService.cs`) uploads one failed input to the website's diagnostic sample API at `https://www.purelogiccode.com/api/samples`. When the input is a cue/gdi/toc/ccd/mds descriptor, the caller first packs the descriptor, its data files and any split volumes into one temporary ZIP (see `SelectedInputMover.GetUploadSetAsync`):
+
+- The app sends the file name, size, failure reason, application version and explicit consent, authenticated with the shared API key (`AppConfig.BugReportApiKey`).
+- The website returns a multipart upload ticket and presigned PUT URLs. Parts are 64 MiB by default, requested ten at a time so URLs stay fresh; the file goes directly to private Cloudflare R2 storage and never passes through the website.
+- SHA-256 is computed while reading, the ETag returned for each part is collected, and the final `/complete` call seals the multipart upload.
+- Cancellation aborts the upload (`/abort`); a failure also aborts best-effort. The UI shows determinate progress and the shared Cancel button while the upload runs.
+- `SampleUploadException` carries the user-facing reason (API error text, storage status or a changed local file) so the caller can log and show it without exposing a stack trace.

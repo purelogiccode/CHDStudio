@@ -16,6 +16,7 @@ internal class FileItem : INotifyPropertyChanged
     private string _fullPath = string.Empty;
     private bool _isSelected = true;
     private string _status = string.Empty;
+    private string _failureReason = string.Empty;
 
     /// <summary>
     ///     Gets or sets whether this file is selected for processing.
@@ -105,6 +106,22 @@ internal class FileItem : INotifyPropertyChanged
             if (string.Equals(_status, value, StringComparison.Ordinal)) return;
 
             _status = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    ///     Gets or sets the reason the last conversion attempt failed. Empty for files that did not
+    ///     fail; populated from the error or warning the converter logged for the file.
+    /// </summary>
+    public string FailureReason
+    {
+        get => _failureReason;
+        set
+        {
+            if (string.Equals(_failureReason, value, StringComparison.Ordinal)) return;
+
+            _failureReason = value;
             OnPropertyChanged();
         }
     }

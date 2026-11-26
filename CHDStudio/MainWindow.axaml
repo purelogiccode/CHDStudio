@@ -365,6 +365,20 @@
                                                     <TextBlock Text="Status" ToolTip.Tip="Outcome of the current or last conversion batch" />
                                                 </DataGridTextColumn.Header>
                                             </DataGridTextColumn>
+                                            <DataGridTemplateColumn Width="2*" SortMemberPath="FailureReason">
+                                                <DataGridTemplateColumn.Header>
+                                                    <TextBlock Text="Reason" ToolTip.Tip="Why the last conversion of this file failed" />
+                                                </DataGridTemplateColumn.Header>
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="models:FileItem">
+                                                        <TextBlock
+                                                            Text="{Binding FailureReason}"
+                                                            TextTrimming="CharacterEllipsis"
+                                                            VerticalAlignment="Center"
+                                                            ToolTip.Tip="{Binding FailureReason}" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                     <StackPanel
@@ -391,6 +405,27 @@
                                             IsEnabled="False"
                                             Click="SelectFailedConversion_Click"
                                             ToolTip.Tip="Select only the files that failed in the last conversion batch so they can be retried" />
+                                        <Button
+                                            x:Name="MoveFailedConversionButton"
+                                            Classes="primary"
+                                            Content="_Move Failed"
+                                            IsEnabled="False"
+                                            Click="MoveFailedConversion_ClickAsync"
+                                            ToolTip.Tip="Move every file marked Failed (with its cue/gdi/toc/ccd/mds data files) into a 'Failed' folder inside the source folder, so the rest of the collection is left alone" />
+                                        <Button
+                                            x:Name="CopyFailureDetailsButton"
+                                            Classes="primary"
+                                            Content="Copy Failure _Details"
+                                            IsEnabled="False"
+                                            Click="CopyFailureDetails_ClickAsync"
+                                            ToolTip.Tip="Copy the failed file paths and their reasons to the clipboard so they can be pasted into an issue or message" />
+                                        <Button
+                                            x:Name="SubmitSampleButton"
+                                            Classes="primary"
+                                            Content="Su_bmit Sample..."
+                                            IsEnabled="False"
+                                            Click="SubmitSample_ClickAsync"
+                                            ToolTip.Tip="Upload the checked failed file to the developer's private storage so the conversion failure can be investigated" />
                                     </StackPanel>
 
                                     <Button

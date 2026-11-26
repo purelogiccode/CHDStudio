@@ -36,8 +36,8 @@ Title-bar buttons: **Donate** (opens the project's donation page), **About** (in
 ### File list
 
 - Every file matching the supported extensions (see [Overview → Supported Formats](01-overview.md#12-supported-formats)) is listed pre-selected.
-- **Select All** / **Deselect All** toggle the whole list; **Select Failed** selects only the rows marked `Failed` after a batch so they can be retried without reconverting the successful files.
-- The **Status** column shows the outcome of the current or last batch: `Pending`, `Converting`, `OK`, `Failed`, or `Skipped` (a companion data file covered by a descriptor, or a duplicate output).
+- **Select All** / **Deselect All** toggle the whole list; **Select Failed** selects only the rows marked `Failed` after a batch so they can be retried without reconverting the successful files. **Move Failed** moves every failed input to a `Failed` folder inside the source folder; cue/gdi/toc/ccd/mds data files and split volume sets move with their input, and descriptor sets go into a subfolder named after the input so they stay together. **Copy Failure Details** copies the failed paths and reasons to the clipboard for pasting into an issue or message.
+- The **Status** column shows the outcome of the current or last batch: `Pending`, `Converting`, `OK`, `Failed`, or `Skipped` (a companion data file covered by a descriptor, or a duplicate output). The **Reason** column shows the last error or warning logged for a failed row, with the full text in its tooltip.
 - The list is loaded in chunks (100 items at background priority) to stay responsive on huge folders.
 - When recursive search is on, the **File Name** column shows the path relative to the source folder.
 
@@ -71,7 +71,9 @@ Space: 22.8 GB of converted source -> 20.0 GB of CHD (saved 2.8 GB / 12.1%).
 
 CHD is a container with compression, not a general-purpose archiver. It shrinks uncompressed BIN/CUE, ISO and raw images well, but it cannot shrink data that is **already compressed**: `.pbp`, `.cso`, `.isz`, `.ecm` and `.zip`/`.7z`/`.rar` inputs, and images whose payload is itself compressed or encrypted, can produce a CHD close to the source size. The summary says so explicitly when no space was saved. The space is only reclaimed when the sources are removed — enable **Delete originals after a successful conversion**, or delete them manually.
 
-Files that fail are marked `Failed` in the list and listed in `failed-conversions.txt` in the output folder (next to the CHDs, with the source folder, output folder and one path per failed input). Use **Select Failed** to select exactly those rows and click **Start Conversion** to retry them; the activity log and the application log file still contain the per-file error.
+Files that fail are marked `Failed` in the list, the **Reason** column shows the last error or warning logged for the file, and `failed-conversions.txt` in the output folder (next to the CHDs) lists each failed input with its reason, the source and output folders, and the application version. Use **Select Failed** to select exactly those rows and click **Start Conversion** to retry them, or **Move Failed** to move them into a `Failed` folder inside the source folder for individual attention; the activity log and the application log file still contain the full per-file output.
+
+To have one failure investigated, check exactly one row marked `Failed` and click **Submit Sample**. After a consent prompt, the file is uploaded directly to the maintainer's private Cloudflare R2 storage (with progress and a Cancel button), and the recorded failure reason is attached to the submission. A cue/gdi/toc/ccd/mds set (and any split volumes) is packed into one ZIP first so the descriptor and its data files stay together. Only submit files you have the right to share, and do not submit personal data.
 
 ---
 

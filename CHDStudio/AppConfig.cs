@@ -58,6 +58,13 @@ internal static class AppConfig
         "https://www.purelogiccode.com/bugreport/api/send-bug-report";
 
     /// <summary>
+    ///     The API endpoint used to start, sign and complete diagnostic sample uploads. Uploads go
+    ///     directly to private Cloudflare R2 storage through presigned URLs; the website only
+    ///     stores the metadata.
+    /// </summary>
+    internal const string SampleUploadApiUrl = "https://www.purelogiccode.com/api/samples";
+
+    /// <summary>
     ///     The encrypted API key shared by both endpoints.
     /// </summary>
     private const string EncryptedApiKey =
