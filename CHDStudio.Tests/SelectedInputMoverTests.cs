@@ -240,6 +240,42 @@ public sealed class SelectedInputMoverTests : IDisposable
         );
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MoveAsync_DescriptorAndReferencedBinBothListed_MovesTheSetOnce(bool binFirst)
+    {
+        var tracks = Path.Join(_source, "tracks");
+        Directory.CreateDirectory(tracks);
+        var cuePath = Path.Join(_source, "Game.cue");
+        var binPath = Path.Join(tracks, "track01.bin");
+        await File.WriteAllBytesAsync(binPath, new byte[2352]);
+        await File.WriteAllTextAsync(
+            cuePath,
+            "FILE \"tracks\\track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+        );
+
+        string[] inputs = binFirst ? [binPath, cuePath] : [cuePath, binPath];
+        var messages = new List<string>();
+        var result = await SelectedInputMover.MoveAsync(
+            _destination,
+            inputs,
+            messages.Add,
+            messages.Add,
+            CancellationToken.None
+        );
+
+        Assert.Equal(2, result.MovedInputs.Count);
+        Assert.Empty(result.FailedInputs);
+        Assert.True(File.Exists(Path.Join(_destination, "Game", "Game.cue")));
+        Assert.True(File.Exists(Path.Join(_destination, "Game", "tracks", "track01.bin")));
+        Assert.False(File.Exists(Path.Join(_destination, "track01.bin")));
+        Assert.Contains(
+            messages,
+            static message => message.Contains("moved with its set", StringComparison.Ordinal)
+        );
+    }
+
     [Fact]
     public async Task MoveAsync_DescriptorSetCollisionGetsItsOwnSubfolder()
     {        var cuePath = Path.Join(_source, "Game.cue");

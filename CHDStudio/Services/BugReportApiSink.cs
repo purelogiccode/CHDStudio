@@ -19,8 +19,10 @@ internal class BugReportApiSink : ILogEventSink
 {
     private static readonly Lock DedupeLock = new();
     private static readonly TimeSpan DuplicateWindow = TimeSpan.FromMinutes(10);
-    private string? _lastSentMessage;
-    private DateTimeOffset _lastSentAt;
+    private const int RecentMessageLimit = 64;
+    private readonly Dictionary<string, DateTimeOffset> _recentMessages = new(
+        StringComparer.Ordinal
+    );
     private int _isSending;
     private int _sendGeneration;
     private readonly BugReportService _bugReportService;
@@ -54,28 +56,25 @@ internal class BugReportApiSink : ILogEventSink
         if (BugReportService.IsDirectlyReportedByApp(message))
             return;
 
-        lock (DedupeLock)
-        {
-            if (
-                string.Equals(message, _lastSentMessage, StringComparison.Ordinal)
-                && DateTimeOffset.UtcNow - _lastSentAt < DuplicateWindow
-            )
-            {
-                return;
-            }
-        }
-
         var ex = logEvent.Exception;
 
         int generation;
         lock (DedupeLock)
         {
+            var now = DateTimeOffset.UtcNow;
+            if (
+                _recentMessages.TryGetValue(message, out var lastSentAt)
+                && now - lastSentAt < DuplicateWindow
+            )
+            {
+                return;
+            }
+
             if (_isSending != 0) return;
 
             _isSending = 1;
             generation = ++_sendGeneration;
-            _lastSentMessage = message;
-            _lastSentAt = DateTimeOffset.UtcNow;
+            RememberMessage(message, now);
         }
 
         // Use a 10-second timeout so a hung HTTP call doesn't permanently block
@@ -95,6 +94,30 @@ internal class BugReportApiSink : ILogEventSink
                 _ => ClearSendingFlag(generation),
                 TaskContinuationOptions.ExecuteSynchronously
             );
+    }
+
+    /// <summary>
+    ///     Records a message as sent so an identical message is suppressed for the duplicate
+    ///     window even when other messages interleave. Entries older than the window are pruned;
+    ///     if the cache is full of recent messages it is cleared rather than growing without bound.
+    /// </summary>
+    /// <param name="message">The rendered log message.</param>
+    /// <param name="now">The current UTC time.</param>
+    private void RememberMessage(string message, DateTimeOffset now)
+    {
+        if (_recentMessages.Count >= RecentMessageLimit)
+        {
+            var stale = new List<string>();
+            foreach (var entry in _recentMessages)
+            {
+                if (now - entry.Value >= DuplicateWindow) stale.Add(entry.Key);
+            }
+
+            foreach (var key in stale) _recentMessages.Remove(key);
+            if (_recentMessages.Count >= RecentMessageLimit) _recentMessages.Clear();
+        }
+
+        _recentMessages[message] = now;
     }
 
     /// <summary>

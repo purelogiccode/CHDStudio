@@ -5,9 +5,9 @@ nav_order: 12
 
 # 11. Testing
 
-The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net11.0-windows`), with **1,398 tests across 69 test classes**: 1,369 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers. The unit suite includes 28 headless Avalonia UI tests and 5 diagnostic sample upload tests.
+The solution contains a single test project, `CHDStudio.Tests` (xUnit, `net11.0-windows`), with **1,402 tests across 69 test classes**: 1,373 unit tests plus 29 integration tests that need a local sample folder (see §11.5), plus the shared `FakeHttpMessageHandler` and `IszImageBuilder` helpers. The unit suite includes 29 headless Avalonia UI tests and 5 diagnostic sample upload tests.
 
-> **Expected result on a machine without the local sample folders:** the 1,369 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
+> **Expected result on a machine without the local sample folders:** the 1,373 unit tests pass and the 29 integration tests early-return (reported as passed) because their sample folders are absent. CI excludes them with `--filter "Category!=Integration"`.
 
 ## 11.1 Running the Tests
 
@@ -40,7 +40,7 @@ Requirements: the tests are run on Windows (the app project is `net11.0-windows`
 | `AppHttpClientTests.cs` | Singleton behavior, Accept header, TLS 1.2+1.3, dispose semantics, thread safety |
 | `ArchiveServiceTests.cs` | ZIP extraction (real ZIPs built in-test), ZIP extraction progress reporting, corrupt/unsupported/missing archives, bin-only archives → auto-cue, `ExtractCsoAsync` failure/cancellation, 7za fallback matrix, real multi-part RAR extraction from the first **and** a later volume, missing-volume / missing-first-volume classification, renamed `.001` RAR sets, SharpCompress decoder-crash rethrow, multi-part RAR / network detection, disk-full errors |
 | `BinCueGeneratorTests.cs` | Auto-cue marker, cue content, mode alternation, read/rewrite |
-| `BugReportApiSinkTests.cs` | Sink forwards Warning/Error/Fatal, ignores Debug/Info |
+| `BugReportApiSinkTests.cs` | Sink forwards Warning/Error/Fatal, ignores Debug/Info, passes exceptions, and suppresses repeated or interleaved duplicate messages |
 | `BugReportServiceTests.cs` | Report formatting (inner exceptions, depth), HTTP method/header/body, success/failure mapping, the full exclusion-pattern list (incl. case-insensitivity), no-HTTP-call for excluded messages |
 | `CancellationHandlingTests.cs` | `IsCancellationException`, `IsDiskSpaceException`, `IsCorruptionException`, `IsCrcErrorException` and their mutual exclusivity |
 | `CcdParserTests.cs` / `CcdModelTests.cs` | CloneCD `.ccd` parsing (disc/session/track fields, MSF formatting), track-count bounds and overflow-safe parsing, track rebuilding from `[Entry N]` TOC-only descriptors (trurip) with sector-header mode detection, rejection of a cue request for a descriptor with no tracks or no `INDEX 01`, and `IsoWriter` output: whole-sector extraction and rejection of a partial trailing sector |
@@ -122,7 +122,7 @@ Requirements: the tests are run on Windows (the app project is `net11.0-windows`
 4. For chdman-dependent tests, early-return when `chdman.exe` is absent from `AppContext.BaseDirectory`.
 5. Prefer building binary fixtures in code (see `IszImageBuilder`) over committing them. Commit one only when the format cannot be generated trustworthily in-repo, as with `ecm-sample.ecm` (the reference encoder's own output) or the WinRAR-produced RAR volume set (there is no RAR writer in the repository).
 6. When a fixture asserts agreement with an outside implementation, add a **guard test** that the fixture still covers the cases it is meant to. A fixture can be regenerated more simply and silently stop testing anything.
-7. Run the full suite before pushing. On the maintainer's machine a full run is **1,398 passed / 0 failed** (1,369 unit including the headless UI tests + 29 integration); CI runs the unit tests only, via `--filter "Category!=Integration"` (1,369 tests). The integration classes' behaviour without samples is described in §11.5.
+7. Run the full suite before pushing. On the maintainer's machine a full run is **1,402 passed / 0 failed** (1,373 unit including the headless UI tests + 29 integration); CI runs the unit tests only, via `--filter "Category!=Integration"` (1,373 tests). The integration classes' behaviour without samples is described in §11.5.
 
 ### Analyzer constraints worth knowing
 

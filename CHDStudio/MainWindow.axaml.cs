@@ -1801,7 +1801,16 @@ internal partial class MainWindow : Window, IDisposable
 
             if (result.FailedInputs.Count > 0)
             {
-                LogError($" {result.FailedInputs.Count} failed file(s) could not be moved.");
+                var failedNames = string.Join(
+                    ", ",
+                    result.FailedInputs.Take(5).Select(static path => Path.GetFileName(path))
+                );
+                if (result.FailedInputs.Count > 5)
+                    failedNames += $", and {result.FailedInputs.Count - 5} more";
+
+                LogError(
+                    $" {result.FailedInputs.Count} failed file(s) could not be moved: {failedNames}."
+                );
                 UpdateStatusBarMessage("Some failed files could not be moved");
             }
             else

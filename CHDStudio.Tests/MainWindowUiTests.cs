@@ -263,6 +263,89 @@ public class MainWindowUiTests
     }
 
     [Fact]
+    public void MoveFailedConversion_RemovesACompanionRowMovedWithItsSet()
+    {
+        UiTestSession.RunAsync(async () =>
+        {
+            var root = Path.Join(
+                Path.GetTempPath(),
+                $"CHDStudio_UiMoveFailedCompanion_{Guid.NewGuid():N}"
+            );
+            var source = Path.Join(root, "source");
+            var tracks = Path.Join(source, "tracks");
+            Directory.CreateDirectory(tracks);
+            try
+            {
+                var cue = Path.Join(source, "broken.cue");
+                var bin = Path.Join(tracks, "track01.bin");
+                await File.WriteAllTextAsync(
+                    cue,
+                    "FILE \"tracks\\track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+                );
+                await File.WriteAllBytesAsync(bin, new byte[2352]);
+
+                using var window = new MainWindow(new DonationState());
+                var inputBox = window.FindControl<TextBox>("ConversionInputFolderTextBox");
+                Assert.NotNull(inputBox);
+                inputBox.Text = source;
+
+                var files = GetConversionFiles(window);
+                files.Add(
+                    new FileItem
+                    {
+                        FileName = "broken.cue",
+                        FullPath = cue,
+                        Status = "Failed",
+                        FailureReason = "Invalid track"
+                    }
+                );
+                files.Add(
+                    new FileItem
+                    {
+                        FileName = "track01.bin",
+                        FullPath = bin,
+                        Status = "Failed",
+                        FailureReason = "Invalid track"
+                    }
+                );
+                SetControlsState(window, enabled: true);
+
+                var button = window.FindControl<Button>("MoveFailedConversionButton");
+                Assert.NotNull(button);
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                for (var attempt = 0; attempt < 100 && files.Count > 0; attempt++)
+                {
+                    await Task.Delay(50);
+                }
+
+                Assert.Empty(files);
+                Assert.True(
+                    File.Exists(Path.Join(source, "Failed", "broken", "broken.cue")),
+                    "The failed cue should be moved"
+                );
+                Assert.True(
+                    File.Exists(Path.Join(source, "Failed", "broken", "tracks", "track01.bin")),
+                    "The bin should move with its cue"
+                );
+                Assert.False(button.IsEnabled);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Best-effort cleanup only.
+                }
+            }
+        });
+    }
+
+    [Fact]
     public void DonationBanner_IsABorderContainingTheDonateButton()
     {
         UiTestSession.Run(() =>

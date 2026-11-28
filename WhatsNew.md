@@ -5,6 +5,21 @@ nav_order: 16
 
 # What's New
 
+## 3.17.1 (2026-11-28)
+
+### Bug fixes
+
+*   **Move Failed keeps a descriptor set together when its data file is also listed as failed.** A failed cue that references a track bin in a subfolder carried the bin with its set; the bin's own row then pointed at the moved path and was reported as a second, unexplained failure. Descriptor inputs now move before raw data inputs, every moved source is tracked, and a companion that already moved with its set is removed as moved. The failure summary also names the files that could not be moved.
+*   **Alternating failures no longer produce duplicate bug reports.** Duplicate suppression in the bug-report sink remembered only the most recently sent message, so two inputs failing in turn re-sent each report on every retry. The sink now remembers every message from the last 10 minutes (up to 64), so 3.17.1 and later send each report once.
+*   **CHDSharp 1.7.3.** Tooling-only update (CLI packaging, winget manifests and test serialization); no public API or encoder-output changes.
+
+### Tests and verification
+
+*   **Post-tag CodeQL cleanup reviewed.** The one commit after `release_3.17.0` is a behavior-preserving projection/test-helper cleanup; the full suite covers it.
+*   **Test suite:** 1,402 tests pass (1,373 unit, including 29 headless UI tests and 5 sample-upload client tests, plus 29 integration-tagged tests).
+*   **JetBrains InspectCode:** zero warnings and zero errors.
+*   **Code scanning:** the post-tag alerts are resolved and the release is built from a clean `master`.
+
 ## 3.17.0 (2026-11-26)
 
 ### Donation banner

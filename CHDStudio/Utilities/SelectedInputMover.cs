@@ -24,6 +24,19 @@ internal static class SelectedInputMover
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
+    /// <summary>Descriptor extensions whose files reference other files in their set.</summary>
+    private static readonly HashSet<string> DescriptorExtensions = new(
+        [
+            FileExtensions.Cue,
+            FileExtensions.Gdi,
+            FileExtensions.Toc,
+            FileExtensions.Ccd,
+            FileExtensions.Mds,
+            FileExtensions.Mdx
+        ],
+        StringComparer.OrdinalIgnoreCase
+    );
+
     /// <summary>
     ///     Moves <paramref name="inputFiles" /> (and their referenced files) into
     ///     <paramref name="destinationFolder" />.
@@ -44,6 +57,7 @@ internal static class SelectedInputMover
     {
         var moved = new List<string>();
         var failed = new List<string>();
+        var movedSources = new HashSet<string>(PathComparer);
 
         if (!PathUtils.TryCreateDirectory(destinationFolder, out var destinationError))
         {
@@ -53,12 +67,19 @@ internal static class SelectedInputMover
             return new MoveSelectedResult(moved, [.. inputFiles]);
         }
 
-        foreach (var input in inputFiles)
+        foreach (var input in DescriptorsFirst(inputFiles))
         {
             token.ThrowIfCancellationRequested();
 
             try
             {
+                if (movedSources.Contains(Path.GetFullPath(input)))
+                {
+                    moved.Add(input);
+                    log($" '{Path.GetFileName(input)}' moved with its set.");
+                    continue;
+                }
+
                 if (IsInsideDirectory(input, destinationFolder))
                 {
                     failed.Add(input);
@@ -182,6 +203,9 @@ internal static class SelectedInputMover
                     continue;
                 }
 
+                foreach (var move in moves)
+                    movedSources.Add(Path.GetFullPath(move.Source));
+
                 moved.Add(input);
                 log(
                     $" Moved {moves.Count} file(s) to: {targetDirectory}"
@@ -199,6 +223,23 @@ internal static class SelectedInputMover
         }
 
         return new MoveSelectedResult(moved, failed);
+    }
+
+    /// <summary>
+    ///     Orders descriptor inputs before raw data inputs. A failed descriptor and one of its
+    ///     data files can both be listed when the data file lives in a subfolder: the batch
+    ///     filter only suppresses a covered data file in the descriptor's own folder. Moving the
+    ///     data file on its own first would separate it from its set; once the descriptor has
+    ///     moved the set, the data file's listed path no longer exists. Descriptors first keeps
+    ///     each set together and lets the already-moved check account for the companion input.
+    /// </summary>
+    /// <param name="inputFiles">Primary inputs to move.</param>
+    /// <returns>The same inputs with descriptor files first, preserving the order within each group.</returns>
+    private static IEnumerable<string> DescriptorsFirst(IEnumerable<string> inputFiles)
+    {
+        return inputFiles.OrderBy(static input =>
+            DescriptorExtensions.Contains(Path.GetExtension(input)) ? 0 : 1
+        );
     }
 
     /// <summary>

@@ -118,6 +118,23 @@ public class BugReportApiSinkTests
     }
 
     [Fact]
+    public void EmitSuppressesARepeatedMessageWhenOtherMessagesInterleave()
+    {
+        var service = CreateTestService();
+        var sink = new BugReportApiSink(service);
+
+        var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+
+        logger.Error("First failure");
+        logger.Error("Second failure");
+        logger.Error("First failure");
+        logger.Error("Second failure");
+
+        Assert.Equal(2, service.CallCount);
+        Assert.Contains("Second failure", service.LastMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EmitForwardsWarningWithException()
     {
         var service = CreateTestService();

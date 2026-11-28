@@ -71,6 +71,7 @@ Serilog sink that forwards **Warning and above** log events to `BugReportService
 
 - Ignores `LogEventLevel.Information` and below.
 - Drops messages matching `BugReportService.IsExcludedFromBugReport`.
+- **Duplicate suppression**: keeps the recent messages from the last 10 minutes (up to 64) and drops a repeat even when other messages interleave, so an alternating pair of failures cannot keep re-reporting each other.
 - **Flood control**: a static interlocked flag allows only one in-flight send; the flag is released in a `ContinueWith(ExecuteSynchronously)` continuation. Fire-and-forget.
 
 ---
@@ -167,7 +168,7 @@ Checks GitHub for new releases at startup.
 
 `internal static class ChdSharpEncoderService` (`ChdSharpEncoderService.cs:11`)
 
-In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.7.2). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
+In-process CHD encoder backed by the [CHDSharp](https://www.nuget.org/packages/CHDSharp) library (CHDSharpLib 1.7.3). It replaced the bundled `CHDSharp.exe` command-line tool, so every platform has an encoder without shipping a native executable: on Windows it is the automatic fallback behind `chdman`; on Linux/macOS it is the only encoder and is always used.
 
 ### API
 
